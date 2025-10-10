@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
 
 class UserController extends Controller
 {
@@ -89,6 +90,32 @@ class UserController extends Controller
             ]);
 
             $user->load(['role', 'userPermissions']);
+
+            // If this is an employee account, ensure an employee record exists/updates
+            if ($roleName === 'employee') {
+                $nameParts = preg_split('/\s+/', trim((string) $request->name));
+                $firstName = $nameParts[0] ?? '';
+                $lastName = count($nameParts) > 1 ? implode(' ', array_slice($nameParts, 1)) : '';
+
+                DB::table('employees')->updateOrInsert(
+                    // Prefer employee_id match; fall back to email if username absent
+                    $request->username
+                        ? ['employee_id' => $request->username]
+                        : ['email' => $request->email],
+                    [
+                        'employee_id' => $request->username,
+                        'first_name' => $firstName,
+                        'last_name' => $lastName,
+                        'email' => $request->email,
+                        'department' => $request->department,
+                        'phone' => $request->phone,
+                        'employee_type' => $request->input('employee_type', 'Regular'),
+                        'status' => 'active',
+                        'updated_at' => now(),
+                        'created_at' => now(),
+                    ]
+                );
+            }
 
             // Log the activity
             $roleName = $user->role ? $user->role->name : 'No role';
@@ -183,6 +210,31 @@ class UserController extends Controller
             
             $user->update($updateData);
             $user->load(['role', 'userPermissions']);
+
+            // Sync employee record when switching/keeping employee role
+            if (($role && $role->name === 'employee') || (!$role && $user->role && $user->role->name === 'employee')) {
+                $nameParts = preg_split('/\s+/', trim((string) $request->name));
+                $firstName = $nameParts[0] ?? '';
+                $lastName = count($nameParts) > 1 ? implode(' ', array_slice($nameParts, 1)) : '';
+
+                DB::table('employees')->updateOrInsert(
+                    $request->username
+                        ? ['employee_id' => $request->username]
+                        : ['email' => $request->email],
+                    [
+                        'employee_id' => $request->username,
+                        'first_name' => $firstName,
+                        'last_name' => $lastName,
+                        'email' => $request->email,
+                        'department' => $request->department,
+                        'phone' => $request->phone,
+                        'employee_type' => $request->input('employee_type', 'Regular'),
+                        'status' => 'active',
+                        'updated_at' => now(),
+                        'created_at' => now(),
+                    ]
+                );
+            }
 
             // Log the activity
             ActivityLogService::logUserActivity(

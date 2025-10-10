@@ -129,10 +129,30 @@ class RequestController extends Controller
                                               ->exists();
 
             if ($existingRequest) {
+                // Instead of failing, return the existing pending request to keep UX smooth
+                $existing = DB::table('requests')
+                    ->leftJoin('employees', 'requests.employee_id', '=', 'employees.id')
+                    ->leftJoin('equipment', 'requests.equipment_id', '=', 'equipment.id')
+                    ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
+                    ->where('requests.employee_id', $validated['employee_id'])
+                    ->where('requests.equipment_id', $validated['equipment_id'])
+                    ->where('requests.status', 'pending')
+                    ->select(
+                        'requests.*',
+                        DB::raw("CONCAT(COALESCE(employees.first_name, ''), ' ', COALESCE(employees.last_name, '')) as full_name"),
+                        DB::raw("COALESCE(employees.employee_type, '') as position"),
+                        DB::raw("COALESCE(equipment.name, '') as equipment_name"),
+                        DB::raw("COALESCE(equipment.brand, '') as brand"),
+                        DB::raw("COALESCE(equipment.model, '') as model"),
+                        DB::raw("COALESCE(categories.name, '') as category_name")
+                    )
+                    ->first();
+
                 return response()->json([
-                    'success' => false,
-                    'message' => 'Employee already has a pending request for this equipment'
-                ], 422);
+                    'success' => true,
+                    'data' => $existing,
+                    'message' => 'A pending request for this equipment already exists. Returning existing record.'
+                ]);
             }
 
             // Generate request number
@@ -142,6 +162,8 @@ class RequestController extends Controller
                 'request_number' => $requestNumber,
                 'employee_id' => $validated['employee_id'],
                 'equipment_id' => $validated['equipment_id'],
+                // Attach the requesting user (from session) so UI can trace who requested
+                'user_id' => auth()->id(),
                 'request_type' => $validated['request_type'],
                 'request_mode' => $validated['request_mode'],
                 'reason' => $validated['reason'] ?? null,
@@ -172,11 +194,10 @@ class RequestController extends Controller
                 )
                 ->first();
 
-            // Log the activity
-            ActivityLogService::logRequestActivity(
+            // Log the activity without requiring a Model instance
+            ActivityLogService::logSystemActivity(
                 'Created a new request',
-                "Created request #{$requestNumber} for {$createdRequest->equipment_name}",
-                (object)['id' => $requestId, 'request_number' => $requestNumber]
+                "Created request #{$requestNumber} for {$createdRequest->equipment_name}"
             );
 
             return response()->json([
@@ -410,11 +431,10 @@ class RequestController extends Controller
                 ]);
             });
 
-            // Log the activity
-            ActivityLogService::logRequestActivity(
+            // Log the activity (model argument expects Eloquent Model; use system log here)
+            ActivityLogService::logSystemActivity(
                 'Approved request',
-                "Approved request #{$equipmentRequest->request_number}",
-                (object)['id' => $id, 'request_number' => $equipmentRequest->request_number]
+                "Approved request #{$equipmentRequest->request_number}"
             );
 
             // Fetch updated request with related data

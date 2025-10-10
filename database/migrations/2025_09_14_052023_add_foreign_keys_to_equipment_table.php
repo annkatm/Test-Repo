@@ -22,7 +22,12 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('equipment', function (Blueprint $table) {
-            $table->dropForeign(['category_id']);
+            // Drop FK only if it exists (handles environments where it was never added)
+            try {
+                $table->dropForeign(['category_id']);
+            } catch (\Throwable $e) {
+                // Ignore if constraint doesn't exist
+            }
         });
     }
 };

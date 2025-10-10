@@ -104,3 +104,8 @@ Route::get('/control-panel', function () {
 Route::get('/reports', function () {
     return view('reports');
 })->name('reports');
+
+// Archive page
+Route::get('/archive', function () {
+    return view('archive');
+})->name('archive');

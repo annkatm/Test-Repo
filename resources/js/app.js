@@ -14,6 +14,7 @@ import RoleManagementPage from './RoleManagementPage.jsx';
 import UsersPage from './UsersPage.jsx';
 import ControlPanel from './ControlPanel.jsx';
 import Reports from './Reports.jsx';
+import Archive from './Archive.jsx';
 
 // Make React, ReactDOM, and components available globally for fallback mechanisms
 window.React = React;
@@ -136,6 +137,17 @@ document.addEventListener('DOMContentLoaded', function() {
       });
   })();
     
+    // Mount Archive page
+    const archiveContainer = document.getElementById('archive-root');
+    if (archiveContainer) {
+        try {
+            const root = createRoot(archiveContainer);
+            root.render(React.createElement(Archive));
+        } catch (error) {
+            console.error('Error rendering Archive component:', error);
+        }
+    }
+
     // Check for home-root first (for homepage/dashboard)
     const homeContainer = document.getElementById('home-root');
     console.log('home-root element found:', homeContainer);

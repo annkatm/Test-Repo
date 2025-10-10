@@ -16,6 +16,7 @@ return new class extends Migration
             $table->string('request_number')->unique();
             $table->foreignId('employee_id')->constrained('employees')->onDelete('cascade');
             $table->foreignId('equipment_id')->constrained('equipment')->onDelete('cascade');
+            $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->enum('request_type', ['new_assignment', 'replacement', 'additional'])->default('new_assignment');
             $table->enum('request_mode', ['on_site', 'work_from_home'])->nullable();
             $table->enum('status', ['pending', 'approved', 'rejected', 'fulfilled'])->default('pending');
@@ -32,6 +33,7 @@ return new class extends Migration
             // Indexes
             $table->index(['employee_id', 'status']);
             $table->index(['equipment_id', 'status']);
+            $table->index(['user_id', 'status']);
             $table->index('requested_date');
         });
     }

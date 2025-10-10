@@ -212,6 +212,20 @@ const UsersPage = () => {
     setShowViewModal(true);
   };
 
+  const viewAsEmployee = (user) => {
+    try {
+      const email = encodeURIComponent(user.email || '');
+      const employeeId = encodeURIComponent(user.username || '');
+      // Prefer email; fallback to employee_id/username
+      const query = email ? `email=${email}` : (employeeId ? `employee_id=${employeeId}` : '');
+      const url = query ? `/employee?${query}` : '/employee';
+      window.location.href = url;
+    } catch (e) {
+      console.error('Failed to redirect to employee page:', e);
+      window.location.href = '/employee';
+    }
+  };
+
   return (
     <div className="h-screen overflow-hidden bg-white flex">
       {/* Sidebar */}
@@ -304,9 +318,14 @@ const UsersPage = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">
-                          <button onClick={() => openViewModal(user)} className="text-gray-600 hover:text-gray-900 p-1 rounded hover:bg-gray-100" title="View">
+                          <button onClick={() => openViewModal(user)} className="text-gray-600 hover:text-gray-900 p-1 rounded hover:bg-gray-100" title="View User">
                             <Eye className="h-4 w-4" />
                           </button>
+                          {activeFilter === 'EMPLOYEE' && (
+                            <button onClick={() => viewAsEmployee(user)} className="text-blue-600 hover:text-blue-900 p-1 rounded hover:bg-blue-50" title="View Employee Profile">
+                              <ArrowRight className="h-4 w-4" />
+                            </button>
+                          )}
                           <button
                             onClick={() => openEditModal(user)}
                             className="text-blue-600 hover:text-blue-900 p-1 rounded hover:bg-blue-50" 

@@ -144,6 +144,43 @@ class AuthController extends Controller
             $user->load(['role', 'userPermissions']);
             $role = $user->role;
             $userPerm = $user->userPermissions;
+            // Resolve linked employee id based on user fields; create if missing for employee role
+            $linkedEmployeeId = null;
+            try {
+                $linkedEmployee = \Illuminate\Support\Facades\DB::table('employees')
+                    ->when($user->employee_id, function ($q) use ($user) {
+                        return $q->where('employee_id', $user->employee_id);
+                    })
+                    ->orWhere(function ($q) use ($user) {
+                        $q->whereNotNull('email')->where('email', $user->email);
+                    })
+                    ->first();
+
+                if (!$linkedEmployee && $user->role && $user->role->name === 'employee') {
+                    // Auto-provision a basic employee record for employee users
+                    $nameParts = preg_split('/\s+/', trim((string) $user->name));
+                    $firstName = $nameParts[0] ?? '';
+                    $lastName = count($nameParts) > 1 ? implode(' ', array_slice($nameParts, 1)) : '';
+                    $generatedEmpCode = $user->employee_id ?: ('EMP' . time());
+
+                    $id = \Illuminate\Support\Facades\DB::table('employees')->insertGetId([
+                        'employee_id' => $generatedEmpCode,
+                        'first_name' => $firstName,
+                        'last_name' => $lastName,
+                        'email' => $user->email,
+                        'employee_type' => 'Regular',
+                        'status' => 'active',
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+
+                    $linkedEmployee = \Illuminate\Support\Facades\DB::table('employees')->where('id', $id)->first();
+                }
+
+                $linkedEmployeeId = $linkedEmployee ? $linkedEmployee->id : null;
+            } catch (\Throwable $e) {
+                // ignore resolution errors, keep null
+            }
             
             return response()->json([
                 'authenticated' => true,
@@ -160,7 +197,10 @@ class AuthController extends Controller
                         'use_custom_permissions' => (bool) $userPerm->use_custom_permissions,
                         'permissions' => $userPerm->permissions ?? [],
                     ] : null,
-                    'is_active' => $user->is_active
+                    'is_active' => $user->is_active,
+                    // Surface linkage so Employee pages can resolve quickly
+                    'employee_code' => $user->employee_id,
+                    'linked_employee_id' => $linkedEmployeeId,
                 ]
             ]);
         }
