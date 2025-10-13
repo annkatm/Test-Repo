@@ -365,31 +365,37 @@ const EmployeeHome = () => {
                 <button
                   key={category.id}
                   onClick={() => handleItemTableClick(category)}
-                  className={`aspect-square bg-gray-100 rounded-lg flex flex-col items-center justify-center hover:shadow-md transition-all cursor-pointer ${
+                   className={`aspect-square bg-gray-100 rounded-lg flex flex-col items-center justify-center hover:shadow-md transition-all cursor-pointer ${
                     selectedCategory === (category.name || category) ? 'ring-2 ring-blue-500' : ''
-                  }`}
+                }`}
                 >
-                  {category.image ? (
-                    <div className="w-8 h-8 rounded-md flex items-center justify-center overflow-hidden mb-1">
-                      <img
-                        src={category.image.startsWith('http') ? category.image :
-                             category.image.startsWith('/storage') ? `${window.location.origin}${category.image}` :
-                             `${window.location.origin}/storage/${category.image}`}
-                        alt={category.name || 'Category'}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          e.target.onerror = null;
-                          e.target.style.display = 'none';
-                          e.target.nextElementSibling.style.display = 'flex';
-                        }}
-                      />
-                      <Laptop className="h-6 w-6 text-gray-600 hidden" />
-                    </div>
-                  ) : (
-                    <Laptop className="h-6 w-6 text-gray-600 mb-1" />
-                  )}
-                  <span className="text-xs font-medium text-gray-700">{category.name || 'Category'}</span>
-                </button>
+                 {category.image ? (
+    <div className="w-16 h-16 rounded-lg flex items-center justify-center overflow-hidden mb-2"> {/* ⬅️ Increased size */}
+      <img
+        src={
+          category.image.startsWith('http')
+            ? category.image
+            : category.image.startsWith('/storage')
+            ? `${window.location.origin}${category.image}`
+            : `${window.location.origin}/storage/${category.image}`
+        }
+        alt={category.name || 'Category'}
+        className="w-full h-full object-cover"
+        onError={(e) => {
+          e.target.onerror = null;
+          e.target.style.display = 'none';
+          e.target.nextElementSibling.style.display = 'flex';
+        }}
+      />
+      <Laptop className="h-8 w-8 text-gray-600 hidden" /> 
+    </div>
+  ) : (
+    <Laptop className="h-8 w-8 text-gray-600 mb-2" />
+  )}
+  <span className="text-sm font-semibold text-gray-800 text-center px-1 truncate"> 
+    {category.name || 'Category'}
+  </span>
+</button>
               ))}
               {categories.length === 0 && (
                 <div className="col-span-2 text-center text-sm text-gray-500 py-8">No categories found</div>
