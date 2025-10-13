@@ -78,6 +78,11 @@ class Request extends Model
         return $query->where('status', 'rejected');
     }
 
+    public function scopeFulfilled($query)
+    {
+        return $query->where('status', 'fulfilled');
+    }
+
     public function scopeByUser($query, $userId)
     {
         return $query->where('user_id', $userId);
@@ -97,6 +102,11 @@ class Request extends Model
     public function getIsRejectedAttribute()
     {
         return $this->status === 'rejected';
+    }
+
+    public function getIsFulfilledAttribute()
+    {
+        return $this->status === 'fulfilled';
     }
 
     public function getDurationAttribute()

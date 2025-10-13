@@ -89,10 +89,17 @@ const ViewRequest = () => {
     const requestToApprove = pendingRequests.find(req => req.id === requestId);
     
     if (requestToApprove) {
+      // Ensure name and item properties are available for the modal
+      const requestWithDetails = {
+        ...requestToApprove,
+        name: requestToApprove.full_name || requestToApprove.employee_name || requestToApprove.name || 'Unknown',
+        item: requestToApprove.equipment_name || requestToApprove.item_name || requestToApprove.item || 'Unknown Item'
+      };
+      
       setModalState({
         isOpen: true,
         type: 'approve',
-        requestData: requestToApprove,
+        requestData: requestWithDetails,
         reason: ''
       });
     }
@@ -102,10 +109,18 @@ const ViewRequest = () => {
   const handleRowClick = (requestId) => {
     const req = pendingRequests.find(r => r.id === requestId);
     if (!req) return;
+    
+    // Ensure name and item properties are available for the modal
+    const requestWithDetails = {
+      ...req,
+      name: req.full_name || req.employee_name || req.name || 'Unknown',
+      item: req.equipment_name || req.item_name || req.item || 'Unknown Item'
+    };
+    
     setModalState({
       isOpen: true,
       type: 'approve',
-      requestData: req,
+      requestData: requestWithDetails,
       reason: ''
     });
   };
@@ -114,10 +129,17 @@ const ViewRequest = () => {
     const requestToReject = pendingRequests.find(req => req.id === requestId);
     
     if (requestToReject) {
+      // Ensure name and item properties are available for the modal
+      const requestWithDetails = {
+        ...requestToReject,
+        name: requestToReject.full_name || requestToReject.employee_name || requestToReject.name || 'Unknown',
+        item: requestToReject.equipment_name || requestToReject.item_name || requestToReject.item || 'Unknown Item'
+      };
+      
       setModalState({
         isOpen: true,
         type: 'reject',
-        requestData: requestToReject,
+        requestData: requestWithDetails,
         reason: ''
       });
     }

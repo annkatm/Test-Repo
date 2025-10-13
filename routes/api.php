@@ -31,6 +31,7 @@ Route::put('/requests/{id}', [RequestController::class, 'update']);
 Route::delete('/requests/{id}', [RequestController::class, 'destroy']);
 Route::post('/requests/{id}/approve', [RequestController::class, 'approve']);
 Route::post('/requests/{id}/reject', [RequestController::class, 'reject']);
+Route::post('/requests/{id}/fulfill', [RequestController::class, 'fulfill']);
 Route::get('/requests/statistics', [RequestController::class, 'statistics']);
 
 // Transaction routes
