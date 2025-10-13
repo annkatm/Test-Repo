@@ -306,11 +306,7 @@ class UserController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => [
-                    'permissions' => $user->getEffectivePermissions(),
-                    'is_custom' => $useCustom,
-                    'role_permissions' => $user->role ? $user->role->permissions : []
-                ],
+                'data' => $user, // Return the full user object instead of just permissions
                 'message' => 'User permissions updated successfully'
             ]);
         } catch (\Exception $e) {
@@ -341,11 +337,7 @@ class UserController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => [
-                    'permissions' => $user->getEffectivePermissions(),
-                    'is_custom' => false,
-                    'role_permissions' => $user->role ? $user->role->permissions : []
-                ],
+                'data' => $user, // Return the full user object instead of just permissions
                 'message' => 'User permissions reset to role defaults'
             ]);
         } catch (\Exception $e) {
