@@ -28,16 +28,15 @@ const EmployeePage = () => {
     employeeId: '', // Employee ID number
     position: '',
     department: '',
-<<<<<<< HEAD
-    issuedItem: ''
-=======
+ 
+    issuedItem: '',
     status: 'active',
     // User account fields
     createAccount: false, // Whether to create a user account
     password: '',
     confirmPassword: '',
     role: 'employee' // Default role for employee accounts
->>>>>>> e1926e6ea3d479f7c23a85ba918673e5ccae8a53
+
   });
   const [employees, setEmployees] = useState([]);
 
@@ -50,11 +49,11 @@ const EmployeePage = () => {
     fetch('/api/employees')
       .then(res => res.json())
       .then(data => {
-<<<<<<< HEAD
+
         console.log('API Response:', data); // Debug log
-=======
+
         let list = [];
->>>>>>> e1926e6ea3d479f7c23a85ba918673e5ccae8a53
+ e1926e6ea3d479f7c23a85ba918673e5ccae8a53
         if (data.success && Array.isArray(data.data)) {
           list = data.data.map(e => ({
             id: e.id,
@@ -95,15 +94,15 @@ const EmployeePage = () => {
     employeeId: '',
     position: '',
     department: '',
-<<<<<<< HEAD
-    issuedItem: ''
-=======
+ 
+    issuedItem: '',
+
     status: 'active',
     createAccount: false,
     password: '',
     confirmPassword: '',
     role: 'employee'
->>>>>>> e1926e6ea3d479f7c23a85ba918673e5ccae8a53
+
   });
   const closeModal = () => setIsAddOpen(false);
 
