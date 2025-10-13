@@ -13,6 +13,10 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body>
-    <div id="archive-root"></div>
+    <div id="archive-root" 
+         data-archived-items="{{ json_encode($archivedItems ?? []) }}"
+         data-filter-type="{{ $filterType ?? 'all' }}"
+         data-search-term="{{ $searchTerm ?? '' }}">
+    </div>
 </body>
 </html>

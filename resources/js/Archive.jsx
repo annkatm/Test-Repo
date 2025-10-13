@@ -4,10 +4,16 @@ import { useApi } from './hooks/useApi';
 import GlobalHeader from './components/GlobalHeader';
 
 const Archive = () => {
-    const [archivedItems, setArchivedItems] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [filterType, setFilterType] = useState('all');
+    // Get initial data from server-side rendering
+    const archiveRoot = document.getElementById('archive-root');
+    const initialItems = archiveRoot?.dataset.archivedItems ? JSON.parse(archiveRoot.dataset.archivedItems) : [];
+    const initialFilterType = archiveRoot?.dataset.filterType || 'all';
+    const initialSearchTerm = archiveRoot?.dataset.searchTerm || '';
+    
+    const [archivedItems, setArchivedItems] = useState(initialItems);
+    const [loading, setLoading] = useState(false);
+    const [searchTerm, setSearchTerm] = useState(initialSearchTerm);
+    const [filterType, setFilterType] = useState(initialFilterType);
     const [selectedItems, setSelectedItems] = useState([]);
     const { get, post } = useApi();
 
@@ -15,9 +21,12 @@ const Archive = () => {
     const fetchArchivedItems = async () => {
         try {
             setLoading(true);
-            // This would be replaced with actual API calls
-            // For now, we'll simulate with empty data
-            setArchivedItems([]);
+            const params = new URLSearchParams();
+            if (filterType !== 'all') params.append('type', filterType);
+            if (searchTerm) params.append('search', searchTerm);
+            
+            const response = await get(`/archive?${params.toString()}`);
+            setArchivedItems(response.items || []);
         } catch (error) {
             console.error('Error fetching archived items:', error);
         } finally {
@@ -27,7 +36,7 @@ const Archive = () => {
 
     useEffect(() => {
         fetchArchivedItems();
-    }, []);
+    }, [filterType, searchTerm]);
 
     const handleSearch = (e) => {
         setSearchTerm(e.target.value);
@@ -53,24 +62,20 @@ const Archive = () => {
         }
     };
 
-    const handleRestore = async (itemId) => {
+    const handleRestore = async (item) => {
         try {
-            // API call to restore item
-            console.log('Restoring item:', itemId);
-            // await post(`/api/archive/${itemId}/restore`);
-            // fetchArchivedItems(); // Refresh the list
+            await post(`/archive/${item.type}/${item.id}/restore`);
+            fetchArchivedItems(); // Refresh the list
         } catch (error) {
             console.error('Error restoring item:', error);
         }
     };
 
-    const handleDelete = async (itemId) => {
+    const handleDelete = async (item) => {
         if (window.confirm('Are you sure you want to permanently delete this item?')) {
             try {
-                // API call to permanently delete item
-                console.log('Deleting item:', itemId);
-                // await post(`/api/archive/${itemId}/delete`);
-                // fetchArchivedItems(); // Refresh the list
+                await post(`/archive/${item.type}/${item.id}/force-delete`);
+                fetchArchivedItems(); // Refresh the list
             } catch (error) {
                 console.error('Error deleting item:', error);
             }
@@ -107,12 +112,7 @@ const Archive = () => {
         }
     };
 
-    const filteredItems = archivedItems.filter(item => {
-        const matchesSearch = item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            item.type?.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesFilter = filterType === 'all' || item.type === filterType;
-        return matchesSearch && matchesFilter;
-    });
+    const filteredItems = archivedItems;
 
     if (loading) {
         return (
@@ -233,8 +233,10 @@ const Archive = () => {
                                 >
                                     <option value="all">All Types</option>
                                     <option value="equipment">Equipment</option>
-                                    <option value="request">Request</option>
-                                    <option value="transaction">Transaction</option>
+                                    <option value="requests">Requests</option>
+                                    <option value="transactions">Transactions</option>
+                                    <option value="employees">Employees</option>
+                                    <option value="users">Users</option>
                                 </select>
                             </div>
                         </div>
@@ -331,7 +333,10 @@ const Archive = () => {
                                                             {item.name}
                                                         </div>
                                                         <div className="text-sm text-gray-500">
-                                                            {item.description}
+                                                            {item.brand && item.model ? `${item.brand} ${item.model}` : 
+                                                             item.employee ? item.employee :
+                                                             item.email ? item.email : 
+                                                             item.reason ? item.reason : ''}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -340,28 +345,31 @@ const Archive = () => {
                                                 <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
                                                     item.type === 'equipment' ? 'bg-blue-100 text-blue-800' :
                                                     item.type === 'request' ? 'bg-green-100 text-green-800' :
-                                                    'bg-purple-100 text-purple-800'
+                                                    item.type === 'transaction' ? 'bg-purple-100 text-purple-800' :
+                                                    item.type === 'employee' ? 'bg-orange-100 text-orange-800' :
+                                                    item.type === 'user' ? 'bg-indigo-100 text-indigo-800' :
+                                                    'bg-gray-100 text-gray-800'
                                                 }`}>
                                                     {item.type}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                {new Date(item.archived_at).toLocaleDateString()}
+                                                {new Date(item.deleted_at).toLocaleDateString()}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                {item.archived_by}
+                                                System
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                                 <div className="flex items-center justify-end space-x-2">
                                                     <button
-                                                        onClick={() => handleRestore(item.id)}
+                                                        onClick={() => handleRestore(item)}
                                                         className="text-green-600 hover:text-green-800 p-2 rounded-lg hover:bg-green-50 transition-colors"
                                                         title="Restore"
                                                     >
                                                         <RotateCcw className="w-4 h-4" />
                                                     </button>
                                                     <button
-                                                        onClick={() => handleDelete(item.id)}
+                                                        onClick={() => handleDelete(item)}
                                                         className="text-red-600 hover:text-red-800 p-2 rounded-lg hover:bg-red-50 transition-colors"
                                                         title="Delete Permanently"
                                                     >

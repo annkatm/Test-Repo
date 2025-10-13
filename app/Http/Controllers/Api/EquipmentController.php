@@ -262,7 +262,7 @@ class EquipmentController extends Controller
             $equipment
         );
 
-        $equipment->delete();
+        $equipment->delete(); // This will now soft delete due to SoftDeletes trait
 
         return response()->json([
             'success' => true,
