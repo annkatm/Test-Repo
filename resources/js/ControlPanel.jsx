@@ -1,6 +1,7 @@
 import React from "react";
 import FileUploadWidget from "./components/FileUploadWidget";
 import { UserCog } from "lucide-react";
+import api from './services/api';
 import HomeSidebar from "./HomeSidebar";
 import GlobalHeader from "./components/GlobalHeader";
 
@@ -9,7 +10,7 @@ const ControlPanel = () => {
 
   const controlPanelCards = [
     { id: 1, title: 'Admin Position', subtitle: 'Manage', icon: UserCog },
-    { id: 2, title: 'Add Categories', subtitle: 'Manage', icon: UserCog },
+    { id: 2, title: 'Equipment Categories', subtitle: 'Manage', icon: UserCog },
     { id: 3, title: 'Item Condition', subtitle: 'Manage', icon: UserCog },
     { id: 4, title: 'Admin Position', subtitle: 'Manage', icon: UserCog },
     { id: 5, title: 'Admin Position', subtitle: 'Manage', icon: UserCog },
@@ -22,10 +23,36 @@ const ControlPanel = () => {
   const [catError, setCatError] = React.useState('');
   const [catLoading, setCatLoading] = React.useState(false);
   const [showSuccess, setShowSuccess] = React.useState(false);
+  const [categoryItems, setCategoryItems] = React.useState([]);
+  const [showExisting, setShowExisting] = React.useState(true);
 
-  const handleCardClick = (card) => {
-    if (card.title === 'Add Categories') {
+  const handleCardClick = async (card) => {
+    if (card.title === 'Equipment Categories') {
+      // Load categories before opening modal
+      try {
+        const res = await api.get('/categories');
+        if (res?.data?.success && Array.isArray(res.data.data)) {
+          setCategoryItems(res.data.data.map(c => ({ id: c.id, name: c.name })));
+        } else {
+          setCategoryItems([]);
+        }
+      } catch (e) {
+        setCategoryItems([]);
+      }
       setShowCategoryModal(true);
+    }
+  };
+
+  const removeCategoryItem = async (idx) => {
+    const item = categoryItems[idx];
+    if (!item) return;
+    try {
+      await api.delete(`/categories/${item.id}`);
+      setCategoryItems(prev => prev.filter((_, i) => i !== idx));
+      // notify other screens (e.g., Equipment) to refresh
+      window.dispatchEvent(new CustomEvent('categories:updated'));
+    } catch (e) {
+      setCatError('Failed to delete category');
     }
   };
 
@@ -127,21 +154,55 @@ const ControlPanel = () => {
             ))}
           </div>
 
-          {/* Add Category Modal */}
+          {/* Add Category Modal */
+          }
           {showCategoryModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center">
               <div className="absolute inset-0 bg-black/30" onClick={() => setShowCategoryModal(false)} />
-              <div className="relative bg-white rounded-2xl shadow-xl w-[400px] max-w-[95vw] p-8">
-                <h3 className="text-xl font-bold text-blue-600 text-center mb-4">Add Category</h3>
+              <div className="relative bg-white rounded-2xl shadow-2xl w-[460px] max-w-[95vw] p-8 border border-blue-100" style={{ boxShadow: '0 8px 32px rgba(29, 78, 216, 0.35)' }}>
+                <h3 className="text-lg font-bold text-blue-600 text-center mb-6">Add Category</h3>
                 <form onSubmit={handleCategorySubmit}>
                   <div className="mb-4">
-                    <label className="block text-sm text-gray-600 mb-1">Name*</label>
+                    <label className="block text-[12px] text-gray-600 mb-1">Name*</label>
                     <input type="text" value={catName} onChange={e => setCatName(e.target.value)} className="w-full px-3 py-2 rounded-md bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" required />
                   </div>
                   <div className="mb-4">
-                    <label className="block text-sm text-gray-600 mb-1">Description</label>
+                    <label className="block text-[12px] text-gray-600 mb-1">Description</label>
                     <input type="text" value={catDesc} onChange={e => setCatDesc(e.target.value)} className="w-full px-3 py-2 rounded-md bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   </div>
+
+                  {/* Existing Categories header with toggle */}
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="block text-[12px] text-gray-600">Existing Categories</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowExisting(v => !v)}
+                      className="text-xs text-blue-600 hover:text-blue-700"
+                    >
+                      {showExisting ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+
+                  {/* Visual category list */}
+                  {showExisting && (
+                  <div className="mb-5">
+                    <div className="w-full rounded-xl border border-blue-100 bg-white shadow-[0_6px_16px_rgba(29,78,216,0.15)]">
+                      <div className="max-h-40 overflow-y-auto divide-y divide-gray-100">
+                        {categoryItems.map((item, idx) => (
+                          <div key={item.id ?? idx} className="flex items-center justify-between px-4 py-2 text-sm hover:bg-blue-50">
+                            <span className="text-gray-700">{item.name}</span>
+                            <button type="button" onClick={() => removeCategoryItem(idx)} className="text-red-500 hover:text-red-600">
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M6 7h12l-1 12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 7Zm3-3h6l1 2H8l1-2Z"/></svg>
+                            </button>
+                          </div>
+                        ))}
+                        {categoryItems.length === 0 && (
+                          <div className="px-4 py-3 text-sm text-gray-400">No categories yet.</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  )}
                   <FileUploadWidget
                     label="Image"
                     onFileSelect={file => setCatImage(file)}
@@ -149,8 +210,8 @@ const ControlPanel = () => {
                     required={true}
                   />
                   {catError && <div className="mb-2 text-xs text-red-600">{catError}</div>}
-                  <div className="flex justify-end mt-6">
-                    <button type="button" className="mr-3 px-4 py-2 rounded bg-gray-200 text-gray-700" onClick={() => setShowCategoryModal(false)}>Cancel</button>
+                  <div className="flex justify-end mt-6 space-x-2">
+                    <button type="button" className="px-4 py-2 rounded bg-gray-200 text-gray-700" onClick={() => setShowCategoryModal(false)}>Cancel</button>
                     <button type="submit" disabled={catLoading} className="px-5 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">
                       {catLoading ? 'Saving...' : 'Save'}
                     </button>
