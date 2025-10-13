@@ -232,13 +232,13 @@ const RoleManagementPage = () => {
         .filter(item => tempPermissions[item.key] === true)
         .map(item => item.api || item.key);
       
-<<<<<<< HEAD
+ 
       console.log('Saving permissions:', permissions); // Debug log
       console.log('Temp permissions state:', tempPermissions); // Debug log
-=======
+
       console.log('Saving permissions:', permissions); // DEBUG
       console.log('Temp permissions state:', tempPermissions); // DEBUG
->>>>>>> e1926e6ea3d479f7c23a85ba918673e5ccae8a53
+ 
       
       // Use user-specific permissions instead of role permissions
       const res = await userService.setPermissions(selectedAdmin.id, permissions, true);
