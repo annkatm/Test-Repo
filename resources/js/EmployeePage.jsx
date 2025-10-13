@@ -30,7 +30,8 @@ const EmployeePage = () => {
     employeeType: 'Regular',
     client: '',
     position: '',
-    department: ''
+    department: '',
+    issuedItem: ''
   });
   const [employees, setEmployees] = useState([]);
 
@@ -38,6 +39,7 @@ const EmployeePage = () => {
     fetch('/api/employees')
       .then(res => res.json())
       .then(data => {
+        console.log('API Response:', data); // Debug log
         if (data.success && Array.isArray(data.data)) {
           setEmployees(data.data.map(e => ({
             id: e.id,
@@ -51,6 +53,7 @@ const EmployeePage = () => {
             email: e.email || '',
             phone: e.phone || '',
             address: e.address || '',
+            issuedItem: e.issued_item || '',
             badge: (e.first_name?.[0] || '').toUpperCase(),
             color: getBadgeColor(e.first_name)
           })));
@@ -69,7 +72,8 @@ const EmployeePage = () => {
     employeeType: 'Regular',
     client: '',
     position: '',
-    department: ''
+    department: '',
+    issuedItem: ''
   });
   const closeModal = () => setIsAddOpen(false);
 
@@ -77,6 +81,7 @@ const EmployeePage = () => {
     fetch('/api/employees')
       .then(res => res.json())
       .then(data => {
+        console.log('API Response:', data); // Debug log
         if (data.success && Array.isArray(data.data)) {
           setEmployees(data.data.map(e => ({
             id: e.id,
@@ -90,6 +95,7 @@ const EmployeePage = () => {
             email: e.email || '',
             phone: e.phone || '',
             address: e.address || '',
+            issuedItem: e.issued_item || '',
             badge: (e.first_name?.[0] || '').toUpperCase(),
             color: getBadgeColor(e.first_name)
           })));
@@ -115,6 +121,7 @@ const EmployeePage = () => {
         client: form.client,
         position: form.position,
         department: form.department,
+        issued_item: form.issuedItem,
         status: 'active',
       })
     })
@@ -136,10 +143,9 @@ const EmployeePage = () => {
 
   const openEdit = (emp) => {
     setEditing(emp);
-    const [firstName, ...lastNameParts] = (emp.name || '').split(' ');
     setForm({
-      firstName: firstName || emp.firstName || '',
-      lastName: lastNameParts.join(' ') || emp.lastName || '',
+      firstName: emp.firstName || '',
+      lastName: emp.lastName || '',
       email: emp.email || '',
       password: '',
       contact: emp.phone || '',
@@ -147,7 +153,8 @@ const EmployeePage = () => {
       employeeType: emp.employeeType || 'Regular',
       client: emp.client || '',
       position: emp.position || '',
-      department: emp.department || ''
+      department: emp.department || '',
+      issuedItem: emp.issuedItem || ''
     });
     setIsAddOpen(false);
   };
@@ -170,6 +177,7 @@ const EmployeePage = () => {
         client: form.client,
         position: form.position,
         department: form.department,
+        issued_item: form.issuedItem,
         status: 'active'
       })
     })
@@ -317,28 +325,28 @@ const EmployeePage = () => {
               <div className="grid grid-cols-2 gap-6 mb-6">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-2">First Name</label>
-                  <div className="bg-gray-100 rounded-lg p-3">
-                    <span className="text-gray-900">{viewing.firstName}</span>
+                  <div className="bg-gray-100 rounded-lg p-3 text-gray-900 w-full">
+                    {viewing.firstName}
                   </div>
                 </div>
 
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-2">Last Name</label>
-                  <div className="bg-gray-100 rounded-lg p-3 text-gray-900">
+                  <div className="bg-gray-100 rounded-lg p-3 text-gray-900 w-full">
                     {viewing.lastName}
                   </div>
                 </div>
 
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-2">Email</label>
-                  <div className="bg-gray-100 rounded-lg p-3">
-                    <span className="text-gray-900">{viewing.email}</span>
+                  <div className="bg-gray-100 rounded-lg p-3 text-gray-900 w-full">
+                    {viewing.email}
                   </div>
                 </div>
 
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-2">Password</label>
-                  <div className="bg-gray-100 rounded-lg p-3 flex items-center justify-end">
+                  <div className="bg-gray-100 rounded-lg p-3 flex items-center justify-end w-full">
                     <button className="text-gray-400 hover:text-gray-600">
                       <Eye className="h-4 w-4" />
                     </button>
@@ -347,43 +355,50 @@ const EmployeePage = () => {
 
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-2">Contact Number</label>
-                  <div className="bg-gray-100 rounded-lg p-3">
-                    <span className="text-gray-900">{viewing.phone}</span>
+                  <div className="bg-gray-100 rounded-lg p-3 text-gray-900 w-full">
+                    {viewing.phone}
                   </div>
                 </div>
 
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-2">Address</label>
-                  <div className="bg-gray-100 rounded-lg p-3">
-                    <span className="text-gray-900">{viewing.address}</span>
+                  <div className="bg-gray-100 rounded-lg p-3 text-gray-900 w-full">
+                    {viewing.address}
                   </div>
                 </div>
 
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-2">Client</label>
-                  <div className="bg-gray-100 rounded-lg p-3">
-                    <span className="text-gray-900">{viewing.client}</span>
+                  <div className="bg-gray-100 rounded-lg p-3 text-gray-900 w-full">
+                    {viewing.client}
                   </div>
                 </div>
 
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-2">Employee Type</label>
-                  <div className="bg-gray-100 rounded-lg p-3">
-                    <span className="text-gray-900">{viewing.employeeType}</span>
+                  <div className="bg-gray-100 rounded-lg p-3 text-gray-900 w-full">
+                    {viewing.employeeType}
                   </div>
                 </div>
 
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-2">Department</label>
-                  <div className="bg-gray-100 rounded-lg p-3">
-                    <span className="text-gray-900">{viewing.department}</span>
+                  <div className="bg-gray-100 rounded-lg p-3 text-gray-900 w-full">
+                    {viewing.department}
                   </div>
                 </div>
 
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-2">Position</label>
-                  <div className="bg-gray-100 rounded-lg p-3">
-                    <span className="text-gray-900">{viewing.position}</span>
+                  <div className="bg-gray-100 rounded-lg p-3 text-gray-900 w-full">
+                    {viewing.position}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-2">Issued Item</label>
+                  <div className="bg-gray-100 rounded-lg p-3 text-gray-900 w-full">
+                    {viewing.issuedItem}
                   </div>
                 </div>
               </div>
@@ -410,6 +425,7 @@ const EmployeePage = () => {
                       onChange={(e) => setForm({...form, firstName: e.target.value})} 
                       className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" 
                       placeholder="Enter first name"
+                      tabIndex={1}
                     />
                   </div>
                   <div>
@@ -420,6 +436,7 @@ const EmployeePage = () => {
                       onChange={update('email')} 
                       className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" 
                       placeholder="Enter email address"
+                      tabIndex={3}
                     />
                   </div>
                   <div>
@@ -430,6 +447,7 @@ const EmployeePage = () => {
                       onChange={update('contact')} 
                       className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" 
                       placeholder="Enter phone number"
+                      tabIndex={5}
                     />
                   </div>
                   <div>
@@ -438,6 +456,7 @@ const EmployeePage = () => {
                       value={form.client}
                       onChange={(e) => setForm({...form, client: e.target.value})}
                       className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      tabIndex={7}
                     >
                       <option value="">Select client</option>
                       <option value="Client A">Client A</option>
@@ -451,6 +470,7 @@ const EmployeePage = () => {
                       value={form.department}
                       onChange={(e) => setForm({...form, department: e.target.value})}
                       className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      tabIndex={9}
                     >
                       <option value="">Select department</option>
                       <option value="IT Department">IT Department</option>
@@ -459,6 +479,16 @@ const EmployeePage = () => {
                       <option value="Marketing Department">Marketing Department</option>
                       <option value="Finance Department">Finance Department</option>
                     </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-700 font-medium mb-2">Issued Item</label>
+                    <input 
+                      value={form.issuedItem} 
+                      onChange={(e) => setForm({...form, issuedItem: e.target.value})} 
+                      className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                      placeholder="Enter issued item"
+                      tabIndex={11}
+                    />
                   </div>
                 </div>
 
@@ -471,6 +501,7 @@ const EmployeePage = () => {
                       onChange={(e) => setForm({...form, lastName: e.target.value})} 
                       className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" 
                       placeholder="Enter last name"
+                      tabIndex={2}
                     />
                   </div>
                   <div>
@@ -481,23 +512,26 @@ const EmployeePage = () => {
                       onChange={(e) => setForm({...form, password: e.target.value})} 
                       className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" 
                       placeholder="Enter password"
+                      tabIndex={4}
                     />
                   </div>
-          <div>
-            <label className="block text-sm text-gray-700 font-medium mb-2">Address*</label>
-            <input 
-              value={form.address} 
-              onChange={(e) => setForm({...form, address: e.target.value})} 
-              className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" 
-              placeholder="Enter complete address"
-            />
-          </div>
+                  <div>
+                    <label className="block text-sm text-gray-700 font-medium mb-2">Address*</label>
+                    <input 
+                      value={form.address} 
+                      onChange={(e) => setForm({...form, address: e.target.value})} 
+                      className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                      placeholder="Enter complete address"
+                      tabIndex={6}
+                    />
+                  </div>
                   <div>
                     <label className="block text-sm text-gray-700 font-medium mb-2">Employee Type*</label>
                     <select 
                       value={form.employeeType} 
                       onChange={(e) => setForm({...form, employeeType: e.target.value})} 
                       className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      tabIndex={8}
                     >
                       <option value="Regular">Regular</option>
                       <option value="Contractor">Contractor</option>
@@ -510,6 +544,7 @@ const EmployeePage = () => {
                       value={form.position}
                       onChange={(e) => setForm({...form, position: e.target.value})}
                       className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      tabIndex={10}
                     >
                       <option value="">Select position</option>
                       <option value="Manager">Manager</option>
@@ -597,6 +632,16 @@ const EmployeePage = () => {
                       <option value="Marketing Department">Marketing Department</option>
                       <option value="Finance Department">Finance Department</option>
                     </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-700 font-medium mb-2">Issued Item</label>
+                    <input 
+                      value={form.issuedItem || ''} 
+                      onChange={(e) => setForm({...form, issuedItem: e.target.value})} 
+                      className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                      placeholder="Enter issued item"
+                      tabIndex={11}
+                    />
                   </div>
                 </div>
                 

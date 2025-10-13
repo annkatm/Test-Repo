@@ -232,12 +232,17 @@ const RoleManagementPage = () => {
         .filter(item => tempPermissions[item.key] === true)
         .map(item => item.api || item.key);
       
+      console.log('Saving permissions:', permissions); // Debug log
+      console.log('Temp permissions state:', tempPermissions); // Debug log
+      
       // Use user-specific permissions instead of role permissions
       const res = await userService.setPermissions(selectedAdmin.id, permissions, true);
+      console.log('API response:', res); // Debug log
       const updatedUser = res.data;
       
       // Create a fresh mapping for the updated admin
       const updatedAdmin = mapUserToAdmin(updatedUser);
+      console.log('Updated admin mapping:', updatedAdmin); // Debug log
       
       // Only update the specific admin in the list
       setAdmins(admins.map(a => a.id === updatedAdmin.id ? updatedAdmin : a));
@@ -245,6 +250,7 @@ const RoleManagementPage = () => {
       // Update selected admin with the new permissions and re-init its temp state
       setSelectedAdmin(updatedAdmin);
       setTempPermissions(initializeTempPermissions(updatedAdmin));
+      console.log('New temp permissions:', initializeTempPermissions(updatedAdmin)); // Debug log
 
       // If we just changed the permissions of the CURRENT logged-in user, refresh local user so sidebar updates
       try {
