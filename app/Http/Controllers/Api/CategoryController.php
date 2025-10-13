@@ -154,7 +154,7 @@ class CategoryController extends Controller
             "Deleted category: {$category->name}"
         );
         
-        $category->delete();
+        $category->delete(); // This will now soft delete due to SoftDeletes trait
 
         return response()->json([
             'success' => true,

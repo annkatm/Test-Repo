@@ -1,28 +1,96 @@
 import React, { useEffect, useState } from "react";
-import { Search, Eye, Edit, Trash2, Plus, Bell, Settings, ArrowRight, X } from "lucide-react";
+import { Search, Eye, Edit, Trash2, Plus, Bell, Settings, ArrowRight, X, AlertCircle, ChevronDown } from "lucide-react";
 import HomeSidebar from "./HomeSidebar";
 import GlobalHeader from "./components/GlobalHeader";
 
 const UsersPage = () => {
   const [admins, setAdmins] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [employeesList, setEmployeesList] = useState([]); // For dropdown
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [loadingEmployees, setLoadingEmployees] = useState(false);
   const [usersError, setUsersError] = useState("");
-  const [activeFilter, setActiveFilter] = useState("ADMIN"); // ADMIN or EMPLOYEE
+  const [activeFilter, setActiveFilter] = useState("ADMIN");
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [showEmployeeDropdown, setShowEmployeeDropdown] = useState(false);
+  const [employeeSearchTerm, setEmployeeSearchTerm] = useState("");
+  
   const [newUser, setNewUser] = useState({ 
     name: "", 
     username: "", 
     email: "", 
     password: "",
     confirmPassword: "",
-    accountType: "" 
+    accountType: "",
+    employeeType: ""
   });
+
+  const [errors, setErrors] = useState({});
+
+  // Validation functions
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const validatePassword = (password) => {
+    return password.length >= 8;
+  };
+
+  const validateForm = (isEdit = false) => {
+    const newErrors = {};
+
+    // Name validation (required)
+    if (!newUser.name.trim()) {
+      newErrors.name = 'Name is required';
+    } else if (newUser.name.trim().length < 2) {
+      newErrors.name = 'Name must be at least 2 characters';
+    }
+
+    // Email validation
+    if (!newUser.email.trim()) {
+      newErrors.email = 'Email is required';
+    } else if (!validateEmail(newUser.email.trim())) {
+      newErrors.email = 'Please enter a valid email address';
+    }
+
+    // Password validation
+    if (!isEdit && !newUser.password) {
+      newErrors.password = 'Password is required';
+    } else if (newUser.password && !validatePassword(newUser.password)) {
+      newErrors.password = 'Password must be at least 8 characters';
+    }
+
+    // Confirm password validation
+    if (!isEdit && !newUser.confirmPassword) {
+      newErrors.confirmPassword = 'Please confirm your password';
+    } else if (newUser.password && newUser.password !== newUser.confirmPassword) {
+      newErrors.confirmPassword = 'Passwords do not match';
+    }
+
+    // Employee Type validation (for employees)
+    if (activeFilter === "EMPLOYEE" && !newUser.employeeType.trim()) {
+      newErrors.employeeType = 'Employee type is required';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleInputChange = (field, value) => {
+    setNewUser({ ...newUser, [field]: value });
+    
+    // Clear error for this field when user starts typing
+    if (errors[field]) {
+      setErrors({ ...errors, [field]: '' });
+    }
+  };
 
   // Load users from API
   useEffect(() => {
@@ -33,7 +101,6 @@ const UsersPage = () => {
         const res = await fetch('/api/users');
         const json = await res.json();
         if (json.success && json.data) {
-          // Map admin users (excluding Super Admin)
           const adminUsers = json.data.admins
             .filter(user => user.role?.name !== 'super_admin' && user.role?.display_name !== 'Super Admin')
             .map(user => ({
@@ -42,6 +109,7 @@ const UsersPage = () => {
               username: user.employee_id || user.email.split('@')[0],
               email: user.email,
               accountType: user.role ? user.role.display_name : 'Admin',
+              employeeType: user.employee_type || 'Regular',
               role: user.role,
               position: user.position,
               department: user.department,
@@ -49,13 +117,13 @@ const UsersPage = () => {
               is_active: user.is_active
             }));
           
-          // Map employee users
           const employeeUsers = json.data.employees.map(user => ({
             id: user.id,
             name: user.name,
             username: user.employee_id || user.email.split('@')[0],
             email: user.email,
             accountType: user.role ? user.role.display_name : 'Employee',
+            employeeType: user.employee_type || 'Regular',
             role: user.role,
             position: user.position,
             department: user.department,
@@ -77,52 +145,100 @@ const UsersPage = () => {
     fetchUsers();
   }, []);
 
-  const handleAddUser = async () => {
-    if (newUser.name && newUser.username && newUser.email && newUser.password && newUser.confirmPassword) {
-      if (newUser.password !== newUser.confirmPassword) {
-        alert("Passwords do not match!");
-        return;
-      }
-      
+  // Load employees list for dropdown
+  useEffect(() => {
+    const fetchEmployeesList = async () => {
       try {
-        const response = await fetch('/api/users', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-          },
-          body: JSON.stringify({
-            name: newUser.name,
-            email: newUser.email,
-            password: newUser.password,
-            accountType: activeFilter === "ADMIN" ? "admin" : "employee",
-            username: newUser.username,
-            position: "Employee",
-            department: null,
-            phone: null,
-          }),
-        });
-
-        const result = await response.json();
-        
-        if (result.success) {
-          window.location.reload();
-        } else {
-          alert(result.message || 'Failed to create user');
+        setLoadingEmployees(true);
+        const res = await fetch('/api/employees');
+        const json = await res.json();
+        if (json.success && json.data) {
+          const employeesData = json.data.map(emp => ({
+            id: emp.id,
+            name: `${emp.first_name} ${emp.last_name}`.trim(),
+            email: emp.email,
+            employeeType: emp.employee_type || 'Regular',
+            position: emp.position,
+            department: emp.department
+          }));
+          setEmployeesList(employeesData);
         }
-      } catch (error) {
-        console.error('Error creating user:', error);
-        alert('Failed to create user. Please try again.');
+      } catch (err) {
+        console.error('Failed to load employees list:', err);
+      } finally {
+        setLoadingEmployees(false);
       }
+    };
+    fetchEmployeesList();
+  }, []);
+
+  const handleEmployeeSelect = (employee) => {
+    setSelectedEmployee(employee);
+    setNewUser({
+      ...newUser,
+      name: employee.name,
+      email: employee.email,
+      employeeType: employee.employeeType,
+      username: employee.email.split('@')[0] // Auto-generate username from email
+    });
+    setShowEmployeeDropdown(false);
+    setEmployeeSearchTerm(employee.name);
+    
+    // Clear name-related errors
+    if (errors.name) {
+      setErrors({ ...errors, name: '', email: '', employeeType: '' });
+    }
+  };
+
+  const filteredEmployees = employeesList.filter(emp =>
+    emp.name.toLowerCase().includes(employeeSearchTerm.toLowerCase())
+  );
+
+  const handleAddUser = async () => {
+    if (!validateForm()) {
+      return;
+    }
+    
+    try {
+      const response = await fetch('/api/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+        },
+        body: JSON.stringify({
+          name: newUser.name.trim(),
+          email: newUser.email.trim(),
+          password: newUser.password,
+          accountType: activeFilter === "ADMIN" ? "admin" : "employee",
+          username: newUser.username.trim() || newUser.email.split('@')[0], // Auto-generate if not provided
+          employeeType: newUser.employeeType.trim(),
+          position: selectedEmployee?.position || "Employee",
+          department: selectedEmployee?.department || null,
+          phone: null,
+        }),
+      });
+
+      const result = await response.json();
       
-      setNewUser({ name: "", username: "", email: "", password: "", confirmPassword: "", accountType: "" });
-      setShowAddModal(false);
+      if (result.success) {
+        window.location.reload();
+      } else {
+        alert(result.message || 'Failed to create user');
+      }
+    } catch (error) {
+      console.error('Error creating user:', error);
+      alert('Failed to create user. Please try again.');
     }
   };
 
   const handleEditUser = async () => {
-    if (selectedUser && newUser.name && newUser.username && newUser.email) {
+    if (!validateForm(true)) {
+      return;
+    }
+
+    if (selectedUser) {
       try {
         const response = await fetch(`/api/users/${selectedUser.id}`, {
           method: 'PUT',
@@ -132,11 +248,12 @@ const UsersPage = () => {
             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
           },
           body: JSON.stringify({
-            name: newUser.name,
-            email: newUser.email,
+            name: newUser.name.trim(),
+            email: newUser.email.trim(),
             password: newUser.password || null,
             accountType: selectedUser?.accountType === "IT Admin" ? "admin" : "employee",
-            username: newUser.username,
+            username: newUser.username.trim() || newUser.email.split('@')[0],
+            employeeType: newUser.employeeType.trim(),
             position: selectedUser.position || "Employee",
             department: selectedUser.department || null,
             phone: selectedUser.phone || null,
@@ -154,10 +271,6 @@ const UsersPage = () => {
         console.error('Error updating user:', error);
         alert('Failed to update user. Please try again.');
       }
-      
-      setSelectedUser(null);
-      setNewUser({ name: "", username: "", email: "", password: "", confirmPassword: "", accountType: "" });
-      setShowEditModal(false);
     }
   };
 
@@ -189,6 +302,26 @@ const UsersPage = () => {
     }
   };
 
+  const resetForm = () => {
+    setNewUser({ 
+      name: "", 
+      username: "", 
+      email: "", 
+      password: "",
+      confirmPassword: "",
+      accountType: "",
+      employeeType: ""
+    });
+    setSelectedEmployee(null);
+    setEmployeeSearchTerm("");
+    setErrors({});
+  };
+
+  const openAddModal = () => {
+    resetForm();
+    setShowAddModal(true);
+  };
+
   const openEditModal = (user) => {
     setSelectedUser(user);
     setNewUser({
@@ -197,8 +330,10 @@ const UsersPage = () => {
       email: user.email,
       password: "",
       confirmPassword: "",
-      accountType: user.accountType
+      accountType: user.accountType,
+      employeeType: user.employeeType || ""
     });
+    setErrors({});
     setShowEditModal(true);
   };
 
@@ -216,7 +351,6 @@ const UsersPage = () => {
     try {
       const email = encodeURIComponent(user.email || '');
       const employeeId = encodeURIComponent(user.username || '');
-      // Prefer email; fallback to employee_id/username
       const query = email ? `email=${email}` : (employeeId ? `employee_id=${employeeId}` : '');
       const url = query ? `/employee?${query}` : '/employee';
       window.location.href = url;
@@ -226,23 +360,44 @@ const UsersPage = () => {
     }
   };
 
+  // Input component with validation
+  const ValidatedInput = ({ label, field, type = "text", placeholder, required = false }) => (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {label}{required && <span className="text-red-500">*</span>}
+      </label>
+      <input
+        type={type}
+        value={newUser[field] || ''}
+        onChange={(e) => handleInputChange(field, e.target.value)}
+        className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 ${
+          errors[field] 
+            ? 'border-red-300 focus:ring-red-500 focus:border-red-500 bg-red-50' 
+            : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+        }`}
+        placeholder={placeholder}
+      />
+      {errors[field] && (
+        <div className="flex items-center mt-1 text-red-500 text-xs">
+          <AlertCircle className="h-3 w-3 mr-1" />
+          {errors[field]}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="h-screen overflow-hidden bg-white flex">
-      {/* Sidebar */}
       <HomeSidebar />
       
-      {/* Main Content */}
       <div className="flex-1 flex flex-col">
         <GlobalHeader title="Users" />
 
-        {/* Page Content */}
         <div className="flex-1 min-h-0 overflow-y-auto p-6">
-          {/* Page Title */}
           <div className="mb-6">
             <h1 className="text-3xl font-bold text-blue-600">Users</h1>
           </div>
 
-          {/* Filter Buttons */}
           <div className="mb-8">
             <div className="flex items-center justify-between mb-4">
               <div className="flex space-x-4">
@@ -268,7 +423,7 @@ const UsersPage = () => {
                 </button>
               </div>
               <button
-                onClick={() => setShowAddModal(true)}
+                onClick={openAddModal}
                 className="inline-flex items-center px-4 py-2 border border-blue-600 text-blue-600 bg-white rounded-lg hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <Plus className="h-4 w-4 mr-2" />
@@ -277,7 +432,6 @@ const UsersPage = () => {
             </div>
           </div>
 
-          {/* Users Table */}
           <div className="mb-8">
             <h2 className="text-lg font-bold text-gray-900 mb-4">{activeFilter === "ADMIN" ? "Admin" : "Employees"}</h2>
             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
@@ -285,21 +439,22 @@ const UsersPage = () => {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account type</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      {activeFilter === "ADMIN" ? "Account type" : "Employee Type"}
+                    </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {loadingUsers && (
                     <tr>
-                      <td colSpan="5" className="px-6 py-4 text-sm text-gray-500 text-center">Loading...</td>
+                      <td colSpan="4" className="px-6 py-4 text-sm text-gray-500 text-center">Loading...</td>
                     </tr>
                   )}
                   {usersError && !loadingUsers && (
                     <tr>
-                      <td colSpan="5" className="px-6 py-4 text-sm text-red-600 text-center">{usersError}</td>
+                      <td colSpan="4" className="px-6 py-4 text-sm text-red-600 text-center">{usersError}</td>
                     </tr>
                   )}
                   {!loadingUsers && !usersError && (activeFilter === "ADMIN" ? admins : employees).map((user) => (
@@ -308,13 +463,10 @@ const UsersPage = () => {
                         {user.name}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {user.username}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {user.email}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {user.accountType}
+                        {activeFilter === "ADMIN" ? user.accountType : user.employeeType}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">
@@ -355,14 +507,13 @@ const UsersPage = () => {
       {showAddModal && (
         <div className="fixed inset-0 bg-gray-900/30 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white backdrop-blur-md rounded-xl shadow-2xl w-full max-w-3xl p-6 border border-white/20">
-            {/* Header */}
             <div className="bg-gradient-to-r from-blue-50 to-blue-100 px-8 py-6 rounded-t-xl border-b border-blue-200">
               <div className="flex items-center justify-between">
                 <h3 className="text-2xl font-bold text-blue-700">Add User</h3>
                 <button
                   onClick={() => {
                     setShowAddModal(false);
-                    setNewUser({ name: "", username: "", email: "", password: "", confirmPassword: "", accountType: "" });
+                    resetForm();
                   }}
                   className="text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-white hover:shadow-md transition-all duration-200"
                   title="Close"
@@ -372,59 +523,120 @@ const UsersPage = () => {
               </div>
             </div>
             
-            {/* Form Content */}
             <div className="p-8 bg-white">
               <div className="grid grid-cols-2 gap-6">
-                {/* Left Column */}
                 <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Name<span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={newUser.name}
-                      onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  {/* Name Field - Dropdown for Employees */}
+                  {activeFilter === "EMPLOYEE" ? (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Name<span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={employeeSearchTerm}
+                          onChange={(e) => {
+                            setEmployeeSearchTerm(e.target.value);
+                            setShowEmployeeDropdown(true);
+                            if (errors.name) setErrors({ ...errors, name: '' });
+                          }}
+                          onFocus={() => setShowEmployeeDropdown(true)}
+                          className={`w-full border rounded-md px-3 py-2 pr-8 focus:outline-none focus:ring-2 ${
+                            errors.name 
+                              ? 'border-red-300 focus:ring-red-500 focus:border-red-500 bg-red-50' 
+                              : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+                          }`}
+                          placeholder="Search and select employee..."
+                        />
+                        <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        
+                        {showEmployeeDropdown && (
+                          <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                            {loadingEmployees ? (
+                              <div className="px-3 py-2 text-gray-500">Loading employees...</div>
+                            ) : filteredEmployees.length > 0 ? (
+                              filteredEmployees.map((employee) => (
+                                <button
+                                  key={employee.id}
+                                  onClick={() => handleEmployeeSelect(employee)}
+                                  className="w-full text-left px-3 py-2 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
+                                >
+                                  <div className="font-medium">{employee.name}</div>
+                                  <div className="text-xs text-gray-500">{employee.email} • {employee.employeeType}</div>
+                                </button>
+                              ))
+                            ) : (
+                              <div className="px-3 py-2 text-gray-500">No employees found</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {errors.name && (
+                        <div className="flex items-center mt-1 text-red-500 text-xs">
+                          <AlertCircle className="h-3 w-3 mr-1" />
+                          {errors.name}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <ValidatedInput 
+                      label="Name" 
+                      field="name" 
+                      placeholder="Enter full name" 
+                      required={true} 
                     />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Email<span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="email"
-                      value={newUser.email}
-                      onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Password<span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="password"
-                      value={newUser.password}
-                      onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
+                  )}
+
+                  <ValidatedInput 
+                    label="Email" 
+                    field="email" 
+                    type="email" 
+                    placeholder="Enter email address" 
+                    required={true} 
+                  />
+                  
+                  <ValidatedInput 
+                    label="Password" 
+                    field="password" 
+                    type="password" 
+                    placeholder="Enter password" 
+                    required={true} 
+                  />
                 </div>
                 
-                {/* Right Column */}
                 <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Username<span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={newUser.username}
-                      onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
+                  {/* Employee Type Field - Now in the right column */}
+                  {activeFilter === "EMPLOYEE" ? (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Employee Type<span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={newUser.employeeType}
+                        readOnly
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-50 text-gray-600"
+                        placeholder="Select employee first"
+                      />
+                      {errors.employeeType && (
+                        <div className="flex items-center mt-1 text-red-500 text-xs">
+                          <AlertCircle className="h-3 w-3 mr-1" />
+                          {errors.employeeType}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Employee Type
+                      </label>
+                      <div className="w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-50 text-gray-600">
+                        Admin
+                      </div>
+                    </div>
+                  )}
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Account type
@@ -433,26 +645,22 @@ const UsersPage = () => {
                       {activeFilter === "ADMIN" ? "IT Admin" : "Employee"}
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Confirm Password<span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="password"
-                      value={newUser.confirmPassword}
-                      onChange={(e) => setNewUser({ ...newUser, confirmPassword: e.target.value })}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
+                  
+                  <ValidatedInput 
+                    label="Confirm Password" 
+                    field="confirmPassword" 
+                    type="password" 
+                    placeholder="Confirm password" 
+                    required={true} 
+                  />
                 </div>
               </div>
               
-              {/* Action Buttons */}
               <div className="flex justify-between mt-8 pt-6 border-t border-gray-200">
                 <button
                   onClick={() => {
                     setShowAddModal(false);
-                    setNewUser({ name: "", username: "", email: "", password: "", confirmPassword: "", accountType: "" });
+                    resetForm();
                   }}
                   className="inline-flex items-center px-6 py-3 border-2 border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
                 >
@@ -477,14 +685,13 @@ const UsersPage = () => {
         <div className="fixed inset-0 bg-gray-900/30 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="relative bg-white backdrop-blur-md rounded-lg shadow-xl w-full max-w-2xl mx-4 border border-white/20">
             <div className="p-6">
-              {/* Header with title and close button */}
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-bold text-blue-600">Edit User</h3>
                 <button
                   onClick={() => {
                     setShowEditModal(false);
                     setSelectedUser(null);
-                    setNewUser({ name: "", username: "", email: "", password: "", confirmPassword: "", accountType: "" });
+                    resetForm();
                   }}
                   className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100"
                   title="Close"
@@ -493,55 +700,52 @@ const UsersPage = () => {
                 </button>
               </div>
               <div className="grid grid-cols-2 gap-6">
-                {/* Left Column */}
                 <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Name<span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={newUser.name}
-                      onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Email<span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="email"
-                      value={newUser.email}
-                      onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Password<span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="password"
-                      value={newUser.password}
-                      onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
+                  <ValidatedInput 
+                    label="Name" 
+                    field="name" 
+                    placeholder="Enter full name" 
+                    required={true} 
+                  />
+                  <ValidatedInput 
+                    label="Email" 
+                    field="email" 
+                    type="email" 
+                    placeholder="Enter email address" 
+                    required={true} 
+                  />
+                  <ValidatedInput 
+                    label="Password" 
+                    field="password" 
+                    type="password" 
+                    placeholder="Leave blank to keep current password" 
+                  />
                 </div>
                 
-                {/* Right Column */}
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Username<span className="text-red-500">*</span>
+                      Employee Type
                     </label>
-                    <input
-                      type="text"
-                      value={newUser.username}
-                      onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
+                    <select
+                      value={newUser.employeeType || ''}
+                      onChange={(e) => handleInputChange('employeeType', e.target.value)}
+                      className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 ${
+                        errors.employeeType ? 'border-red-500 focus:ring-red-500 bg-red-50' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+                      }`}
+                    >
+                      <option value="">Select employee type</option>
+                      <option value="Regular">Regular</option>
+                      <option value="Contractor">Contractor</option>
+                      <option value="Temporary">Temporary</option>
+                      <option value="Admin">Admin</option>
+                    </select>
+                    {errors.employeeType && (
+                      <div className="flex items-center mt-1 text-red-500 text-xs">
+                        <AlertCircle className="h-3 w-3 mr-1" />
+                        {errors.employeeType}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -551,27 +755,21 @@ const UsersPage = () => {
                       {selectedUser?.accountType || "Employee"}
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Confirm Password<span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="password"
-                      value={newUser.confirmPassword}
-                      onChange={(e) => setNewUser({ ...newUser, confirmPassword: e.target.value })}
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
+                  <ValidatedInput 
+                    label="Confirm Password" 
+                    field="confirmPassword" 
+                    type="password" 
+                    placeholder="Confirm new password" 
+                  />
                 </div>
               </div>
               
-              {/* Action Buttons */}
               <div className="flex justify-between mt-6">
                 <button
                   onClick={() => {
                     setShowEditModal(false);
                     setSelectedUser(null);
-                    setNewUser({ name: "", username: "", email: "", password: "", confirmPassword: "", accountType: "" });
+                    resetForm();
                   }}
                   className="inline-flex items-center px-6 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
@@ -642,8 +840,8 @@ const UsersPage = () => {
               </div>
               <div className="space-y-3 text-sm">
                 <div><span className="text-gray-500">Name:</span> <span className="text-gray-900">{selectedUser?.name}</span></div>
-                <div><span className="text-gray-500">Username:</span> <span className="text-gray-900">{selectedUser?.username}</span></div>
                 <div><span className="text-gray-500">Email:</span> <span className="text-gray-900">{selectedUser?.email}</span></div>
+                <div><span className="text-gray-500">Employee Type:</span> <span className="text-gray-900">{selectedUser?.employeeType || 'N/A'}</span></div>
                 <div><span className="text-gray-500">Account type:</span> <span className="text-gray-900">{selectedUser?.accountType}</span></div>
               </div>
               <div className="mt-6 text-right">
@@ -660,6 +858,14 @@ const UsersPage = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Click outside to close dropdown */}
+      {showEmployeeDropdown && (
+        <div 
+          className="fixed inset-0 z-5" 
+          onClick={() => setShowEmployeeDropdown(false)}
+        />
       )}
     </div>
   );

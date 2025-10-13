@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import HomeSidebar from './HomeSidebar';
 import GlobalHeader from './components/GlobalHeader';
-import { Eye, Pencil, Trash2, Search } from 'lucide-react';
+import { Eye, Pencil, Trash2, Search, AlertCircle } from 'lucide-react';
 
 const getBadgeColor = (name) => {
   const colors = {
@@ -25,20 +25,122 @@ const EmployeePage = () => {
     lastName: '',
     email: '',
     contact: '',
-    employeeId: '', // Employee ID number
+    employeeId: '',
     position: '',
     department: '',
- 
+    address: '',
+    client: '',
+    employeeType: 'Regular',
     issuedItem: '',
     status: 'active',
-    // User account fields
-    createAccount: false, // Whether to create a user account
+    createAccount: false,
     password: '',
     confirmPassword: '',
-    role: 'employee' // Default role for employee accounts
-
+    role: 'employee'
   });
+  const [errors, setErrors] = useState({});
   const [employees, setEmployees] = useState([]);
+
+  // Validation functions
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const validatePhone = (phone) => {
+    const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
+    return phoneRegex.test(phone.replace(/[\s\-\(\)]/g, ''));
+  };
+
+  const validatePassword = (password) => {
+    // At least 8 characters, 1 uppercase, 1 lowercase, 1 number
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d@$!%*?&]{8,}$/;
+    return passwordRegex.test(password);
+  };
+
+  const validateForm = (isEdit = false) => {
+    const newErrors = {};
+
+    // First Name validation
+    if (!form.firstName.trim()) {
+      newErrors.firstName = 'First name is required';
+    } else if (form.firstName.trim().length < 2) {
+      newErrors.firstName = 'First name must be at least 2 characters';
+    } else if (!/^[a-zA-Z\s]+$/.test(form.firstName.trim())) {
+      newErrors.firstName = 'First name can only contain letters and spaces';
+    }
+
+    // Last Name validation
+    if (!form.lastName.trim()) {
+      newErrors.lastName = 'Last name is required';
+    } else if (form.lastName.trim().length < 2) {
+      newErrors.lastName = 'Last name must be at least 2 characters';
+    } else if (!/^[a-zA-Z\s]+$/.test(form.lastName.trim())) {
+      newErrors.lastName = 'Last name can only contain letters and spaces';
+    }
+
+    // Email validation
+    if (!form.email.trim()) {
+      newErrors.email = 'Email is required';
+    } else if (!validateEmail(form.email.trim())) {
+      newErrors.email = 'Please enter a valid email address';
+    }
+
+    // Password validation (required for new employees, optional for edit)
+    if (!isEdit && !form.password) {
+      newErrors.password = 'Password is required';
+    } else if (form.password && !validatePassword(form.password)) {
+      newErrors.password = 'Password must be at least 8 characters with uppercase, lowercase, and number';
+    }
+
+    // Contact validation
+    if (!form.contact.trim()) {
+      newErrors.contact = 'Contact number is required';
+    } else if (!validatePhone(form.contact.trim())) {
+      newErrors.contact = 'Please enter a valid phone number';
+    }
+
+    // Address validation
+    if (!form.address.trim()) {
+      newErrors.address = 'Address is required';
+    } else if (form.address.trim().length < 10) {
+      newErrors.address = 'Address must be at least 10 characters';
+    }
+
+    // Employee Type validation
+    if (!form.employeeType) {
+      newErrors.employeeType = 'Employee type is required';
+    }
+
+    // Optional field validations (only if filled)
+    if (form.client && form.client.trim().length < 2) {
+      newErrors.client = 'Client name must be at least 2 characters';
+    }
+
+    if (form.position && form.position.trim().length < 2) {
+      newErrors.position = 'Position must be at least 2 characters';
+    }
+
+    if (form.department && form.department.trim().length < 2) {
+      newErrors.department = 'Department must be at least 2 characters';
+    }
+
+    if (form.issuedItem && form.issuedItem.trim().length < 2) {
+      newErrors.issuedItem = 'Issued item must be at least 2 characters';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleInputChange = (field, value) => {
+    setForm({ ...form, [field]: value });
+    
+    // Clear error for this field when user starts typing
+    if (errors[field]) {
+      setErrors({ ...errors, [field]: '' });
+    }
+  };
 
   useEffect(() => {
     // Support deep-linking via /employee?email=... or ?employee_id=...
@@ -49,11 +151,9 @@ const EmployeePage = () => {
     fetch('/api/employees')
       .then(res => res.json())
       .then(data => {
-
-        console.log('API Response:', data); // Debug log
+        console.log('API Response:', data);
 
         let list = [];
- e1926e6ea3d479f7c23a85ba918673e5ccae8a53
         if (data.success && Array.isArray(data.data)) {
           list = data.data.map(e => ({
             id: e.id,
@@ -73,7 +173,6 @@ const EmployeePage = () => {
           }));
         }
 
-        // Optional filter: if viewing from Users page, pre-focus this employee
         if (filterEmail || filterEmpId) {
           const match = list.find(e => (filterEmail && e.email?.toLowerCase() === filterEmail.toLowerCase()) || (filterEmpId && (e.employeeId === filterEmpId || e.name?.toLowerCase().includes(filterEmpId.toLowerCase()))));
           if (match) {
@@ -85,32 +184,38 @@ const EmployeePage = () => {
       });
   }, []);
 
-  const update = (key) => (e) => setForm({ ...form, [key]: e.target.value });
-  const resetAll = () => setForm({
-    firstName: '',
-    lastName: '',
-    email: '',
-    contact: '',
-    employeeId: '',
-    position: '',
-    department: '',
- 
-    issuedItem: '',
+  const resetAll = () => {
+    setForm({
+      firstName: '',
+      lastName: '',
+      email: '',
+      contact: '',
+      employeeId: '',
+      position: '',
+      department: '',
+      address: '',
+      client: '',
+      employeeType: 'Regular',
+      issuedItem: '',
+      status: 'active',
+      createAccount: false,
+      password: '',
+      confirmPassword: '',
+      role: 'employee'
+    });
+    setErrors({});
+  };
 
-    status: 'active',
-    createAccount: false,
-    password: '',
-    confirmPassword: '',
-    role: 'employee'
-
-  });
-  const closeModal = () => setIsAddOpen(false);
+  const closeModal = () => {
+    setIsAddOpen(false);
+    setErrors({});
+  };
 
   const refreshEmployees = () => {
     fetch('/api/employees')
       .then(res => res.json())
       .then(data => {
-        console.log('API Response:', data); // Debug log
+        console.log('API Response:', data);
         if (data.success && Array.isArray(data.data)) {
           setEmployees(data.data.map(e => ({
             id: e.id,
@@ -133,6 +238,10 @@ const EmployeePage = () => {
   };
 
   const saveEmployee = () => {
+    if (!validateForm()) {
+      return;
+    }
+
     fetch('/api/employees', {
       method: 'POST',
       headers: {
@@ -140,17 +249,17 @@ const EmployeePage = () => {
         'Accept': 'application/json',
       },
       body: JSON.stringify({
-        first_name: form.firstName,
-        last_name: form.lastName,
-        email: form.email,
+        first_name: form.firstName.trim(),
+        last_name: form.lastName.trim(),
+        email: form.email.trim(),
         password: form.password,
-        phone: form.contact,
-        address: form.address,
+        phone: form.contact.trim(),
+        address: form.address.trim(),
         employee_type: form.employeeType,
-        client: form.client,
-        position: form.position,
-        department: form.department,
-        issued_item: form.issuedItem,
+        client: form.client.trim(),
+        position: form.position.trim(),
+        department: form.department.trim(),
+        issued_item: form.issuedItem.trim(),
         status: 'active',
       })
     })
@@ -185,28 +294,36 @@ const EmployeePage = () => {
       department: emp.department || '',
       issuedItem: emp.issuedItem || ''
     });
+    setErrors({});
     setIsAddOpen(false);
   };
   
-  const closeEdit = () => { setEditing(null); resetAll(); };
+  const closeEdit = () => { 
+    setEditing(null); 
+    resetAll(); 
+  };
 
   const updateEmployee = () => {
+    if (!validateForm(true)) {
+      return;
+    }
+
     if (!editing) return;
     fetch(`/api/employees/${editing.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       body: JSON.stringify({
-        first_name: form.firstName,
-        last_name: form.lastName,
-        email: form.email,
+        first_name: form.firstName.trim(),
+        last_name: form.lastName.trim(),
+        email: form.email.trim(),
         password: form.password || undefined,
-        phone: form.contact,
-        address: form.address,
+        phone: form.contact.trim(),
+        address: form.address.trim(),
         employee_type: form.employeeType,
-        client: form.client,
-        position: form.position,
-        department: form.department,
-        issued_item: form.issuedItem,
+        client: form.client.trim(),
+        position: form.position.trim(),
+        department: form.department.trim(),
+        issued_item: form.issuedItem.trim(),
         status: 'active'
       })
     })
@@ -245,6 +362,58 @@ const EmployeePage = () => {
     (emp.position || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (emp.department || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (emp.client || '').toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Input component with validation
+  const ValidatedInput = ({ label, field, type = "text", placeholder, required = false, tabIndex }) => (
+    <div>
+      <label className="block text-sm text-gray-700 font-medium mb-2">
+        {label}{required && <span className="text-red-500">*</span>}
+      </label>
+      <input 
+        type={type}
+        value={form[field] || ''} 
+        onChange={(e) => handleInputChange(field, e.target.value)}
+        className={`w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 ${
+          errors[field] ? 'focus:ring-red-500 bg-red-50' : 'focus:ring-blue-500'
+        }`}
+        placeholder={placeholder}
+        tabIndex={tabIndex}
+      />
+      {errors[field] && (
+        <div className="flex items-center mt-1 text-red-500 text-xs">
+          <AlertCircle className="h-3 w-3 mr-1" />
+          {errors[field]}
+        </div>
+      )}
+    </div>
+  );
+
+  // Select component with validation
+  const ValidatedSelect = ({ label, field, options, required = false, tabIndex }) => (
+    <div>
+      <label className="block text-sm text-gray-700 font-medium mb-2">
+        {label}{required && <span className="text-red-500">*</span>}
+      </label>
+      <select
+        value={form[field] || ''}
+        onChange={(e) => handleInputChange(field, e.target.value)}
+        className={`w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 focus:outline-none focus:ring-2 ${
+          errors[field] ? 'focus:ring-red-500 bg-red-50' : 'focus:ring-blue-500'
+        }`}
+        tabIndex={tabIndex}
+      >
+        {options.map((option, index) => (
+          <option key={index} value={option.value}>{option.label}</option>
+        ))}
+      </select>
+      {errors[field] && (
+        <div className="flex items-center mt-1 text-red-500 text-xs">
+          <AlertCircle className="h-3 w-3 mr-1" />
+          {errors[field]}
+        </div>
+      )}
+    </div>
   );
 
   return (
@@ -344,6 +513,7 @@ const EmployeePage = () => {
           </div>
         </div>
 
+        {/* View Modal */}
         {viewing && (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/20" onClick={closeView} />
@@ -431,12 +601,11 @@ const EmployeePage = () => {
                   </div>
                 </div>
               </div>
-
-              
             </div>
           </div>
         )}
 
+        {/* Add Modal */}
         {isAddOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/20" onClick={closeModal} />
@@ -447,140 +616,107 @@ const EmployeePage = () => {
               <div className="grid grid-cols-2 gap-6">
                 {/* LEFT SIDE */}
                 <div className="space-y-6">
-                  <div>
-                    <label className="block text-sm text-gray-700 font-medium mb-2">First Name*</label>
-                    <input 
-                      value={form.firstName} 
-                      onChange={(e) => setForm({...form, firstName: e.target.value})} 
-                      className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                      placeholder="Enter first name"
-                      tabIndex={1}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-700 font-medium mb-2">Email*</label>
-                    <input 
-                      type="email"
-                      value={form.email} 
-                      onChange={update('email')} 
-                      className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                      placeholder="Enter email address"
-                      tabIndex={3}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-700 font-medium mb-2">Contact Number*</label>
-                    <input 
-                      type="tel"
-                      value={form.contact} 
-                      onChange={update('contact')} 
-                      className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                      placeholder="Enter phone number"
-                      tabIndex={5}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-700 font-medium mb-2">Client</label>
-                    <select
-                      value={form.client}
-                      onChange={(e) => setForm({...form, client: e.target.value})}
-                      className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      tabIndex={7}
-                    >
-                      <option value="">Select client</option>
-                      <option value="Client A">Client A</option>
-                      <option value="Client B">Client B</option>
-                      <option value="Client C">Client C</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-700 font-medium mb-2">Department</label>
-                    <select
-                      value={form.department}
-                      onChange={(e) => setForm({...form, department: e.target.value})}
-                      className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      tabIndex={9}
-                    >
-                      <option value="">Select department</option>
-                      <option value="IT Department">IT Department</option>
-                      <option value="HR Department">HR Department</option>
-                      <option value="Sales Department">Sales Department</option>
-                      <option value="Marketing Department">Marketing Department</option>
-                      <option value="Finance Department">Finance Department</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-700 font-medium mb-2">Issued Item</label>
-                    <input 
-                      value={form.issuedItem} 
-                      onChange={(e) => setForm({...form, issuedItem: e.target.value})} 
-                      className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                      placeholder="Enter issued item"
-                      tabIndex={11}
-                    />
-                  </div>
+                  <ValidatedInput 
+                    label="First Name" 
+                    field="firstName" 
+                    placeholder="Enter first name" 
+                    required={true} 
+                    tabIndex={1} 
+                  />
+                  <ValidatedInput 
+                    label="Email" 
+                    field="email" 
+                    type="email" 
+                    placeholder="Enter email address" 
+                    required={true} 
+                    tabIndex={3} 
+                  />
+                  <ValidatedInput 
+                    label="Contact Number" 
+                    field="contact" 
+                    type="tel" 
+                    placeholder="Enter phone number" 
+                    required={true} 
+                    tabIndex={5} 
+                  />
+                  <ValidatedSelect
+                    label="Client"
+                    field="client"
+                    tabIndex={7}
+                    options={[
+                      { value: '', label: 'Select client' },
+                      { value: 'Client A', label: 'Client A' },
+                      { value: 'Client B', label: 'Client B' },
+                      { value: 'Client C', label: 'Client C' }
+                    ]}
+                  />
+                  <ValidatedSelect
+                    label="Department"
+                    field="department"
+                    tabIndex={9}
+                    options={[
+                      { value: '', label: 'Select department' },
+                      { value: 'IT Department', label: 'IT Department' },
+                      { value: 'HR Department', label: 'HR Department' },
+                      { value: 'Sales Department', label: 'Sales Department' },
+                      { value: 'Marketing Department', label: 'Marketing Department' },
+                      { value: 'Finance Department', label: 'Finance Department' }
+                    ]}
+                  />
+                  <ValidatedInput 
+                    label="Issued Item" 
+                    field="issuedItem" 
+                    placeholder="Enter issued item" 
+                    tabIndex={11} 
+                  />
                 </div>
 
                 {/* RIGHT SIDE */}
                 <div className="space-y-6">
-                  <div>
-                    <label className="block text-sm text-gray-700 font-medium mb-2">Last Name*</label>
-                    <input 
-                      value={form.lastName} 
-                      onChange={(e) => setForm({...form, lastName: e.target.value})} 
-                      className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                      placeholder="Enter last name"
-                      tabIndex={2}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-700 font-medium mb-2">Password*</label>
-                    <input 
-                      type="password"
-                      value={form.password} 
-                      onChange={(e) => setForm({...form, password: e.target.value})} 
-                      className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                      placeholder="Enter password"
-                      tabIndex={4}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-700 font-medium mb-2">Address*</label>
-                    <input 
-                      value={form.address} 
-                      onChange={(e) => setForm({...form, address: e.target.value})} 
-                      className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                      placeholder="Enter complete address"
-                      tabIndex={6}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-700 font-medium mb-2">Employee Type*</label>
-                    <select 
-                      value={form.employeeType} 
-                      onChange={(e) => setForm({...form, employeeType: e.target.value})} 
-                      className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      tabIndex={8}
-                    >
-                      <option value="Regular">Regular</option>
-                      <option value="Contractor">Contractor</option>
-                      <option value="Temporary">Temporary</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-700 font-medium mb-2">Position</label>
-                    <select
-                      value={form.position}
-                      onChange={(e) => setForm({...form, position: e.target.value})}
-                      className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      tabIndex={10}
-                    >
-                      <option value="">Select position</option>
-                      <option value="Manager">Manager</option>
-                      <option value="Supervisor">Supervisor</option>
-                      <option value="Staff">Staff</option>
-                    </select>
-                  </div>
+                  <ValidatedInput 
+                    label="Last Name" 
+                    field="lastName" 
+                    placeholder="Enter last name" 
+                    required={true} 
+                    tabIndex={2} 
+                  />
+                  <ValidatedInput 
+                    label="Password" 
+                    field="password" 
+                    type="password" 
+                    placeholder="Enter password" 
+                    required={true} 
+                    tabIndex={4} 
+                  />
+                  <ValidatedInput 
+                    label="Address" 
+                    field="address" 
+                    placeholder="Enter complete address" 
+                    required={true} 
+                    tabIndex={6} 
+                  />
+                  <ValidatedSelect
+                    label="Employee Type"
+                    field="employeeType"
+                    required={true}
+                    tabIndex={8}
+                    options={[
+                      { value: 'Regular', label: 'Regular' },
+                      { value: 'Contractor', label: 'Contractor' },
+                      { value: 'Temporary', label: 'Temporary' }
+                    ]}
+                  />
+                  <ValidatedSelect
+                    label="Position"
+                    field="position"
+                    tabIndex={10}
+                    options={[
+                      { value: '', label: 'Select position' },
+                      { value: 'Manager', label: 'Manager' },
+                      { value: 'Supervisor', label: 'Supervisor' },
+                      { value: 'Staff', label: 'Staff' }
+                    ]}
+                  />
                 </div>
               </div>
 
@@ -592,6 +728,7 @@ const EmployeePage = () => {
           </div>
         )}
 
+        {/* Edit Modal */}
         {editing && (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/20" onClick={closeEdit} />
@@ -600,141 +737,106 @@ const EmployeePage = () => {
               <h3 className="text-xl font-semibold text-blue-500 text-center mb-8">Edit employee</h3>
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-6">
-                  <div>
-                    <label className="block text-sm text-gray-700 font-medium mb-2">First Name*</label>
-                    <input 
-                      value={form.firstName || ''} 
-                      onChange={(e) => setForm({...form, firstName: e.target.value})} 
-                      className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                      placeholder="Enter first name"
-                      tabIndex={1}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-700 font-medium mb-2">Email*</label>
-                    <input 
-                      type="email"
-                      value={form.email} 
-                      onChange={update('email')} 
-                      className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                      placeholder="Enter email address"
-                      tabIndex={3}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-700 font-medium mb-2">Contact Number*</label>
-                    <input 
-                      type="tel"
-                      value={form.contact} 
-                      onChange={update('contact')} 
-                      className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                      placeholder="Enter phone number"
-                      tabIndex={5}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-700 font-medium mb-2">Client</label>
-                    <select
-                      value={form.client || ''}
-                      onChange={(e) => setForm({...form, client: e.target.value})}
-                      className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      tabIndex={7}
-                    >
-                      <option value="">Select client</option>
-                      <option value="Client A">Client A</option>
-                      <option value="Client B">Client B</option>
-                      <option value="Client C">Client C</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-700 font-medium mb-2">Department</label>
-                    <select
-                      value={form.department || ''}
-                      onChange={(e) => setForm({...form, department: e.target.value})}
-                      className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      tabIndex={9}
-                    >
-                      <option value="">Select department</option>
-                      <option value="IT Department">IT Department</option>
-                      <option value="HR Department">HR Department</option>
-                      <option value="Sales Department">Sales Department</option>
-                      <option value="Marketing Department">Marketing Department</option>
-                      <option value="Finance Department">Finance Department</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-700 font-medium mb-2">Issued Item</label>
-                    <input 
-                      value={form.issuedItem || ''} 
-                      onChange={(e) => setForm({...form, issuedItem: e.target.value})} 
-                      className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                      placeholder="Enter issued item"
-                      tabIndex={11}
-                    />
-                  </div>
+                  <ValidatedInput 
+                    label="First Name" 
+                    field="firstName" 
+                    placeholder="Enter first name" 
+                    required={true} 
+                    tabIndex={1} 
+                  />
+                  <ValidatedInput 
+                    label="Email" 
+                    field="email" 
+                    type="email" 
+                    placeholder="Enter email address" 
+                    required={true} 
+                    tabIndex={3} 
+                  />
+                  <ValidatedInput 
+                    label="Contact Number" 
+                    field="contact" 
+                    type="tel" 
+                    placeholder="Enter phone number" 
+                    required={true} 
+                    tabIndex={5} 
+                  />
+                  <ValidatedSelect
+                    label="Client"
+                    field="client"
+                    tabIndex={7}
+                    options={[
+                      { value: '', label: 'Select client' },
+                      { value: 'Client A', label: 'Client A' },
+                      { value: 'Client B', label: 'Client B' },
+                      { value: 'Client C', label: 'Client C' }
+                    ]}
+                  />
+                  <ValidatedSelect
+                    label="Department"
+                    field="department"
+                    tabIndex={9}
+                    options={[
+                      { value: '', label: 'Select department' },
+                      { value: 'IT Department', label: 'IT Department' },
+                      { value: 'HR Department', label: 'HR Department' },
+                      { value: 'Sales Department', label: 'Sales Department' },
+                      { value: 'Marketing Department', label: 'Marketing Department' },
+                      { value: 'Finance Department', label: 'Finance Department' }
+                    ]}
+                  />
+                  <ValidatedInput 
+                    label="Issued Item" 
+                    field="issuedItem" 
+                    placeholder="Enter issued item" 
+                    tabIndex={11} 
+                  />
                 </div>
                 
                 <div className="space-y-6">
-                  <div>
-                    <label className="block text-sm text-gray-700 font-medium mb-2">Last Name*</label>
-                    <input 
-                      value={form.lastName || ''} 
-                      onChange={(e) => setForm({...form, lastName: e.target.value})} 
-                      className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                      placeholder="Enter last name"
-                      tabIndex={2}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-700 font-medium mb-2">Password*</label>
-                    <input 
-                      type="password"
-                      value={form.password || ''} 
-                      onChange={(e) => setForm({...form, password: e.target.value})} 
-                      className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                      placeholder="Enter password"
-                      tabIndex={4}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-700 font-medium mb-2">Address*</label>
-                    <input 
-                      value={form.address || ''} 
-                      onChange={(e) => setForm({...form, address: e.target.value})} 
-                      className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500" 
-                      placeholder="Enter complete address"
-                      tabIndex={6}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-700 font-medium mb-2">Employee Type*</label>
-                    <select 
-                      value={form.employeeType || 'Regular'} 
-                      onChange={(e) => setForm({...form, employeeType: e.target.value})} 
-                      className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      tabIndex={8}
-                    >
-                      <option value="Regular">Regular</option>
-                      <option value="Contractor">Contractor</option>
-                      <option value="Temporary">Temporary</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-700 font-medium mb-2">Position</label>
-                    <select
-                      value={form.position || ''}
-                      onChange={(e) => setForm({...form, position: e.target.value})}
-                      className="w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      tabIndex={10}
-                    >
-                      <option value="">Select position</option>
-                      <option value="Manager">Manager</option>
-                      <option value="Supervisor">Supervisor</option>
-                      <option value="Staff">Staff</option>
-                    </select>
-                  </div>
+                  <ValidatedInput 
+                    label="Last Name" 
+                    field="lastName" 
+                    placeholder="Enter last name" 
+                    required={true} 
+                    tabIndex={2} 
+                  />
+                  <ValidatedInput 
+                    label="Password" 
+                    field="password" 
+                    type="password" 
+                    placeholder="Leave blank to keep current password" 
+                    tabIndex={4} 
+                  />
+                  <ValidatedInput 
+                    label="Address" 
+                    field="address" 
+                    placeholder="Enter complete address" 
+                    required={true} 
+                    tabIndex={6} 
+                  />
+                  <ValidatedSelect
+                    label="Employee Type"
+                    field="employeeType"
+                    required={true}
+                    tabIndex={8}
+                    options={[
+                      { value: 'Regular', label: 'Regular' },
+                      { value: 'Contractor', label: 'Contractor' },
+                      { value: 'Temporary', label: 'Temporary' }
+                    ]}
+                  />
+                  <ValidatedSelect
+                    label="Position"
+                    field="position"
+                    tabIndex={10}
+                    options={[
+                      { value: '', label: 'Select position' },
+                      { value: 'Manager', label: 'Manager' },
+                      { value: 'Supervisor', label: 'Supervisor' },
+                      { value: 'Staff', label: 'Staff' }
+                    ]}
+                  />
                 </div>
-                
               </div>
               <div className="mt-8 flex items-center justify-between">
                 <button onClick={resetAll} className="text-blue-500 hover:text-blue-600 font-medium">Reset</button>
@@ -744,6 +846,7 @@ const EmployeePage = () => {
           </div>
         )}
 
+        {/* Delete Modal */}
         {deleting && (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/50" onClick={closeDelete} />
