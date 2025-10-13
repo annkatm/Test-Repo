@@ -61,8 +61,7 @@ class RequestController extends Controller
         // Filter by equipment type (e.g., laptop)
         if ($request->has('equipment_type')) {
             $equipmentType = $request->equipment_type;
-            $query->join('categories', 'equipment.category_id', '=', 'categories.id')
-                  ->where('categories.name', 'like', '%' . $equipmentType . '%');
+            $query->where('categories.name', 'like', '%' . $equipmentType . '%');
         }
 
         // Filter by request type
@@ -163,7 +162,7 @@ class RequestController extends Controller
                 'employee_id' => $validated['employee_id'],
                 'equipment_id' => $validated['equipment_id'],
                 // Attach the requesting user (from session) so UI can trace who requested
-                'user_id' => auth()->id(),
+                'user_id' => Auth::id(),
                 'request_type' => $validated['request_type'],
                 'request_mode' => $validated['request_mode'],
                 'reason' => $validated['reason'] ?? null,
@@ -545,6 +544,88 @@ class RequestController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error rejecting request: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Fulfill the specified request.
+     */
+    public function fulfill(Request $request, string $id): JsonResponse
+    {
+        try {
+            $equipmentRequest = DB::table('requests')->where('id', $id)->first();
+
+            if (!$equipmentRequest) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Request not found'
+                ], 404);
+            }
+
+            if ($equipmentRequest->status !== 'approved') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Only approved requests can be fulfilled'
+                ], 422);
+            }
+
+            DB::transaction(function () use ($equipmentRequest, $id) {
+                // Update request status
+                DB::table('requests')->where('id', $id)->update([
+                    'status' => 'fulfilled',
+                    'updated_at' => now(),
+                ]);
+
+                // Ensure equipment status is in_use
+                DB::table('equipment')->where('id', $equipmentRequest->equipment_id)->update([
+                    'status' => 'in_use',
+                    'updated_at' => now(),
+                ]);
+
+                // Update transaction status if exists
+                DB::table('transactions')->where('request_id', $id)->update([
+                    'status' => 'released', // Equipment has been released to employee
+                    'release_date' => now(),
+                    'updated_at' => now(),
+                ]);
+            });
+
+            // Log the activity
+            ActivityLogService::logSystemActivity(
+                'Fulfilled request',
+                "Fulfilled request #{$equipmentRequest->request_number}"
+            );
+
+            // Fetch updated request with related data
+            $updatedRequest = DB::table('requests')
+                ->leftJoin('employees', 'requests.employee_id', '=', 'employees.id')
+                ->leftJoin('equipment', 'requests.equipment_id', '=', 'equipment.id')
+                ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
+                ->leftJoin('users as approver', 'requests.approved_by', '=', 'approver.id')
+                ->where('requests.id', $id)
+                ->select(
+                    'requests.*',
+                    DB::raw("CONCAT(COALESCE(employees.first_name, ''), ' ', COALESCE(employees.last_name, '')) as full_name"),
+                    DB::raw("COALESCE(employees.employee_type, '') as position"),
+                    DB::raw("COALESCE(equipment.name, '') as equipment_name"),
+                    DB::raw("COALESCE(equipment.brand, '') as brand"),
+                    DB::raw("COALESCE(equipment.model, '') as model"),
+                    DB::raw("COALESCE(categories.name, '') as category_name"),
+                    DB::raw("COALESCE(approver.name, '') as approved_by_name")
+                )
+                ->first();
+
+            return response()->json([
+                'success' => true,
+                'data' => $updatedRequest,
+                'message' => 'Request fulfilled successfully'
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error fulfilling request: ' . $e->getMessage()
             ], 500);
         }
     }
