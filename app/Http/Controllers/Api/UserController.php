@@ -360,11 +360,11 @@ class UserController extends Controller
             // ✅ CRITICAL FIX: Return the complete user object instead of just permissions
             return response()->json([
                 'success' => true,
-<<<<<<< HEAD
+
                 'data' => $user, // Return the full user object instead of just permissions
-=======
+
                 'data' => $user, // Now returns the full user object with all relationships
->>>>>>> e1926e6ea3d479f7c23a85ba918673e5ccae8a53
+ 
                 'message' => 'User permissions updated successfully'
             ]);
         } catch (\Exception $e) {
@@ -397,11 +397,11 @@ class UserController extends Controller
             // ✅ CRITICAL FIX: Return the complete user object instead of just permissions
             return response()->json([
                 'success' => true,
-<<<<<<< HEAD
-                'data' => $user, // Return the full user object instead of just permissions
-=======
+ 
+            'data' => $user, // Return the full user object instead of just permissions
+
                 'data' => $user, // Now returns the full user object with all relationships
->>>>>>> e1926e6ea3d479f7c23a85ba918673e5ccae8a53
+
                 'message' => 'User permissions reset to role defaults'
             ]);
         } catch (\Exception $e) {
