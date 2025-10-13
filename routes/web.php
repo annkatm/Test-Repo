@@ -6,6 +6,7 @@ use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\ActivityLogController;
+use App\Http\Controllers\Api\RequestController;
 
 // Authentication routes
 Route::get('/', [AuthController::class, 'showLoginForm'])->name('login');
@@ -19,9 +20,15 @@ Route::get('/csrf-token', function () {
 
 // Protected routes (require authentication)
 Route::middleware(['auth'])->group(function () {
+    // Admin dashboard (for super_admin and admin roles)
     Route::get('/dashboard', function () {
         return view('home'); // loads resources/views/home.blade.php with Dashboard component
     })->name('dashboard');
+
+    // Employee dashboard (for employee role)
+    Route::get('/employee/dashboard', function () {
+        return view('employee_dashboard');
+    })->name('employee.dashboard');
 
     Route::get('/employee', function () {
         return view('employee_page');
@@ -41,7 +48,6 @@ Route::middleware(['auth'])->group(function () {
 
     // Activity Logs JSON endpoints (session-authenticated)
     Route::get('/activity-logs', [ActivityLogController::class, 'index']);
-    Route::post('/activity-logs', [ActivityLogController::class, 'store']);
     Route::get('/activity-logs/user/{userId}', [ActivityLogController::class, 'forUser']);
     Route::get('/activity-logs/model/{modelType}/{modelId?}', [ActivityLogController::class, 'forModel']);
     Route::get('/activity-logs/recent', [ActivityLogController::class, 'recent']);
@@ -63,6 +69,15 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/roles/{id}', [RoleController::class, 'destroy']);
         Route::post('/roles/{id}/permissions', [RoleController::class, 'setPermissions']);
     });
+
+    // Request routes (session auth with CSRF protection)
+    Route::post('/api/requests', [RequestController::class, 'store'])->name('requests.store');
+    Route::get('/api/requests', [RequestController::class, 'index'])->name('requests.index');
+    Route::get('/api/requests/{id}', [RequestController::class, 'show'])->name('requests.show');
+    Route::put('/api/requests/{id}', [RequestController::class, 'update'])->name('requests.update');
+    Route::delete('/api/requests/{id}', [RequestController::class, 'destroy'])->name('requests.destroy');
+    Route::post('/api/requests/{id}/approve', [RequestController::class, 'approve'])->name('requests.approve');
+    Route::post('/api/requests/{id}/reject', [RequestController::class, 'reject'])->name('requests.reject');
 });
 
 Route::get('/equipment', function () {
@@ -90,6 +105,7 @@ Route::get('/reports', function () {
     return view('reports');
 })->name('reports');
 
+// Archive page
 Route::get('/archive', function () {
     return view('archive');
 })->name('archive');

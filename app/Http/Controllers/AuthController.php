@@ -80,6 +80,9 @@ class AuthController extends Controller
         // Get user role information
         $role = $user->role;
         
+        // Determine redirect route based on role
+        $redirectRoute = $this->getRedirectRouteForRole($role);
+        
         if ($request->expectsJson()) {
             // For JSON requests, we need to ensure the session cookie is properly set
             // by using a different approach - return a redirect response that sets the cookie
@@ -97,10 +100,31 @@ class AuthController extends Controller
             ]]);
             
             // Return a redirect response that will set the session cookie
-            return redirect()->route('dashboard')->with('login_success', true);
+            return redirect()->route($redirectRoute)->with('login_success', true);
         }
 
-        return redirect()->route('dashboard');
+        return redirect()->route($redirectRoute);
+    }
+
+    /**
+     * Determine the redirect route based on user role
+     */
+    private function getRedirectRouteForRole($role)
+    {
+        if (!$role) {
+            return 'dashboard'; // Default fallback
+        }
+
+        // Check role name
+        switch ($role->name) {
+            case 'employee':
+                return 'employee.dashboard';
+            case 'super_admin':
+            case 'admin':
+                return 'dashboard';
+            default:
+                return 'dashboard';
+        }
     }
 
     public function logout(Request $request)
@@ -116,7 +140,47 @@ class AuthController extends Controller
     {
         if (Auth::check()) {
             $user = Auth::user();
+            // Eager-load relations to expose permissions correctly
+            $user->load(['role', 'userPermissions']);
             $role = $user->role;
+            $userPerm = $user->userPermissions;
+            // Resolve linked employee id based on user fields; create if missing for employee role
+            $linkedEmployeeId = null;
+            try {
+                $linkedEmployee = \Illuminate\Support\Facades\DB::table('employees')
+                    ->when($user->employee_id, function ($q) use ($user) {
+                        return $q->where('employee_id', $user->employee_id);
+                    })
+                    ->orWhere(function ($q) use ($user) {
+                        $q->whereNotNull('email')->where('email', $user->email);
+                    })
+                    ->first();
+
+                if (!$linkedEmployee && $user->role && $user->role->name === 'employee') {
+                    // Auto-provision a basic employee record for employee users
+                    $nameParts = preg_split('/\s+/', trim((string) $user->name));
+                    $firstName = $nameParts[0] ?? '';
+                    $lastName = count($nameParts) > 1 ? implode(' ', array_slice($nameParts, 1)) : '';
+                    $generatedEmpCode = $user->employee_id ?: ('EMP' . time());
+
+                    $id = \Illuminate\Support\Facades\DB::table('employees')->insertGetId([
+                        'employee_id' => $generatedEmpCode,
+                        'first_name' => $firstName,
+                        'last_name' => $lastName,
+                        'email' => $user->email,
+                        'employee_type' => 'Regular',
+                        'status' => 'active',
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+
+                    $linkedEmployee = \Illuminate\Support\Facades\DB::table('employees')->where('id', $id)->first();
+                }
+
+                $linkedEmployeeId = $linkedEmployee ? $linkedEmployee->id : null;
+            } catch (\Throwable $e) {
+                // ignore resolution errors, keep null
+            }
             
             return response()->json([
                 'authenticated' => true,
@@ -126,8 +190,17 @@ class AuthController extends Controller
                     'email' => $user->email,
                     'role' => $role ? $role->name : null,
                     'role_display' => $role ? $role->display_name : null,
+                    // Keep role permissions field for backward-compat
                     'permissions' => $role ? $role->permissions : null,
-                    'is_active' => $user->is_active
+                    // NEW: include user custom permissions so the frontend can prefer them
+                    'user_permissions' => $userPerm ? [
+                        'use_custom_permissions' => (bool) $userPerm->use_custom_permissions,
+                        'permissions' => $userPerm->permissions ?? [],
+                    ] : null,
+                    'is_active' => $user->is_active,
+                    // Surface linkage so Employee pages can resolve quickly
+                    'employee_code' => $user->employee_id,
+                    'linked_employee_id' => $linkedEmployeeId,
                 ]
             ]);
         }
@@ -139,7 +212,9 @@ class AuthController extends Controller
     {
         if (Auth::check()) {
             $user = Auth::user();
+            $user->load(['role', 'userPermissions']);
             $role = $user->role;
+            $userPerm = $user->userPermissions;
             
             return response()->json([
                 'success' => true,
@@ -151,6 +226,10 @@ class AuthController extends Controller
                     'role' => $role ? $role->name : null,
                     'role_display' => $role ? $role->display_name : null,
                     'permissions' => $role ? $role->permissions : null,
+                    'user_permissions' => $userPerm ? [
+                        'use_custom_permissions' => (bool) $userPerm->use_custom_permissions,
+                        'permissions' => $userPerm->permissions ?? [],
+                    ] : null,
                     'is_active' => $user->is_active
                 ],
                 'redirect' => route('dashboard')

@@ -1,8 +1,8 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { initReact } from './utils/initReact';
-import Employee from './Users/Employee.jsx';
 import EmployeePage from './EmployeePage.jsx';
+import EmployeeDashboard from './Users/EmployeeDashboard.jsx';
 import SimpleEmployee from './SimpleEmployee';
 import ViewRequest from './ViewRequest';
 import ViewApproved from './ViewApproved.jsx';
@@ -47,7 +47,6 @@ window.RoleManagementPage = RoleManagementPage;
 window.UsersPage = UsersPage;
 window.ControlPanel = ControlPanel;
 window.Reports = Reports;
-window.Archive = Archive;
 
 // Double check components are properly exposed
 console.log('ViewApproved component:', ViewApproved);
@@ -113,7 +112,42 @@ console.log('React version:', React.version);
 // Wait for DOM to be ready
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM loaded, looking for containers');
+  // Lazy-load SuperAdmin when the superadmin page is present to code-split large admin bundle
+  (function lazyLoadSuperAdmin() {
+    const superAdminContainer = document.getElementById('superadmin-root');
+    if (!superAdminContainer) return;
+    // Dynamic import creates a separate chunk for SuperAdmin
+    import('./SuperAdmin.jsx')
+      .then((mod) => {
+        const SuperAdmin = mod.default || mod;
+        // Expose globally for existing inline scripts that expect window.SuperAdmin
+        try { window.SuperAdmin = SuperAdmin; } catch (e) { /* ignore */ }
+        // Try to render immediately if the container is present
+        try {
+          if (typeof window.ReactDOM !== 'undefined' && typeof window.ReactDOM.createRoot === 'function') {
+            const root = window.ReactDOM.createRoot(superAdminContainer);
+            root.render(window.React.createElement(SuperAdmin));
+          }
+        } catch (err) {
+          console.error('Error rendering lazy-loaded SuperAdmin:', err);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to lazy-load SuperAdmin chunk:', err);
+      });
+  })();
     
+    // Mount Archive page
+    const archiveContainer = document.getElementById('archive-root');
+    if (archiveContainer) {
+        try {
+            const root = createRoot(archiveContainer);
+            root.render(React.createElement(Archive));
+        } catch (error) {
+            console.error('Error rendering Archive component:', error);
+        }
+    }
+
     // Check for home-root first (for homepage/dashboard)
     const homeContainer = document.getElementById('home-root');
     console.log('home-root element found:', homeContainer);
@@ -161,11 +195,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             };
             
-            // Render Employee component directly on employee page
+            // Render SimpleEmployee component directly on employee page
             try {
-                console.log('Rendering Employee component on employee-root');
-                root.render(React.createElement(Employee));
-                console.log('Employee component rendered to employee-root');
+                console.log('Rendering SimpleEmployee component on employee-root');
+                root.render(React.createElement(SimpleEmployee));
+                console.log('SimpleEmployee component rendered to employee-root');
             } catch (employeeError) {
                 console.error('Error rendering Employee component:', employeeError);
                 // Try to use the inline fallback component if available
@@ -307,23 +341,23 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Check for archive-root (for archive page)
-    const archiveContainer = document.getElementById('archive-root');
-    console.log('archive-root element found:', archiveContainer);
+    // Check for employee-dashboard-root (for employee dashboard page)
+    const employeeDashboardContainer = document.getElementById('employee-dashboard-root');
+    console.log('employee-dashboard-root element found:', employeeDashboardContainer);
     
-    if (archiveContainer) {
+    if (employeeDashboardContainer) {
         try {
-            console.log('Initializing Archive component');
-            const root = createRoot(archiveContainer);
-            root.render(React.createElement(Archive));
-            console.log('Archive component rendered successfully');
+            console.log('Initializing EmployeeDashboard component');
+            const root = createRoot(employeeDashboardContainer);
+            root.render(React.createElement(EmployeeDashboard));
+            console.log('EmployeeDashboard component rendered successfully');
         } catch (error) {
-            console.error('Error rendering Archive component:', error);
+            console.error('Error rendering EmployeeDashboard component:', error);
             // Display error message in the UI
-            archiveContainer.innerHTML = `
+            employeeDashboardContainer.innerHTML = `
               <div style="padding: 20px; background-color: #ffebee; border: 2px solid #f44336; border-radius: 5px; margin: 20px; text-align: center;">
-                <h2 style="color: #d32f2f;">Archive Failed to Load</h2>
-                <p>There was an error loading the Archive component. Please try reloading the page.</p>
+                <h2 style="color: #d32f2f;">Employee Dashboard Failed to Load</h2>
+                <p>There was an error loading the Employee Dashboard component. Please try reloading the page.</p>
                 <button onclick="window.location.reload()" style="padding: 10px 20px; background-color: #2196f3; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 10px;">
                   Reload Page
                 </button>
@@ -381,9 +415,9 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Try to render the main component with error handling
             try {
-                console.log('Attempting to render Employee component');
-                root.render(React.createElement(Employee));
-                console.log('Employee component rendered to root');
+                console.log('Attempting to render SimpleEmployee component');
+                root.render(React.createElement(SimpleEmployee));
+                console.log('SimpleEmployee component rendered to root');
             } catch (employeeError) {
                 console.error('Error rendering Employee component:', employeeError);
                 // Try to use the inline fallback component if available

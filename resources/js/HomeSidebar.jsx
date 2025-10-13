@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Eye,
   ArrowLeftRight,
@@ -10,11 +10,12 @@ import {
   Clock,
 } from "lucide-react";
 import { apiUtils } from "./services/api";
-import { useEffect } from "react";
 
 const HomeSidebar = ({ onSelect }) => {
   const [openTransaction, setOpenTransaction] = useState(true);
   const [openEquipment, setOpenEquipment] = useState(true);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [permissions, setPermissions] = useState([]);
 
   const isActive = (path) =>
     typeof window !== "undefined" &&
@@ -60,80 +61,130 @@ const HomeSidebar = ({ onSelect }) => {
       : "text-white hover:bg-white hover:text-[#2262C6] hover:shadow-sm"
   }`;
 
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
-  const [permissions, setPermissions] = useState([]);
-
-  useEffect(() => {
-    const normalizePermissions = (user) => {
-      if (!user) return [];
-      if (typeof user.role === 'object' && user.role) {
-        if (Array.isArray(user.role.permissions)) return user.role.permissions;
-        if (typeof user.role.permissions === 'string') {
-          try { return JSON.parse(user.role.permissions); } catch { return []; }
-        }
+  // ✅ CRITICAL FIX: Helper functions moved outside useEffect for reusability
+  const normalizePermissions = (user) => {
+    if (!user) return [];
+    
+    // Check if user has custom permissions enabled
+    if (user.user_permissions?.use_custom_permissions) {
+      const customPerms = user.user_permissions.permissions;
+      if (Array.isArray(customPerms)) return customPerms;
+      if (typeof customPerms === 'string') {
+        try { return JSON.parse(customPerms); } catch { return []; }
       }
       return [];
-    };
-
-    const computeIsSuperAdmin = (user) => {
-      if (!user) return false;
-      // Role can be a string or object; permissions may be array or JSON string
-      const roleName = typeof user.role === 'string' ? user.role : user.role?.name;
-      const perms = normalizePermissions(user);
-      return roleName === 'super_admin' || (Array.isArray(perms) && perms.includes('*'));
-    };
-
-    const checkUserRole = async () => {
-      // First check localStorage
-      const localUser = apiUtils.getCurrentUser();
-      if (localUser && localUser.role) {
-        const isSA = computeIsSuperAdmin(localUser);
-        console.debug('[Sidebar] local role:', (typeof localUser.role === 'string' ? localUser.role : localUser.role?.name), 'isSuperAdmin:', isSA);
-        setIsSuperAdmin(isSA);
-        setPermissions(normalizePermissions(localUser));
-        return;
+    }
+    
+    // Fall back to role permissions
+    if (typeof user.role === 'object' && user.role) {
+      if (Array.isArray(user.role.permissions)) return user.role.permissions;
+      if (typeof user.role.permissions === 'string') {
+        try { return JSON.parse(user.role.permissions); } catch { return []; }
       }
+    }
+    return [];
+  };
 
-      // Fallback to session-based auth endpoint
-      try {
-        const response = await fetch('/check-auth', { credentials: 'include' });
-        if (response.ok) {
-          const data = await response.json();
-          if (data?.authenticated && data.user) {
-            // Normalize to match apiUtils expectations
-            const normalized = {
-              ...data.user,
-              role: { name: data.user.role, display_name: data.user.role_display, permissions: data.user.permissions },
-            };
-            localStorage.setItem('user', JSON.stringify(normalized));
-            const isSA = computeIsSuperAdmin(normalized);
-            console.debug('[Sidebar] fetched role:', normalized.role?.name, 'isSuperAdmin:', isSA);
-            setIsSuperAdmin(isSA);
-            setPermissions(normalizePermissions(normalized));
-          } else {
-            setIsSuperAdmin(false);
-            setPermissions([]);
-          }
+  const computeIsSuperAdmin = (user) => {
+    if (!user) return false;
+    const roleName = typeof user.role === 'string' ? user.role : user.role?.name;
+    const perms = normalizePermissions(user);
+    return roleName === 'super_admin' || (Array.isArray(perms) && perms.includes('*'));
+  };
+
+  const checkUserRole = async () => {
+    // First read localStorage and render quickly if present
+    const localUser = apiUtils.getCurrentUser();
+    if (localUser && localUser.role) {
+      const isSA = computeIsSuperAdmin(localUser);
+      const perms = normalizePermissions(localUser);
+      console.debug('[Sidebar] local role:', (typeof localUser.role === 'string' ? localUser.role : localUser.role?.name), 'isSuperAdmin:', isSA);
+      console.debug('[Sidebar] permissions:', perms);
+      setIsSuperAdmin(isSA);
+      setPermissions(perms || []);
+    }
+
+    // Always fetch fresh data to avoid stale cache after role/permission changes
+    try {
+      const response = await fetch('/check-auth', { credentials: 'include' });
+      if (response.ok) {
+        const data = await response.json();
+        if (data?.authenticated && data.user) {
+          // Normalize to match apiUtils expectations
+          const normalized = {
+            ...data.user,
+            role: { 
+              name: data.user.role, 
+              display_name: data.user.role_display, 
+              permissions: data.user.permissions 
+            },
+            user_permissions: data.user.user_permissions
+          };
+          localStorage.setItem('user', JSON.stringify(normalized));
+          const isSA = computeIsSuperAdmin(normalized);
+          const perms = normalizePermissions(normalized);
+          console.debug('[Sidebar] fetched role:', normalized.role?.name, 'isSuperAdmin:', isSA);
+          console.debug('[Sidebar] permissions:', perms);
+          setIsSuperAdmin(isSA);
+          setPermissions(perms);
         } else {
           setIsSuperAdmin(false);
           setPermissions([]);
         }
-      } catch (error) {
-        console.error('Error checking user role:', error);
+      } else {
         setIsSuperAdmin(false);
         setPermissions([]);
       }
+    } catch (error) {
+      console.error('Error checking user role:', error);
+      setIsSuperAdmin(false);
+      setPermissions([]);
+    }
+  };
+
+  // ✅ CRITICAL FIX: Listen for permission updates
+  useEffect(() => {
+    // Initial load
+    checkUserRole();
+
+    // Listen for storage changes from other tabs
+    const handleStorageChange = (e) => {
+      if (e.key === 'user') {
+        console.debug('[Sidebar] Storage changed, reloading permissions');
+        checkUserRole();
+      }
     };
 
-    checkUserRole();
-  }, []);
+    // ✅ Listen for custom event when localStorage is updated in the same tab
+    const handleUserUpdate = () => {
+      console.debug('[Sidebar] User updated event received, reloading permissions');
+      checkUserRole();
+    };
 
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('userUpdated', handleUserUpdate);
+
+    // Cleanup listeners
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('userUpdated', handleUserUpdate);
+    };
+  }, []); // Empty dependency array - only set up listeners once
+
+  // ✅ FIXED: Permission check now uses custom permissions if enabled
   const can = (perm) => {
     if (isSuperAdmin) return true;
     if (!perm) return false;
-    // If permissions are not loaded or empty, default to showing menus
-    if (!permissions || (Array.isArray(permissions) && permissions.length === 0)) return true;
-    return Array.isArray(permissions) && (permissions.includes('*') || permissions.includes(perm));
+    
+    // ✅ CRITICAL: If permissions array is empty, hide menus (no permissions granted)
+    if (!permissions || permissions.length === 0) {
+      console.debug(`[Sidebar] No permissions loaded, denying access to: ${perm}`);
+      return false;
+    }
+    
+    const hasPermission = permissions.includes('*') || permissions.includes(perm);
+    console.debug(`[Sidebar] Checking permission '${perm}': ${hasPermission}`);
+    return hasPermission;
   };
 
   return (

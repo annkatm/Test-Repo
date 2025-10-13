@@ -96,7 +96,7 @@ const Equipment = () => {
                 <h3 className="text-base font-semibold text-gray-700 mt-3">Categories</h3>
                 <div className="mt-6 grid grid-cols-4 gap-6">
                   {categories.map((cat) => (
-                    <div key={cat.id} className="group relative">
+                    <div key={cat.id}>
                       <Card
                         selected={selected === cat.name}
                         name={cat.name}
@@ -104,29 +104,6 @@ const Equipment = () => {
                         image={cat.image}
                         onClick={() => setSelected(cat.name)}
                       />
-                      {/* Equipment items for this category - Shows on hover */}
-                      <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
-                        <div className="p-4 max-h-96 overflow-y-auto">
-                        {equipment
-                          .filter(eq => eq.category_id === cat.id)
-                          .map(eq => (
-                            <div key={eq.id} className="w-full bg-gray-50 rounded-lg p-3 mb-2 text-xs text-gray-700 hover:bg-blue-50/50 transition-colors">
-                              <div className="flex items-center space-x-2">
-                                <span>{eq.brand || eq.name}</span>
-                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium
-                                  ${eq.status === 'available' ? 'bg-green-100 text-green-800' : ''}
-                                  ${eq.status === 'in_use' ? 'bg-blue-100 text-blue-800' : ''}
-                                  ${eq.status === 'maintenance' ? 'bg-yellow-100 text-yellow-800' : ''}
-                                  ${eq.status === 'retired' ? 'bg-gray-100 text-gray-800' : ''}
-                                `}>
-                                  {eq.status}
-                                </span>
-                              </div>
-                              <span className="text-gray-500">{eq.serial_number}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
                     </div>
                   ))}
                 </div>

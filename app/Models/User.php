@@ -30,6 +30,15 @@ class User extends Authenticatable
     ];
 
     /**
+     * Get the employee profile associated with the user.
+     */
+    public function employee()
+    {
+        // Link by email or explicit FK when present (fallback kept simple here)
+        return $this->hasOne(Employee::class, 'email', 'email');
+    }
+
+    /**
      * The attributes that should be hidden for serialization.
      *
      * @var list<string>
@@ -59,17 +68,24 @@ class User extends Authenticatable
         return $this->belongsTo(Role::class);
     }
 
+    /**
+     * Get requests submitted by this user on behalf of employees.
+     */
     public function requests()
     {
-        return $this->hasMany(Request::class);
+        // Requests created by this user on behalf of an employee
+        return $this->hasMany(Request::class, 'user_id');
+    }
+
+    /**
+     * Get requests approved by this user.
+     */
+    public function approvedRequests()
+    {
+        return $this->hasMany(Request::class, 'approved_by');
     }
 
     public function transactions()
-    {
-        return $this->hasMany(Transaction::class);
-    }
-
-    public function approvedRequests()
     {
         return $this->hasMany(Request::class, 'approved_by');
     }

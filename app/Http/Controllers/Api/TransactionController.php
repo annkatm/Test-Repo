@@ -256,6 +256,8 @@ class TransactionController extends Controller
             ]);
 
             $validatedData['status'] = $validatedData['status'] ?? 'pending';
+            // Attach user_id of the staff processing/creating this transaction
+            $validatedData['user_id'] = auth()->id();
             $validatedData['created_at'] = now();
             $validatedData['updated_at'] = now();
 

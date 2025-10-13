@@ -9,14 +9,17 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 class Request extends Model
 {
     protected $fillable = [
-        'user_id',
+        'request_number',
+        'employee_id',
         'equipment_id',
+        'user_id',
         'request_type',
         'request_mode',
-        'reason',
-        'start_date',
-        'end_date',
         'status',
+        'reason',
+        'requested_date',
+        'expected_start_date',
+        'expected_end_date',
         'approved_by',
         'approved_at',
         'approval_notes',
@@ -24,20 +27,29 @@ class Request extends Model
     ];
 
     protected $casts = [
-        'start_date' => 'date',
-        'end_date' => 'date',
+        'requested_date' => 'date',
+        'expected_start_date' => 'date',
+        'expected_end_date' => 'date',
         'approved_at' => 'datetime',
     ];
 
     // Relationships
+    public function employee(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class);
+    }
+
+    /**
+     * Get the user who submitted this request.
+     */
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(User::class, 'user_id');
     }
 
     public function equipment(): BelongsTo
     {
-        return $this->belongsTo(Equipment::class);
+        return $this->belongsTo(Equipment::class, 'equipment_id');
     }
 
     public function approver(): BelongsTo

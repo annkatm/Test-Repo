@@ -12,4 +12,17 @@ export default defineConfig({
         react(),
         tailwindcss(),
     ],
+    build: {
+        chunkSizeWarningLimit: 600, // increase limit to reduce noisy warnings (KB)
+        rollupOptions: {
+            output: {
+                manualChunks(id) {
+                    if (id.includes('node_modules')) {
+                        if (id.includes('react')) return 'vendor_react';
+                        return 'vendor';
+                    }
+                }
+            }
+        }
+    }
 });

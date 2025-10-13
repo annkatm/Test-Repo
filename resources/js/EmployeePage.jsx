@@ -24,24 +24,39 @@ const EmployeePage = () => {
     firstName: '',
     lastName: '',
     email: '',
-    password: '',
     contact: '',
-    address: '',
-    employeeType: 'Regular',
-    client: '',
+    employeeId: '', // Employee ID number
     position: '',
     department: '',
+<<<<<<< HEAD
     issuedItem: ''
+=======
+    status: 'active',
+    // User account fields
+    createAccount: false, // Whether to create a user account
+    password: '',
+    confirmPassword: '',
+    role: 'employee' // Default role for employee accounts
+>>>>>>> e1926e6ea3d479f7c23a85ba918673e5ccae8a53
   });
   const [employees, setEmployees] = useState([]);
 
   useEffect(() => {
+    // Support deep-linking via /employee?email=... or ?employee_id=...
+    const params = new URLSearchParams(window.location.search);
+    const filterEmail = params.get('email');
+    const filterEmpId = params.get('employee_id');
+
     fetch('/api/employees')
       .then(res => res.json())
       .then(data => {
+<<<<<<< HEAD
         console.log('API Response:', data); // Debug log
+=======
+        let list = [];
+>>>>>>> e1926e6ea3d479f7c23a85ba918673e5ccae8a53
         if (data.success && Array.isArray(data.data)) {
-          setEmployees(data.data.map(e => ({
+          list = data.data.map(e => ({
             id: e.id,
             name: `${e.first_name} ${e.last_name}`.trim(),
             firstName: e.first_name || '',
@@ -56,8 +71,18 @@ const EmployeePage = () => {
             issuedItem: e.issued_item || '',
             badge: (e.first_name?.[0] || '').toUpperCase(),
             color: getBadgeColor(e.first_name)
-          })));
+          }));
         }
+
+        // Optional filter: if viewing from Users page, pre-focus this employee
+        if (filterEmail || filterEmpId) {
+          const match = list.find(e => (filterEmail && e.email?.toLowerCase() === filterEmail.toLowerCase()) || (filterEmpId && (e.employeeId === filterEmpId || e.name?.toLowerCase().includes(filterEmpId.toLowerCase()))));
+          if (match) {
+            setViewing(match);
+          }
+        }
+
+        setEmployees(list);
       });
   }, []);
 
@@ -66,14 +91,19 @@ const EmployeePage = () => {
     firstName: '',
     lastName: '',
     email: '',
-    password: '',
     contact: '',
-    address: '',
-    employeeType: 'Regular',
-    client: '',
+    employeeId: '',
     position: '',
     department: '',
+<<<<<<< HEAD
     issuedItem: ''
+=======
+    status: 'active',
+    createAccount: false,
+    password: '',
+    confirmPassword: '',
+    role: 'employee'
+>>>>>>> e1926e6ea3d479f7c23a85ba918673e5ccae8a53
   });
   const closeModal = () => setIsAddOpen(false);
 
