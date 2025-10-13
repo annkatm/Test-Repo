@@ -14,6 +14,58 @@ const getBadgeColor = (name) => {
   return colors[first] || 'bg-gray-400';
 };
 
+// Input component with validation (top-level to avoid remount on parent re-render)
+const ValidatedInput = ({ label, value, onChange, type = "text", placeholder, required = false, error, tabIndex }) => (
+  <div>
+    <label className="block text-sm text-gray-700 font-medium mb-2">
+      {label}{required && <span className="text-red-500">*</span>}
+    </label>
+    <input
+      type={type}
+      value={value || ''}
+      onChange={(e) => onChange(e.target.value)}
+      className={`w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 ${
+        error ? 'focus:ring-red-500 bg-red-50' : 'focus:ring-blue-500'
+      }`}
+      placeholder={placeholder}
+      tabIndex={tabIndex}
+    />
+    {error && (
+      <div className="flex items-center mt-1 text-red-500 text-xs">
+        <AlertCircle className="h-3 w-3 mr-1" />
+        {error}
+      </div>
+    )}
+  </div>
+);
+
+// Select component with validation (top-level to avoid remount on parent re-render)
+const ValidatedSelect = ({ label, value, onChange, options, required = false, error, tabIndex }) => (
+  <div>
+    <label className="block text-sm text-gray-700 font-medium mb-2">
+      {label}{required && <span className="text-red-500">*</span>}
+    </label>
+    <select
+      value={value || ''}
+      onChange={(e) => onChange(e.target.value)}
+      className={`w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 focus:outline-none focus:ring-2 ${
+        error ? 'focus:ring-red-500 bg-red-50' : 'focus:ring-blue-500'
+      }`}
+      tabIndex={tabIndex}
+    >
+      {options.map((option, index) => (
+        <option key={index} value={option.value}>{option.label}</option>
+      ))}
+    </select>
+    {error && (
+      <div className="flex items-center mt-1 text-red-500 text-xs">
+        <AlertCircle className="h-3 w-3 mr-1" />
+        {error}
+      </div>
+    )}
+  </div>
+);
+
 const EmployeePage = () => {
   const [isAddOpen, setIsAddOpen] = React.useState(false);
   const [viewing, setViewing] = React.useState(null);
@@ -134,11 +186,11 @@ const EmployeePage = () => {
   };
 
   const handleInputChange = (field, value) => {
-    setForm({ ...form, [field]: value });
+    setForm(prev => ({ ...prev, [field]: value }));
     
     // Clear error for this field when user starts typing
     if (errors[field]) {
-      setErrors({ ...errors, [field]: '' });
+      setErrors(prev => ({ ...prev, [field]: '' }));
     }
   };
 
@@ -364,57 +416,7 @@ const EmployeePage = () => {
     (emp.client || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Input component with validation
-  const ValidatedInput = ({ label, field, type = "text", placeholder, required = false, tabIndex }) => (
-    <div>
-      <label className="block text-sm text-gray-700 font-medium mb-2">
-        {label}{required && <span className="text-red-500">*</span>}
-      </label>
-      <input 
-        type={type}
-        value={form[field] || ''} 
-        onChange={(e) => handleInputChange(field, e.target.value)}
-        className={`w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 ${
-          errors[field] ? 'focus:ring-red-500 bg-red-50' : 'focus:ring-blue-500'
-        }`}
-        placeholder={placeholder}
-        tabIndex={tabIndex}
-      />
-      {errors[field] && (
-        <div className="flex items-center mt-1 text-red-500 text-xs">
-          <AlertCircle className="h-3 w-3 mr-1" />
-          {errors[field]}
-        </div>
-      )}
-    </div>
-  );
-
-  // Select component with validation
-  const ValidatedSelect = ({ label, field, options, required = false, tabIndex }) => (
-    <div>
-      <label className="block text-sm text-gray-700 font-medium mb-2">
-        {label}{required && <span className="text-red-500">*</span>}
-      </label>
-      <select
-        value={form[field] || ''}
-        onChange={(e) => handleInputChange(field, e.target.value)}
-        className={`w-full px-4 py-3 rounded-lg bg-gray-100 border-0 text-gray-700 focus:outline-none focus:ring-2 ${
-          errors[field] ? 'focus:ring-red-500 bg-red-50' : 'focus:ring-blue-500'
-        }`}
-        tabIndex={tabIndex}
-      >
-        {options.map((option, index) => (
-          <option key={index} value={option.value}>{option.label}</option>
-        ))}
-      </select>
-      {errors[field] && (
-        <div className="flex items-center mt-1 text-red-500 text-xs">
-          <AlertCircle className="h-3 w-3 mr-1" />
-          {errors[field]}
-        </div>
-      )}
-    </div>
-  );
+  // (components moved to top-level)
 
   return (
     <div className="h-screen overflow-hidden bg-white flex">
@@ -618,42 +620,50 @@ const EmployeePage = () => {
                 <div className="space-y-6">
                   <ValidatedInput 
                     label="First Name" 
-                    field="firstName" 
+                    value={form.firstName}
+                    onChange={(val) => handleInputChange('firstName', val)}
                     placeholder="Enter first name" 
-                    required={true} 
-                    tabIndex={1} 
+                    required={true}
+                    error={errors.firstName}
+                    tabIndex={1}
                   />
                   <ValidatedInput 
                     label="Email" 
-                    field="email" 
+                    value={form.email}
+                    onChange={(val) => handleInputChange('email', val)}
                     type="email" 
                     placeholder="Enter email address" 
-                    required={true} 
-                    tabIndex={3} 
+                    required={true}
+                    error={errors.email}
+                    tabIndex={3}
                   />
                   <ValidatedInput 
                     label="Contact Number" 
-                    field="contact" 
+                    value={form.contact}
+                    onChange={(val) => handleInputChange('contact', val)}
                     type="tel" 
                     placeholder="Enter phone number" 
-                    required={true} 
-                    tabIndex={5} 
+                    required={true}
+                    error={errors.contact}
+                    tabIndex={5}
                   />
                   <ValidatedSelect
                     label="Client"
-                    field="client"
-                    tabIndex={7}
+                    value={form.client}
+                    onChange={(val) => handleInputChange('client', val)}
                     options={[
                       { value: '', label: 'Select client' },
                       { value: 'Client A', label: 'Client A' },
                       { value: 'Client B', label: 'Client B' },
                       { value: 'Client C', label: 'Client C' }
                     ]}
+                    error={errors.client}
+                    tabIndex={7}
                   />
                   <ValidatedSelect
                     label="Department"
-                    field="department"
-                    tabIndex={9}
+                    value={form.department}
+                    onChange={(val) => handleInputChange('department', val)}
                     options={[
                       { value: '', label: 'Select department' },
                       { value: 'IT Department', label: 'IT Department' },
@@ -662,12 +672,16 @@ const EmployeePage = () => {
                       { value: 'Marketing Department', label: 'Marketing Department' },
                       { value: 'Finance Department', label: 'Finance Department' }
                     ]}
+                    error={errors.department}
+                    tabIndex={9}
                   />
                   <ValidatedInput 
                     label="Issued Item" 
-                    field="issuedItem" 
+                    value={form.issuedItem}
+                    onChange={(val) => handleInputChange('issuedItem', val)}
                     placeholder="Enter issued item" 
-                    tabIndex={11} 
+                    error={errors.issuedItem}
+                    tabIndex={11}
                   />
                 </div>
 
@@ -675,47 +689,57 @@ const EmployeePage = () => {
                 <div className="space-y-6">
                   <ValidatedInput 
                     label="Last Name" 
-                    field="lastName" 
+                    value={form.lastName}
+                    onChange={(val) => handleInputChange('lastName', val)}
                     placeholder="Enter last name" 
-                    required={true} 
-                    tabIndex={2} 
+                    required={true}
+                    error={errors.lastName}
+                    tabIndex={2}
                   />
                   <ValidatedInput 
                     label="Password" 
-                    field="password" 
+                    value={form.password}
+                    onChange={(val) => handleInputChange('password', val)}
                     type="password" 
                     placeholder="Enter password" 
-                    required={true} 
-                    tabIndex={4} 
+                    required={true}
+                    error={errors.password}
+                    tabIndex={4}
                   />
                   <ValidatedInput 
                     label="Address" 
-                    field="address" 
+                    value={form.address}
+                    onChange={(val) => handleInputChange('address', val)}
                     placeholder="Enter complete address" 
-                    required={true} 
-                    tabIndex={6} 
+                    required={true}
+                    error={errors.address}
+                    tabIndex={6}
                   />
                   <ValidatedSelect
                     label="Employee Type"
-                    field="employeeType"
+                    value={form.employeeType}
+                    onChange={(val) => handleInputChange('employeeType', val)}
                     required={true}
-                    tabIndex={8}
                     options={[
                       { value: 'Regular', label: 'Regular' },
                       { value: 'Contractor', label: 'Contractor' },
                       { value: 'Temporary', label: 'Temporary' }
                     ]}
+                    error={errors.employeeType}
+                    tabIndex={8}
                   />
                   <ValidatedSelect
                     label="Position"
-                    field="position"
-                    tabIndex={10}
+                    value={form.position}
+                    onChange={(val) => handleInputChange('position', val)}
                     options={[
                       { value: '', label: 'Select position' },
                       { value: 'Manager', label: 'Manager' },
                       { value: 'Supervisor', label: 'Supervisor' },
                       { value: 'Staff', label: 'Staff' }
                     ]}
+                    error={errors.position}
+                    tabIndex={10}
                   />
                 </div>
               </div>
@@ -739,42 +763,50 @@ const EmployeePage = () => {
                 <div className="space-y-6">
                   <ValidatedInput 
                     label="First Name" 
-                    field="firstName" 
+                    value={form.firstName}
+                    onChange={(val) => handleInputChange('firstName', val)}
                     placeholder="Enter first name" 
-                    required={true} 
-                    tabIndex={1} 
+                    required={true}
+                    error={errors.firstName}
+                    tabIndex={1}
                   />
                   <ValidatedInput 
                     label="Email" 
-                    field="email" 
+                    value={form.email}
+                    onChange={(val) => handleInputChange('email', val)}
                     type="email" 
                     placeholder="Enter email address" 
-                    required={true} 
-                    tabIndex={3} 
+                    required={true}
+                    error={errors.email}
+                    tabIndex={3}
                   />
                   <ValidatedInput 
                     label="Contact Number" 
-                    field="contact" 
+                    value={form.contact}
+                    onChange={(val) => handleInputChange('contact', val)}
                     type="tel" 
                     placeholder="Enter phone number" 
-                    required={true} 
-                    tabIndex={5} 
+                    required={true}
+                    error={errors.contact}
+                    tabIndex={5}
                   />
                   <ValidatedSelect
                     label="Client"
-                    field="client"
-                    tabIndex={7}
+                    value={form.client}
+                    onChange={(val) => handleInputChange('client', val)}
                     options={[
                       { value: '', label: 'Select client' },
                       { value: 'Client A', label: 'Client A' },
                       { value: 'Client B', label: 'Client B' },
                       { value: 'Client C', label: 'Client C' }
                     ]}
+                    error={errors.client}
+                    tabIndex={7}
                   />
                   <ValidatedSelect
                     label="Department"
-                    field="department"
-                    tabIndex={9}
+                    value={form.department}
+                    onChange={(val) => handleInputChange('department', val)}
                     options={[
                       { value: '', label: 'Select department' },
                       { value: 'IT Department', label: 'IT Department' },
@@ -783,58 +815,71 @@ const EmployeePage = () => {
                       { value: 'Marketing Department', label: 'Marketing Department' },
                       { value: 'Finance Department', label: 'Finance Department' }
                     ]}
+                    error={errors.department}
+                    tabIndex={9}
                   />
                   <ValidatedInput 
                     label="Issued Item" 
-                    field="issuedItem" 
+                    value={form.issuedItem}
+                    onChange={(val) => handleInputChange('issuedItem', val)}
                     placeholder="Enter issued item" 
-                    tabIndex={11} 
+                    error={errors.issuedItem}
+                    tabIndex={11}
                   />
                 </div>
                 
                 <div className="space-y-6">
                   <ValidatedInput 
                     label="Last Name" 
-                    field="lastName" 
+                    value={form.lastName}
+                    onChange={(val) => handleInputChange('lastName', val)}
                     placeholder="Enter last name" 
-                    required={true} 
-                    tabIndex={2} 
+                    required={true}
+                    error={errors.lastName}
+                    tabIndex={2}
                   />
                   <ValidatedInput 
                     label="Password" 
-                    field="password" 
+                    value={form.password}
+                    onChange={(val) => handleInputChange('password', val)}
                     type="password" 
                     placeholder="Leave blank to keep current password" 
-                    tabIndex={4} 
+                    tabIndex={4}
                   />
                   <ValidatedInput 
                     label="Address" 
-                    field="address" 
+                    value={form.address}
+                    onChange={(val) => handleInputChange('address', val)}
                     placeholder="Enter complete address" 
-                    required={true} 
-                    tabIndex={6} 
+                    required={true}
+                    error={errors.address}
+                    tabIndex={6}
                   />
                   <ValidatedSelect
                     label="Employee Type"
-                    field="employeeType"
+                    value={form.employeeType}
+                    onChange={(val) => handleInputChange('employeeType', val)}
                     required={true}
-                    tabIndex={8}
                     options={[
                       { value: 'Regular', label: 'Regular' },
                       { value: 'Contractor', label: 'Contractor' },
                       { value: 'Temporary', label: 'Temporary' }
                     ]}
+                    error={errors.employeeType}
+                    tabIndex={8}
                   />
                   <ValidatedSelect
                     label="Position"
-                    field="position"
-                    tabIndex={10}
+                    value={form.position}
+                    onChange={(val) => handleInputChange('position', val)}
                     options={[
                       { value: '', label: 'Select position' },
                       { value: 'Manager', label: 'Manager' },
                       { value: 'Supervisor', label: 'Supervisor' },
                       { value: 'Staff', label: 'Staff' }
                     ]}
+                    error={errors.position}
+                    tabIndex={10}
                   />
                 </div>
               </div>
