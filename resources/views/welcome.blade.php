@@ -12,7 +12,7 @@
       padding: 0;
       height: 100vh;
       font-family: Arial, sans-serif;
-      background: url("{{ asset('images/Frame 35.jpg') }}") no-repeat center center;
+      background: url("{{ asset('images/New BG.jpg') }}") no-repeat center center;
       background-size: cover;
       display: flex;
       justify-content: flex-end;
