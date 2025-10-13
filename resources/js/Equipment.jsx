@@ -41,8 +41,7 @@ const Equipment = () => {
   const [equipment, setEquipment] = useState([]);
   const [showSuccess, setShowSuccess] = useState(false);
 
-  useEffect(() => {
-    const fetchData = async () => {
+  const fetchData = async () => {
       try {
         // Fetch categories first
         const catRes = await api.get('/categories');
@@ -78,8 +77,13 @@ const Equipment = () => {
       } catch (e) {
         console.error('Failed to fetch categories/equipment:', e);
       }
-    };
+  };
+
+  useEffect(() => {
     fetchData();
+    const handler = () => fetchData();
+    window.addEventListener('categories:updated', handler);
+    return () => window.removeEventListener('categories:updated', handler);
   }, []);
 
   return (

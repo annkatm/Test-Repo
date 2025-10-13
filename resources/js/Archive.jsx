@@ -2,41 +2,87 @@ import React, { useState, useEffect } from 'react';
 import { Archive as ArchiveIcon, Search, Filter, Download, Eye, Trash2, RotateCcw, ArrowLeft, Home } from 'lucide-react';
 import { useApi } from './hooks/useApi';
 import GlobalHeader from './components/GlobalHeader';
+import SimpleConfirmModal from './components/SimpleConfirmModal';
 
 const Archive = () => {
     // Get initial data from server-side rendering
     const archiveRoot = document.getElementById('archive-root');
-    const initialItems = archiveRoot?.dataset.archivedItems ? JSON.parse(archiveRoot.dataset.archivedItems) : [];
+    const initialItemsRaw = archiveRoot?.dataset.archivedItems ? JSON.parse(archiveRoot.dataset.archivedItems) : [];
+    const initialItems = Array.isArray(initialItemsRaw) ? initialItemsRaw : [];
+    const initialTotalFromDom = archiveRoot?.dataset.total ? parseInt(archiveRoot.dataset.total, 10) : initialItems.length;
     const initialFilterType = archiveRoot?.dataset.filterType || 'all';
     const initialSearchTerm = archiveRoot?.dataset.searchTerm || '';
     
     const [archivedItems, setArchivedItems] = useState(initialItems);
-    const [loading, setLoading] = useState(false);
+    const [totalItems, setTotalItems] = useState(Number.isFinite(initialTotalFromDom) ? initialTotalFromDom : initialItems.length);
+    const [initialLoading, setInitialLoading] = useState(!Array.isArray(initialItems) || initialItems.length === 0);
+    const [refreshing, setRefreshing] = useState(false);
     const [searchTerm, setSearchTerm] = useState(initialSearchTerm);
     const [filterType, setFilterType] = useState(initialFilterType);
     const [selectedItems, setSelectedItems] = useState([]);
-    const { get, post } = useApi();
+    // Note: We won't use get/post from useApi here; we'll use fetch directly
+
+    // Confirmation modal state for consistent system design
+    const [confirmState, setConfirmState] = useState({
+        isOpen: false,
+        title: '',
+        message: '',
+        tone: 'primary',
+        onConfirm: null,
+    });
+
+    const openConfirm = ({ title, message, tone = 'primary', onConfirm }) => {
+        setConfirmState({ isOpen: true, title, message, tone, onConfirm });
+    };
+
+    const closeConfirm = () => setConfirmState(prev => ({ ...prev, isOpen: false }));
 
     // Fetch archived items
-    const fetchArchivedItems = async () => {
+    const fetchArchivedItems = async (mode = 'refresh') => {
         try {
-            setLoading(true);
+            if (mode === 'init') {
+                setInitialLoading(true);
+            } else {
+                setRefreshing(true);
+            }
             const params = new URLSearchParams();
             if (filterType !== 'all') params.append('type', filterType);
             if (searchTerm) params.append('search', searchTerm);
             
-            const response = await get(`/archive?${params.toString()}`);
-            setArchivedItems(response.items || []);
+            const res = await fetch(`/archive?${params.toString()}`, {
+                headers: { 'Accept': 'application/json' }
+            });
+            const response = await res.json().catch(() => ({}));
+            const items = Array.isArray(response?.items) ? response.items : [];
+            setArchivedItems(items);
+            if (typeof response?.total === 'number') {
+                setTotalItems(response.total);
+            } else {
+                setTotalItems(items.length);
+            }
         } catch (error) {
             console.error('Error fetching archived items:', error);
         } finally {
-            setLoading(false);
+            setInitialLoading(false);
+            setRefreshing(false);
         }
     };
 
     useEffect(() => {
-        fetchArchivedItems();
-    }, [filterType, searchTerm]);
+        // ensure header count reflects SSR data first, then refresh
+        setTotalItems(initialItems.length);
+        fetchArchivedItems('init');
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    useEffect(() => {
+        fetchArchivedItems('refresh');
+    }, [filterType]);
+
+    useEffect(() => {
+        const t = window.setTimeout(() => fetchArchivedItems('refresh'), 350);
+        return () => window.clearTimeout(t);
+    }, [searchTerm]);
 
     const handleSearch = (e) => {
         setSearchTerm(e.target.value);
@@ -64,21 +110,51 @@ const Archive = () => {
 
     const handleRestore = async (item) => {
         try {
-            await post(`/archive/${item.type}/${item.id}/restore`);
-            fetchArchivedItems(); // Refresh the list
+            const response = await fetch(`/archive/${item.type}/${item.id}/restore`, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'same-origin'
+            });
+            
+            const result = await response.json().catch(() => ({}));
+            if (response.ok && result?.success !== false) {
+                fetchArchivedItems('refresh');
+            } else {
+                throw new Error(result?.message || 'Failed to restore item');
+            }
         } catch (error) {
             console.error('Error restoring item:', error);
+            alert('Error restoring item. Please try again.');
         }
     };
 
     const handleDelete = async (item) => {
-        if (window.confirm('Are you sure you want to permanently delete this item?')) {
-            try {
-                await post(`/archive/${item.type}/${item.id}/force-delete`);
-                fetchArchivedItems(); // Refresh the list
-            } catch (error) {
-                console.error('Error deleting item:', error);
+        try {
+            const response = await fetch(`/archive/${item.type}/${item.id}/force-delete`, {
+                method: 'DELETE',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'same-origin'
+            });
+            
+            const result = await response.json().catch(() => ({}));
+            if (response.ok && result?.success !== false) {
+                fetchArchivedItems('refresh');
+            } else {
+                throw new Error(result?.message || 'Failed to delete item');
             }
+        } catch (error) {
+            console.error('Error deleting item:', error);
+            alert('Error deleting item. Please try again.');
         }
     };
 
@@ -86,35 +162,75 @@ const Archive = () => {
         if (selectedItems.length === 0) return;
         
         try {
-            // API call to restore multiple items
-            console.log('Bulk restoring items:', selectedItems);
-            // await post('/api/archive/bulk-restore', { itemIds: selectedItems });
-            // fetchArchivedItems(); // Refresh the list
+            // Prepare item data with type and id for bulk restore
+            const itemData = selectedItems.map(itemId => {
+                const item = archivedItems.find(item => item.id === itemId);
+                return { type: item.type, id: item.id };
+            });
+            
+            const response = await fetch('/archive/bulk-restore', {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({ itemIds: itemData })
+            });
+            
+            const result = await response.json().catch(() => ({}));
+            if (response.ok && result?.success !== false) {
+                fetchArchivedItems('refresh');
             setSelectedItems([]);
+            } else {
+                throw new Error(result?.message || 'Failed to restore items');
+            }
         } catch (error) {
             console.error('Error bulk restoring items:', error);
+            alert('Error restoring items. Please try again.');
         }
     };
 
     const handleBulkDelete = async () => {
         if (selectedItems.length === 0) return;
         
-        if (window.confirm(`Are you sure you want to permanently delete ${selectedItems.length} items?`)) {
-            try {
-                // API call to permanently delete multiple items
-                console.log('Bulk deleting items:', selectedItems);
-                // await post('/api/archive/bulk-delete', { itemIds: selectedItems });
-                // fetchArchivedItems(); // Refresh the list
+        try {
+            // Prepare item data with type and id for bulk delete
+            const itemData = selectedItems.map(itemId => {
+                const item = archivedItems.find(item => item.id === itemId);
+                return { type: item.type, id: item.id };
+            });
+            
+            const response = await fetch('/archive/bulk-delete', {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({ itemIds: itemData })
+            });
+            
+            const result = await response.json().catch(() => ({}));
+            if (response.ok && result?.success !== false) {
+                fetchArchivedItems('refresh');
                 setSelectedItems([]);
-            } catch (error) {
-                console.error('Error bulk deleting items:', error);
+            } else {
+                throw new Error(result?.message || 'Failed to delete items');
             }
+        } catch (error) {
+            console.error('Error bulk deleting items:', error);
+            alert('Error deleting items. Please try again.');
         }
     };
 
-    const filteredItems = archivedItems;
+    const filteredItems = Array.isArray(archivedItems) ? archivedItems : [];
 
-    if (loading) {
+    if (initialLoading) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="text-center">
@@ -161,7 +277,12 @@ const Archive = () => {
                         <div className="flex items-center space-x-4">
                             <div className="text-right">
                                 <div className="text-sm text-gray-500">Total Items</div>
-                                <div className="text-2xl font-bold text-blue-600">{archivedItems.length}</div>
+                                <div className="flex items-center justify-end space-x-2">
+                                    <div className="text-2xl font-bold text-blue-600">{totalItems}</div>
+                                    {refreshing && (
+                                        <div className="ml-2 h-4 w-4 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin" />
+                                    )}
+                                </div>
                             </div>
                             <button 
                                 onClick={() => window.location.href = '/dashboard'}
@@ -213,6 +334,8 @@ const Archive = () => {
                             <div className="relative">
                                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                                 <input
+                                    id="archive-search"
+                                    name="archive_search"
                                     type="text"
                                     placeholder="Search archived items..."
                                     value={searchTerm}
@@ -227,6 +350,8 @@ const Archive = () => {
                             <div className="relative">
                                 <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                                 <select
+                                    id="archive-type-filter"
+                                    name="type"
                                     value={filterType}
                                     onChange={handleFilterChange}
                                     className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-gray-50 hover:bg-white transition-colors"
@@ -245,14 +370,24 @@ const Archive = () => {
                         {selectedItems.length > 0 && (
                             <div className="flex items-center space-x-2">
                                 <button
-                                    onClick={handleBulkRestore}
+                                    onClick={() => openConfirm({
+                                        title: 'Restore selected items?',
+                                        message: `Restore ${selectedItems.length} selected item(s)?`,
+                                        tone: 'primary',
+                                        onConfirm: async () => { closeConfirm(); await handleBulkRestore(); }
+                                    })}
                                     className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors shadow-sm"
                                 >
                                     <RotateCcw className="w-4 h-4" />
                                     <span>Restore ({selectedItems.length})</span>
                                 </button>
                                 <button
-                                    onClick={handleBulkDelete}
+                                    onClick={() => openConfirm({
+                                        title: 'Delete selected permanently?',
+                                        message: `Permanently delete ${selectedItems.length} selected item(s)? This cannot be undone.`,
+                                        tone: 'danger',
+                                        onConfirm: async () => { closeConfirm(); await handleBulkDelete(); }
+                                    })}
                                     className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors shadow-sm"
                                 >
                                     <Trash2 className="w-4 h-4" />
@@ -287,6 +422,8 @@ const Archive = () => {
                                     <tr>
                                         <th className="px-6 py-4 text-left">
                                             <input
+                                                id="archive-select-all"
+                                                name="select_all"
                                                 type="checkbox"
                                                 checked={selectedItems.length === archivedItems.length && archivedItems.length > 0}
                                                 onChange={handleSelectAll}
@@ -315,6 +452,8 @@ const Archive = () => {
                                         <tr key={item.id} className="hover:bg-blue-50 transition-colors">
                                             <td className="px-6 py-4">
                                                 <input
+                                                    id={`archive-select-${item.type}-${item.id}`}
+                                                    name="selected[]"
                                                     type="checkbox"
                                                     checked={selectedItems.includes(item.id)}
                                                     onChange={() => handleSelectItem(item.id)}
@@ -362,14 +501,24 @@ const Archive = () => {
                                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                                 <div className="flex items-center justify-end space-x-2">
                                                     <button
-                                                        onClick={() => handleRestore(item)}
+                                                        onClick={() => openConfirm({
+                                                            title: 'Restore item?',
+                                                            message: `Do you want to restore \"${item.name}\" (${item.type})?`,
+                                                            tone: 'primary',
+                                                            onConfirm: async () => { closeConfirm(); await handleRestore(item); }
+                                                        })}
                                                         className="text-green-600 hover:text-green-800 p-2 rounded-lg hover:bg-green-50 transition-colors"
                                                         title="Restore"
                                                     >
                                                         <RotateCcw className="w-4 h-4" />
                                                     </button>
                                                     <button
-                                                        onClick={() => handleDelete(item)}
+                                                        onClick={() => openConfirm({
+                                                            title: 'Delete permanently?',
+                                                            message: `This will permanently delete \"${item.name}\" (${item.type}). This action cannot be undone.`,
+                                                            tone: 'danger',
+                                                            onConfirm: async () => { closeConfirm(); await handleDelete(item); }
+                                                        })}
                                                         className="text-red-600 hover:text-red-800 p-2 rounded-lg hover:bg-red-50 transition-colors"
                                                         title="Delete Permanently"
                                                     >
@@ -385,8 +534,20 @@ const Archive = () => {
                     )}
                 </div>
             </div>
+
+            {/* System-styled confirmation modal */}
+            <SimpleConfirmModal
+                isOpen={confirmState?.isOpen}
+                onClose={closeConfirm}
+                onConfirm={confirmState?.onConfirm}
+                title={confirmState?.title}
+                message={confirmState?.message}
+                confirmText={confirmState?.tone === 'danger' ? 'Delete' : 'Restore'}
+                confirmTone={confirmState?.tone || 'primary'}
+            />
         </div>
     );
 };
 
 export default Archive;
+

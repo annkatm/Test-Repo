@@ -14,7 +14,8 @@
 </head>
 <body>
     <div id="archive-root" 
-         data-archived-items="{{ json_encode($archivedItems ?? []) }}"
+         data-archived-items='@json($archivedItems ?? [])'
+         data-total="{{ $total ?? (is_countable($archivedItems ?? []) ? count($archivedItems) : 0) }}"
          data-filter-type="{{ $filterType ?? 'all' }}"
          data-search-term="{{ $searchTerm ?? '' }}">
     </div>
