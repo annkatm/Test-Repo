@@ -408,7 +408,10 @@ class TransactionController extends Controller
                 ], 404);
             }
 
-            DB::table('transactions')->where('id', $id)->delete();
+            $transaction = Transaction::find($id);
+            if ($transaction) {
+                $transaction->delete(); // This will now soft delete due to SoftDeletes trait
+            }
 
             return response()->json([
                 'success' => true,

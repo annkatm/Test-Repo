@@ -129,7 +129,10 @@ class EmployeeController extends Controller
                 ], 404);
             }
 
-            DB::table('employees')->where('id', $id)->delete();
+            $employee = Employee::find($id);
+            if ($employee) {
+                $employee->delete(); // This will now soft delete due to SoftDeletes trait
+            }
 
             return response()->json([
                 'success' => true,
