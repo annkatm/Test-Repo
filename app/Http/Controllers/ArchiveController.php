@@ -21,14 +21,19 @@ class ArchiveController extends Controller
         
         // Get all archived items based on filter
         if ($filterType === 'all' || $filterType === 'equipment') {
-            $equipment = Equipment::onlyTrashed()
+            $equipmentQuery = Equipment::onlyTrashed()
                 ->with('category')
-                ->when($searchTerm, function($query) use ($searchTerm) {
+                ->whereNotNull('deleted_at'); // Ensure only properly soft-deleted items
+            
+            if ($searchTerm) {
+                $equipmentQuery->where(function($query) use ($searchTerm) {
                     $query->where('name', 'like', "%{$searchTerm}%")
                           ->orWhere('brand', 'like', "%{$searchTerm}%")
                           ->orWhere('model', 'like', "%{$searchTerm}%");
-                })
-                ->get()
+                });
+            }
+            
+            $equipment = $equipmentQuery->get()
                 ->map(function($item) {
                     return [
                         'id' => $item->id,
@@ -46,13 +51,18 @@ class ArchiveController extends Controller
         }
         
         if ($filterType === 'all' || $filterType === 'requests') {
-            $requests = EquipmentRequest::onlyTrashed()
+            $requestsQuery = EquipmentRequest::onlyTrashed()
                 ->with(['employee', 'equipment', 'user'])
-                ->when($searchTerm, function($query) use ($searchTerm) {
+                ->whereNotNull('deleted_at'); // Ensure only properly soft-deleted items
+            
+            if ($searchTerm) {
+                $requestsQuery->where(function($query) use ($searchTerm) {
                     $query->where('request_number', 'like', "%{$searchTerm}%")
                           ->orWhere('reason', 'like', "%{$searchTerm}%");
-                })
-                ->get()
+                });
+            }
+            
+            $requests = $requestsQuery->get()
                 ->map(function($item) {
                     return [
                         'id' => $item->id,
@@ -69,12 +79,15 @@ class ArchiveController extends Controller
         }
         
         if ($filterType === 'all' || $filterType === 'transactions') {
-            $transactions = Transaction::onlyTrashed()
+            $transactionsQuery = Transaction::onlyTrashed()
                 ->with(['employee', 'equipment', 'user'])
-                ->when($searchTerm, function($query) use ($searchTerm) {
-                    $query->where('transaction_number', 'like', "%{$searchTerm}%");
-                })
-                ->get()
+                ->whereNotNull('deleted_at'); // Ensure only properly soft-deleted items
+            
+            if ($searchTerm) {
+                $transactionsQuery->where('transaction_number', 'like', "%{$searchTerm}%");
+            }
+            
+            $transactions = $transactionsQuery->get()
                 ->map(function($item) {
                     return [
                         'id' => $item->id,
@@ -90,13 +103,18 @@ class ArchiveController extends Controller
         }
         
         if ($filterType === 'all' || $filterType === 'employees') {
-            $employees = Employee::onlyTrashed()
-                ->when($searchTerm, function($query) use ($searchTerm) {
+            $employeesQuery = Employee::onlyTrashed()
+                ->whereNotNull('deleted_at'); // Ensure only properly soft-deleted items
+            
+            if ($searchTerm) {
+                $employeesQuery->where(function($query) use ($searchTerm) {
                     $query->where('first_name', 'like', "%{$searchTerm}%")
                           ->orWhere('last_name', 'like', "%{$searchTerm}%")
                           ->orWhere('email', 'like', "%{$searchTerm}%");
-                })
-                ->get()
+                });
+            }
+            
+            $employees = $employeesQuery->get()
                 ->map(function($item) {
                     return [
                         'id' => $item->id,
@@ -112,13 +130,18 @@ class ArchiveController extends Controller
         }
         
         if ($filterType === 'all' || $filterType === 'users') {
-            $users = User::onlyTrashed()
+            $usersQuery = User::onlyTrashed()
                 ->with('role')
-                ->when($searchTerm, function($query) use ($searchTerm) {
+                ->whereNotNull('deleted_at'); // Ensure only properly soft-deleted items
+            
+            if ($searchTerm) {
+                $usersQuery->where(function($query) use ($searchTerm) {
                     $query->where('name', 'like', "%{$searchTerm}%")
                           ->orWhere('email', 'like', "%{$searchTerm}%");
-                })
-                ->get()
+                });
+            }
+            
+            $users = $usersQuery->get()
                 ->map(function($item) {
                     return [
                         'id' => $item->id,
@@ -132,6 +155,14 @@ class ArchiveController extends Controller
                 });
             $archivedItems = $archivedItems->merge($users);
         }
+        
+        // Filter out items with invalid deleted_at timestamps (like 1970-01-01)
+        $archivedItems = $archivedItems->filter(function($item) {
+            return $item['deleted_at'] && 
+                   $item['deleted_at'] !== '1970-01-01 00:00:00' && 
+                   $item['deleted_at'] !== '1970-01-01' &&
+                   strtotime($item['deleted_at']) > 0;
+        });
         
         // Sort by deleted_at desc
         $archivedItems = $archivedItems->sortByDesc('deleted_at');
