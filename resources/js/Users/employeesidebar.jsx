@@ -1,65 +1,55 @@
 import React from 'react';
-import { Home, ArrowLeftRight, Package } from 'lucide-react';
+import { Home, History, Package } from 'lucide-react';
 
 const EmployeeSidebar = ({ activeMenu, onMenuClick }) => {
   const menuItems = [
-    {
-      label: 'Home',
-      icon: Home,
-      path: 'Home'
-    },
-    {
-      label: 'Transaction',
-      icon: ArrowLeftRight,
-      path: 'Transaction'
-    },
-    {
-      label: 'Returned Items',
-      icon: Package,
-      path: 'Returned Items'
-    }
+    { icon: Home, label: 'Home', active: true },
+    { icon: History, label: 'Transaction', active: false },
+    { icon: Package, label: 'Returned Items', active: false },
   ];
 
-  const isActive = (path) => activeMenu === path;
-
-  const linkClass = (path) =>
-    `inline-flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-300 ease-out text-base font-semibold min-w-[140px] transform hover:scale-105 active:scale-95 ${
-      isActive(path)
-        ? "bg-white text-[#2262C6] shadow-sm scale-105"
-        : "text-white hover:bg-white hover:text-[#2262C6] hover:shadow-sm"
-    }`;
-
   return (
-    <div className="flex flex-col">
-      {/* Logo */}
-      <div className="flex items-center space-x-3 p-3">
-        <img
-          src="/images/Frame_89-removebg-preview.png"
-          alt="iREPLY Logo"
-          className="h-16 w-auto"
-        />
-      </div>
-
-      {/* Sidebar */}
-      <aside className="w-57 bg-gradient-to-b from-[#0064FF] to-[#053786] text-white flex flex-col h-screen overflow-hidden rounded-tr-[72px]">
-        {/* Navigation */}
-        <nav className="flex-1 min-h-0 px-3 py-4 mt-4 space-y-2 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-          {menuItems.map((item) => {
-            const IconComponent = item.icon;
+    <>
+      {/* Logo Header */}
+      <header className="fixed top-0 left-0 w-60 bg-white flex items-center justify-center py-4 z-40 border-r border-gray-200">
+        <div className="flex items-center space-x-3 p-3">
+          <img 
+            src="/images/Frame_89-removebg-preview.png"
+            alt="iREPLY Logo" 
+            className="h-12 w-auto"
+            onError={(e) => {
+              console.error('Logo failed to load:', e.target.src);
+              e.target.style.display = 'none';
+              e.target.nextElementSibling.style.display = 'block';
+            }}
+          />
+        </div>
+      </header>
+  
+      {/* Sidebar Navigation */}
+      <aside className="w-57 bg-gradient-to-b from-[#0064FF] to-[#053786] text-white fixed top-20 inset-y-0 left-0 bg-blue-600 overflow-hidden rounded-tr-[72px] flex flex-col">
+        <nav className="mt-8 space-y-2">
+          {menuItems.map((item, index) => {
+            const Icon = item.icon;
             return (
-              <button
-                key={item.path}
-                className={linkClass(item.path)}
-                onClick={() => onMenuClick(item.path)}
-              >
-                <IconComponent className="h-5 w-5" />
-                <span>{item.label}</span>
-              </button>
+              <div key={index}>
+                <button
+                  onClick={() => onMenuClick(item.label)}
+                  className={`w-50 flex items-center space-x-5 px-7 py-3 rounded-r-full transition-all duration-200 ${
+                    activeMenu === item.label
+                      ? "bg-white text-[#2262C6] shadow-sm scale-105"
+                      : "text-white/90 hover:bg-white hover:text-[#2262C6]"
+                  }`}
+                >
+                  <Icon className="h-6 w-6" />
+                  <span className="font-medium">{item.label}</span>
+                </button>
+              </div>
             );
           })}
         </nav>
       </aside>
-    </div>
+    </>
   );
 };
 

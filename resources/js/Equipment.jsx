@@ -11,25 +11,25 @@ const Card = ({ selected, name, qty, image, onClick }) => {
         selected ? 'border-blue-500' : 'border-gray-200'
       } bg-white text-left focus:outline-none`}
     > 
-      <div className="h-2/3 w-full flex items-center justify-center">
+      <div className="absolute inset-0 overflow-hidden">
         {image ? (
           <img
             src={image.startsWith('http') ? image : image.startsWith('/storage') ? image : `/storage/${image}`}
             alt={name}
-            className="h-24 w-40 object-cover rounded-md"
+            className="h-full w-full object-cover"
             onError={(e) => {
               e.target.onerror = null;
               e.target.src = '/images/placeholder-equipment.png';
             }}
           />
         ) : (
-          <div className="h-24 w-40 bg-gray-200 rounded-md" />
+          <div className="h-full w-full bg-gray-200" />
         )}
       </div>
-      <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-b from-blue-50 to-blue-200" />
+      <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-b from-transparent to-[#2262C6]" />
       <div className="absolute bottom-0 left-0 right-0 px-4 py-3 flex items-center justify-between">
-        <span className="text-xs font-semibold text-gray-700 uppercase">{name}</span>
-        <span className="text-xs text-blue-700 font-medium">{qty}</span>
+        <span className="text-xs font-semibold text-white uppercase">{name}</span>
+        <span className="text-xs text-white font-medium">{qty}</span>
       </div>
     </button>
   );
