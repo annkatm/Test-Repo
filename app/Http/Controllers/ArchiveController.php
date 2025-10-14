@@ -144,8 +144,16 @@ class ArchiveController extends Controller
                 'search' => $searchTerm
             ]);
         }
+ 
+        $itemsForView = $archivedItems->values()->toArray();
+        $totalForView = $archivedItems->count();
         
-        return view('archive', compact('archivedItems', 'filterType', 'searchTerm'));
+        return view('archive', [
+            'archivedItems' => $itemsForView,
+            'filterType' => $filterType,
+            'searchTerm' => $searchTerm,
+            'total' => $totalForView,
+        ]);
     }
 
     public function restore($type, $id)
@@ -212,5 +220,103 @@ class ArchiveController extends Controller
         }
 
         return response()->json(['success' => false, 'message' => 'Item not found'], 404);
+    }
+
+    public function bulkRestore(Request $request)
+    {
+        $itemIds = $request->input('itemIds', []);
+        $restoredCount = 0;
+        $errors = [];
+
+        foreach ($itemIds as $itemData) {
+            $type = $itemData['type'];
+            $id = $itemData['id'];
+            
+            $model = null;
+            
+            switch ($type) {
+                case 'equipment':
+                    $model = Equipment::withTrashed()->find($id);
+                    break;
+                case 'category':
+                    $model = Category::withTrashed()->find($id);
+                    break;
+                case 'employee':
+                    $model = Employee::withTrashed()->find($id);
+                    break;
+                case 'request':
+                    $model = EquipmentRequest::withTrashed()->find($id);
+                    break;
+                case 'transaction':
+                    $model = Transaction::withTrashed()->find($id);
+                    break;
+                case 'user':
+                    $model = User::withTrashed()->find($id);
+                    break;
+            }
+
+            if ($model) {
+                $model->restore();
+                $restoredCount++;
+            } else {
+                $errors[] = "Item {$type} with ID {$id} not found";
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => "Successfully restored {$restoredCount} items",
+            'restored_count' => $restoredCount,
+            'errors' => $errors
+        ]);
+    }
+
+    public function bulkForceDelete(Request $request)
+    {
+        $itemIds = $request->input('itemIds', []);
+        $deletedCount = 0;
+        $errors = [];
+
+        foreach ($itemIds as $itemData) {
+            $type = $itemData['type'];
+            $id = $itemData['id'];
+            
+            $model = null;
+            
+            switch ($type) {
+                case 'equipment':
+                    $model = Equipment::withTrashed()->find($id);
+                    break;
+                case 'category':
+                    $model = Category::withTrashed()->find($id);
+                    break;
+                case 'employee':
+                    $model = Employee::withTrashed()->find($id);
+                    break;
+                case 'request':
+                    $model = EquipmentRequest::withTrashed()->find($id);
+                    break;
+                case 'transaction':
+                    $model = Transaction::withTrashed()->find($id);
+                    break;
+                case 'user':
+                    $model = User::withTrashed()->find($id);
+                    break;
+            }
+
+            if ($model) {
+                $model->forceDelete();
+                $deletedCount++;
+            } else {
+                $errors[] = "Item {$type} with ID {$id} not found";
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => "Successfully deleted {$deletedCount} items",
+            'deleted_count' => $deletedCount,
+            'errors' => $errors
+        ]);
     }
 }
