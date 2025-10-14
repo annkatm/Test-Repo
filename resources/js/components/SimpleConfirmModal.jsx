@@ -16,26 +16,33 @@ const SimpleConfirmModal = ({
     : 'bg-green-600 hover:bg-green-700';
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-md shadow-lg max-w-sm w-full mx-4 overflow-hidden border border-gray-300">
-        <div className="px-4 py-3">
-          <h3 className="text-base font-semibold text-gray-900">{title}</h3>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden border border-gray-200">
+        {/* Header */}
+        <div className="px-6 py-5 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-100">
+          <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
         </div>
-        <div className="border-t" />
-        <div className="px-4 py-4">
-          <p className="text-sm font-medium text-gray-800">{message}</p>
+        
+        {/* Content */}
+        <div className="px-6 py-6">
+          <p className="text-base text-gray-700 leading-relaxed">{message}</p>
         </div>
-        <div className="border-t" />
-        <div className="px-4 py-3 flex justify-end space-x-2">
+        
+        {/* Actions */}
+        <div className="px-6 py-4 bg-gray-50 flex justify-end space-x-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none"
+            className="px-6 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all duration-200"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
-            className={`px-4 py-2 text-sm font-medium text-white rounded-md ${confirmClasses}`}
+            className={`px-6 py-2.5 text-sm font-medium text-white rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 ${confirmClasses} ${
+              confirmTone === 'danger' 
+                ? 'focus:ring-red-300 shadow-lg hover:shadow-xl' 
+                : 'focus:ring-green-300 shadow-lg hover:shadow-xl'
+            }`}
           >
             {confirmText}
           </button>

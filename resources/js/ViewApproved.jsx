@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Printer, ChevronDown } from 'lucide-react';
+import { Search, Printer, ChevronDown, Clock, User, CheckCircle } from 'lucide-react';
 import GlobalHeader from './components/GlobalHeader';
 import HomeSidebar from './HomeSidebar';
 import ConfirmModal from './components/ConfirmModal.jsx';
@@ -300,21 +300,21 @@ const ViewApproved = () => {
                   <h4 className="text-sm uppercase tracking-wider opacity-80">New Approved</h4>
                   <div className="mt-2 flex items-center justify-between">
                     <p className="text-5xl font-bold">{loading ? '...' : dashboardStats.new_requests}</p>
-                    <div className="w-6 h-6 rounded-full bg-white/30"></div>
+                    <Clock className="w-8 h-8 text-white/70" />
                   </div>
                 </div>
                 <div className="bg-gray-100 rounded-2xl p-3 shadow flex flex-col h-26">
                   <h4 className="text-sm font-semibold text-gray-600">Current holder</h4>
                   <div className="mt-2 flex items-center justify-between">
                     <p className="text-2xl font-bold text-gray-900">{loading ? '...' : dashboardStats.current_holders}</p>
-                    <div className="w-6 h-6 rounded-full bg-gray-300"></div>
+                    <User className="w-8 h-8 text-gray-500" />
                   </div>
                 </div>
                 <div className="bg-gray-100 rounded-2xl p-6 shadow flex flex-col h-26">
                   <h4 className="text-sm font-semibold text-gray-600">Verify Return</h4>
                   <div className="mt-2 flex items-center justify-between">
                     <p className="text-2xl font-bold text-gray-900">{loading ? '...' : dashboardStats.verify_returns}</p>
-                    <div className="w-6 h-6 rounded-full bg-gray-300"></div>
+                    <CheckCircle className="w-8 h-8 text-gray-500" />
                   </div>
                 </div>
               </div>
