@@ -40,6 +40,18 @@ const Equipment = () => {
   const [categories, setCategories] = useState([]);
   const [equipment, setEquipment] = useState([]);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [expandedItems, setExpandedItems] = useState(new Set());
+  const [individualEquipment, setIndividualEquipment] = useState({});
+
+  const toggleExpanded = (itemName) => {
+    const newExpanded = new Set(expandedItems);
+    if (newExpanded.has(itemName)) {
+      newExpanded.delete(itemName);
+    } else {
+      newExpanded.add(itemName);
+    }
+    setExpandedItems(newExpanded);
+  };
 
   const fetchData = async () => {
       try {
@@ -72,6 +84,17 @@ const Equipment = () => {
             });
             setCategories(categoriesWithCount);
             setEquipment(assignedEquipment);
+            
+            // Store individual equipment data for expanded views
+            const individualData = {};
+            assignedEquipment.forEach(eq => {
+              const key = eq.name || eq.brand || 'Unknown';
+              if (!individualData[key]) {
+                individualData[key] = [];
+              }
+              individualData[key].push(eq);
+            });
+            setIndividualEquipment(individualData);
           }
         }
       } catch (e) {
@@ -174,15 +197,99 @@ const Equipment = () => {
                             return acc;
                           }, {});
 
-                          return Object.values(groupedEquipment).map((group, index) => (
-                            <div key={`${group.name}-${index}`} className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
-                              <div className="grid grid-cols-3 gap-4 items-center">
-                                <div className="text-left font-medium text-gray-800">{group.name}</div>
-                                <div className="text-center text-gray-700">{group.available}/{group.total}</div>
-                                <div className="text-right text-gray-800">₱{Number(group.price).toFixed(2)}</div>
+                          return Object.values(groupedEquipment).map((group, index) => {
+                            const isExpanded = expandedItems.has(group.name);
+                            const individualItems = individualEquipment[group.name] || [];
+                            
+                            return (
+                              <div key={`${group.name}-${index}`} className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+                                {/* Main Item Row */}
+                                <div 
+                                  className="p-4 cursor-pointer hover:bg-gray-50 transition-colors duration-200 grid grid-cols-3 gap-4 items-center"
+                                  onClick={() => toggleExpanded(group.name)}
+                                >
+                                  <div className="text-left font-medium text-gray-800">{group.name}</div>
+                                  <div className="text-center text-gray-700">{group.available}/{group.total}</div>
+                                  <div className="text-right text-gray-800 flex items-center justify-end">
+                                    <span>₱{Number(group.price).toFixed(2)}</span>
+                                    <svg 
+                                      className={`ml-2 h-4 w-4 text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                                      fill="none" 
+                                      stroke="currentColor" 
+                                      viewBox="0 0 24 24"
+                                    >
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                  </div>
+                                </div>
+                                
+                                {/* Expanded Stock Details */}
+                                {isExpanded && (
+                                  <div className="border-t border-gray-100 bg-gray-50">
+                                    <div className="p-4">
+                                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                                        {/* Table Header */}
+                                        <div className="bg-gray-100 px-4 py-3 border-b border-gray-200">
+                                          <div className="grid grid-cols-5 gap-4 text-sm font-semibold text-gray-700">
+                                            <div>Serial Number</div>
+                                            <div>Status</div>
+                                            <div>Date Added</div>
+                                            <div>Last Updated</div>
+                                            <div className="text-center">Actions</div>
+                                          </div>
+                                        </div>
+                                        
+                                        {/* Table Body */}
+                                        <div className="divide-y divide-gray-200">
+                                          {individualItems.map((item, itemIndex) => (
+                                            <div key={`${item.id}-${itemIndex}`} className={`px-4 py-3 ${itemIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                                              <div className="grid grid-cols-5 gap-4 items-center text-sm">
+                                                <div className="font-medium text-gray-900">{item.serial_number || 'N/A'}</div>
+                                                <div>
+                                                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                                    item.status === 'available' ? 'bg-green-100 text-green-800' :
+                                                    item.status === 'borrowed' ? 'bg-orange-100 text-orange-800' :
+                                                    item.status === 'issued' ? 'bg-red-100 text-red-800' :
+                                                    'bg-gray-100 text-gray-800'
+                                                  }`}>
+                                                    {item.status ? item.status.charAt(0).toUpperCase() + item.status.slice(1) : 'Unknown'}
+                                                  </span>
+                                                </div>
+                                                <div className="text-gray-600">
+                                                  {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'N/A'}
+                                                </div>
+                                                <div className="text-gray-600">
+                                                  {item.updated_at ? new Date(item.updated_at).toLocaleDateString() : 'N/A'}
+                                                </div>
+                                                <div className="flex justify-center space-x-2">
+                                                  <button 
+                                                    className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors duration-200"
+                                                    title="Edit"
+                                                  >
+                                                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                    </svg>
+                                                  </button>
+                                                  <button 
+                                                    className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors duration-200"
+                                                    title="Delete"
+                                                  >
+                                                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                    </svg>
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
-                            </div>
-                          ));
+                            );
+                          });
                         })()}
                       </div>
                     </div>
