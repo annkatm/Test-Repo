@@ -22,7 +22,7 @@ const EmployeeSidebar = ({ activeMenu, onMenuClick }) => {
   return (
     <>
       {/* Logo Header - Fixed at top */}
-      <header className="fixed top-0 left-0 w-60flex items-center justify-start px-6 py-4 z-40 border-gray-200">
+      <header className="fixed top-0 left-0 w-60 flex items-center justify-start px-6 py-4 z-40 border-gray-200">
         <div className="flex items-center space-x-3">
           <img
             src="/images/Frame_89-removebg-preview.png"
