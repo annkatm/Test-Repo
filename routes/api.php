@@ -52,6 +52,26 @@ Route::post('/equipment/add-stock', [EquipmentController::class, 'addStock']);
 use App\Http\Controllers\Api\CategoryController;
 Route::apiResource('categories', CategoryController::class);
 
+// Position API routes
+use App\Http\Controllers\Api\PositionController;
+Route::apiResource('positions', PositionController::class);
+
+// Department API routes
+use App\Http\Controllers\Api\DepartmentController;
+Route::apiResource('departments', DepartmentController::class);
+
+// Client API routes
+use App\Http\Controllers\Api\ClientController;
+Route::apiResource('clients', ClientController::class);
+
+// Employee Type API routes
+use App\Http\Controllers\Api\EmployeeTypeController;
+Route::apiResource('employee-types', EmployeeTypeController::class);
+
+// Account Type API routes
+use App\Http\Controllers\Api\AccountTypeController;
+Route::apiResource('account-types', AccountTypeController::class);
+
 // User management API routes
 use App\Http\Controllers\Api\UserController;
 Route::apiResource('users', UserController::class);

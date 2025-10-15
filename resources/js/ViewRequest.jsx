@@ -85,15 +85,23 @@ const ViewRequest = () => {
   };
 
   // Handler functions for approve and reject actions
-  const handleApprove = (requestId) => {
+  const handleCheckApprove = (requestId) => {
     const requestToApprove = pendingRequests.find(req => req.id === requestId);
     
     if (requestToApprove) {
-      // Ensure name and item properties are available for the modal
+      // Format request data for modal with items array
       const requestWithDetails = {
         ...requestToApprove,
-        name: requestToApprove.full_name || requestToApprove.employee_name || requestToApprove.name || 'Unknown',
-        item: requestToApprove.equipment_name || requestToApprove.item_name || requestToApprove.item || 'Unknown Item'
+        employee_name: requestToApprove.full_name || requestToApprove.employee_name || requestToApprove.name || 'Unknown',
+        employee_type: requestToApprove.position || requestToApprove.employee_type || 'Regular',
+        role: 'Employee',
+        items: [{
+          id: requestToApprove.equipment_id,
+          equipment_name: requestToApprove.equipment_name || 'Unknown Item',
+          name: requestToApprove.equipment_name || 'Unknown Item',
+          specifications: [requestToApprove.brand, requestToApprove.model].filter(Boolean).join(' ') || requestToApprove.category_name || '',
+          specs: [requestToApprove.brand, requestToApprove.model].filter(Boolean).join(' ') || requestToApprove.category_name || ''
+        }]
       };
       
       setModalState({
@@ -105,16 +113,22 @@ const ViewRequest = () => {
     }
   };
 
-  // Row click opens the detailed approval modal
-  const handleRowClick = (requestId) => {
-    const req = pendingRequests.find(r => r.id === requestId);
+  const handleApprove = (req) => {
     if (!req) return;
     
-    // Ensure name and item properties are available for the modal
+    // Format request data for modal with items array
     const requestWithDetails = {
       ...req,
-      name: req.full_name || req.employee_name || req.name || 'Unknown',
-      item: req.equipment_name || req.item_name || req.item || 'Unknown Item'
+      employee_name: req.full_name || req.employee_name || req.name || 'Unknown',
+      employee_type: req.position || req.employee_type || 'Regular',
+      role: 'Employee',
+      items: [{
+        id: req.equipment_id,
+        equipment_name: req.equipment_name || 'Unknown Item',
+        name: req.equipment_name || 'Unknown Item',
+        specifications: [req.brand, req.model].filter(Boolean).join(' ') || req.category_name || '',
+        specs: [req.brand, req.model].filter(Boolean).join(' ') || req.category_name || ''
+      }]
     };
     
     setModalState({
@@ -125,15 +139,31 @@ const ViewRequest = () => {
     });
   };
 
+  // Row click opens the detailed approval modal
+  const handleRowClick = (requestId) => {
+    const req = pendingRequests.find(r => r.id === requestId);
+    if (!req) return;
+    
+    handleApprove(req);
+  };
+
   const handleReject = (requestId) => {
     const requestToReject = pendingRequests.find(req => req.id === requestId);
     
     if (requestToReject) {
-      // Ensure name and item properties are available for the modal
+      // Format request data for modal with items array
       const requestWithDetails = {
         ...requestToReject,
-        name: requestToReject.full_name || requestToReject.employee_name || requestToReject.name || 'Unknown',
-        item: requestToReject.equipment_name || requestToReject.item_name || requestToReject.item || 'Unknown Item'
+        employee_name: requestToReject.full_name || requestToReject.employee_name || requestToReject.name || 'Unknown',
+        employee_type: requestToReject.position || requestToReject.employee_type || 'Regular',
+        role: 'Employee',
+        items: [{
+          id: requestToReject.equipment_id,
+          equipment_name: requestToReject.equipment_name || 'Unknown Item',
+          name: requestToReject.equipment_name || 'Unknown Item',
+          specifications: [requestToReject.brand, requestToReject.model].filter(Boolean).join(' ') || requestToReject.category_name || '',
+          specs: [requestToReject.brand, requestToReject.model].filter(Boolean).join(' ') || requestToReject.category_name || ''
+        }]
       };
       
       setModalState({
@@ -1014,7 +1044,20 @@ const ViewRequest = () => {
             // For delete, open the detailed reject modal to capture optional reason
             const requestToReject = pendingRequests.find(req => req.id === confirmModal.requestId);
             if (requestToReject) {
-              setModalState({ isOpen: true, type: 'reject', requestData: requestToReject, reason: '' });
+              const requestWithDetails = {
+                ...requestToReject,
+                employee_name: requestToReject.full_name || requestToReject.employee_name || requestToReject.name || 'Unknown',
+                employee_type: requestToReject.position || requestToReject.employee_type || 'Regular',
+                role: 'Employee',
+                items: [{
+                  id: requestToReject.equipment_id,
+                  equipment_name: requestToReject.equipment_name || 'Unknown Item',
+                  name: requestToReject.equipment_name || 'Unknown Item',
+                  specifications: [requestToReject.brand, requestToReject.model].filter(Boolean).join(' ') || requestToReject.category_name || '',
+                  specs: [requestToReject.brand, requestToReject.model].filter(Boolean).join(' ') || requestToReject.category_name || ''
+                }]
+              };
+              setModalState({ isOpen: true, type: 'reject', requestData: requestWithDetails, reason: '' });
             }
           }
           setConfirmModal({ isOpen: false, mode: null, requestId: null });

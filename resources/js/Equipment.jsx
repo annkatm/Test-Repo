@@ -74,11 +74,13 @@ const Equipment = () => {
             const categoriesWithCount = categoriesData.map(cat => {
               const categoryEquipment = assignedEquipment.filter(eq => eq.category_id === cat.id);
               const available = categoryEquipment.filter(eq => eq.status === 'available').length;
-              const total = categoryEquipment.length;
+              const inUse = categoryEquipment.filter(eq => eq.status === 'in_use').length;
+              const total = available + inUse; // Only count available and in_use equipment
               return {
                 ...cat,
                 qty: `${available}/${total}`,
                 availableCount: available,
+                inUseCount: inUse,
                 totalCount: total
               };
             });
@@ -106,7 +108,11 @@ const Equipment = () => {
     fetchData();
     const handler = () => fetchData();
     window.addEventListener('categories:updated', handler);
-    return () => window.removeEventListener('categories:updated', handler);
+    window.addEventListener('equipment:updated', handler);
+    return () => {
+      window.removeEventListener('categories:updated', handler);
+      window.removeEventListener('equipment:updated', handler);
+    };
   }, []);
 
   return (
@@ -187,12 +193,18 @@ const Equipment = () => {
                                 name: key,
                                 total: 0,
                                 available: 0,
+                                inUse: 0,
                                 price: eq.purchase_price || 0
                               };
                             }
-                            acc[key].total += 1;
-                            if (eq.status === 'available') {
-                              acc[key].available += 1;
+                            // Only count available and in_use equipment
+                            if (eq.status === 'available' || eq.status === 'in_use') {
+                              acc[key].total += 1;
+                              if (eq.status === 'available') {
+                                acc[key].available += 1;
+                              } else if (eq.status === 'in_use') {
+                                acc[key].inUse += 1;
+                              }
                             }
                             return acc;
                           }, {});

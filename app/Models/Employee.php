@@ -10,15 +10,23 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Employee extends Model
 {
     use SoftDeletes;
+    
     protected $fillable = [
         'user_id',
+        'employee_id',
         'employee_number',
         'first_name',
         'last_name',
         'email',
         'department',
         'position',
-        'contact_number',
+        'client',
+        'phone',
+        'address',
+        'employee_type',
+        'issued_item',
+        'status',
+        'hire_date',
     ];
 
     /**

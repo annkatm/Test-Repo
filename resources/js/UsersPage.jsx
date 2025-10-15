@@ -44,17 +44,26 @@ const UsersPage = () => {
   };
 
   const validatePassword = (password) => {
-    return password.length >= 8;
+    return password.length >= 6;
   };
 
   const validateForm = (isEdit = false) => {
     const newErrors = {};
 
-    // Name validation (required)
-    if (!newUser.name.trim()) {
-      newErrors.name = 'Name is required';
-    } else if (newUser.name.trim().length < 2) {
-      newErrors.name = 'Name must be at least 2 characters';
+    // For employee accounts, must select from dropdown first
+    if (activeFilter === "EMPLOYEE" && !selectedEmployee && !isEdit) {
+      newErrors.name = 'Please select an employee from the dropdown';
+      setErrors(newErrors);
+      return false;
+    }
+
+    // Name validation (required) - only if not already errored
+    if (!newErrors.name) {
+      if (!newUser.name.trim()) {
+        newErrors.name = 'Name is required';
+      } else if (newUser.name.trim().length < 2) {
+        newErrors.name = 'Name must be at least 2 characters';
+      }
     }
 
     // Email validation
@@ -68,7 +77,7 @@ const UsersPage = () => {
     if (!isEdit && !newUser.password) {
       newErrors.password = 'Password is required';
     } else if (newUser.password && !validatePassword(newUser.password)) {
-      newErrors.password = 'Password must be at least 8 characters';
+      newErrors.password = 'Password must be at least 6 characters';
     }
 
     // Confirm password validation
@@ -193,6 +202,19 @@ const UsersPage = () => {
     }
     
     try {
+      const userData = {
+        name: newUser.name?.trim() || '',
+        email: newUser.email?.trim() || '',
+        password: newUser.password || '',
+        accountType: activeFilter === "ADMIN" ? "admin" : "employee",
+        username: newUser.username?.trim() || newUser.email?.split('@')[0] || '', // Auto-generate if not provided
+        position: newUser.position?.trim() || selectedEmployee?.position || null,
+        department: selectedEmployee?.department || null,
+        phone: selectedEmployee?.phone || null,
+      };
+
+      console.log('Creating user with data:', userData);
+
       const response = await fetch('/api/users', {
         method: 'POST',
         headers: {
@@ -200,28 +222,22 @@ const UsersPage = () => {
           'Accept': 'application/json',
           'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
         },
-        body: JSON.stringify({
-          name: newUser.name.trim(),
-          email: newUser.email.trim(),
-          password: newUser.password,
-          accountType: activeFilter === "ADMIN" ? "admin" : "employee",
-          username: newUser.username.trim() || newUser.email.split('@')[0], // Auto-generate if not provided
-          position: newUser.position.trim() || selectedEmployee?.position || "Employee",
-          department: selectedEmployee?.department || null,
-          phone: null,
-        }),
+        body: JSON.stringify(userData),
       });
 
       const result = await response.json();
+      console.log('Server response:', result);
       
       if (result.success) {
         window.location.reload();
       } else {
-        alert(result.message || 'Failed to create user');
+        const errorMsg = result.message || 'Failed to create user';
+        const errors = result.errors ? '\n' + Object.values(result.errors).flat().join('\n') : '';
+        alert(errorMsg + errors);
       }
     } catch (error) {
       console.error('Error creating user:', error);
-      alert('Failed to create user. Please try again.');
+      alert('Failed to create user. Please check your input and try again.\n\nError: ' + error.message);
     }
   };
 
@@ -240,12 +256,12 @@ const UsersPage = () => {
             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
           },
           body: JSON.stringify({
-            name: newUser.name.trim(),
-            email: newUser.email.trim(),
+            name: newUser.name?.trim() || '',
+            email: newUser.email?.trim() || '',
             password: newUser.password || null,
             accountType: selectedUser?.accountType === "IT Admin" ? "admin" : "employee",
-            username: newUser.username.trim() || newUser.email.split('@')[0],
-            position: newUser.position.trim() || selectedUser.position || "Employee",
+            username: newUser.username?.trim() || newUser.email?.split('@')[0] || '',
+            position: newUser.position?.trim() || selectedUser.position || null,
             department: selectedUser.department || null,
             phone: selectedUser.phone || null,
           }),
@@ -256,11 +272,13 @@ const UsersPage = () => {
         if (result.success) {
           window.location.reload();
         } else {
-          alert(result.message || 'Failed to update user');
+          const errorMsg = result.message || 'Failed to update user';
+          const errors = result.errors ? '\n' + Object.values(result.errors).flat().join('\n') : '';
+          alert(errorMsg + errors);
         }
       } catch (error) {
         console.error('Error updating user:', error);
-        alert('Failed to update user. Please try again.');
+        alert('Failed to update user. Please check your input and try again.');
       }
     }
   };
@@ -505,8 +523,17 @@ const UsersPage = () => {
                         type="text"
                         value={employeeSearchTerm}
                         onChange={(e) => {
-                          setEmployeeSearchTerm(e.target.value);
+                          const value = e.target.value;
+                          setEmployeeSearchTerm(value);
                           setShowEmployeeDropdown(true);
+ 
+
+                          // For ADMIN, allow direct typing
+                          if (activeFilter === "ADMIN") {
+                            setNewUser({ ...newUser, name: value });
+                            setSelectedEmployee(null); // Clear selected employee for admin
+                          }
+                          if (errors.name) setErrors({ ...errors, name: '' }); 
                         }}
                         onFocus={() => setShowEmployeeDropdown(true)}
                         className={`w-full border rounded-md px-3 py-2 pr-8 focus:outline-none focus:ring-2 ${
@@ -514,11 +541,13 @@ const UsersPage = () => {
                             ? 'border-red-300 focus:ring-red-500 focus:border-red-500 bg-red-50' 
                             : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
                         }`}
-                        placeholder="Search and select employee..."
+                        placeholder={activeFilter === "ADMIN" ? "Enter admin name..." : "Search and select employee..."}
                       />
-                      <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      {activeFilter === "EMPLOYEE" && (
+                        <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      )}
                       
-                      {showEmployeeDropdown && (
+                      {showEmployeeDropdown && activeFilter === "EMPLOYEE" && (
                         <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
                           {loadingEmployees ? (
                             <div className="px-3 py-2 text-gray-500">Loading employees...</div>
@@ -530,7 +559,7 @@ const UsersPage = () => {
                                 className="w-full text-left px-3 py-2 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
                               >
                                 <div className="font-medium">{employee.name}</div>
-                                <div className="text-xs text-gray-500">{employee.email} • {employee.position || employee.employeeType}</div>
+                                <div className="text-xs text-gray-500">{employee.email} • {employee.position || employee.position}</div>
                               </button>
                             ))
                           ) : (
