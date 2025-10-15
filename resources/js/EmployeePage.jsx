@@ -99,6 +99,10 @@ const EmployeePage = () => {
     employeeTypes: [],
     accountTypes: []
   });
+  const [isEquipmentModalOpen, setIsEquipmentModalOpen] = useState(false);
+  const [availableEquipment, setAvailableEquipment] = useState([]);
+  const [issuedEquipment, setIssuedEquipment] = useState([]);
+  const [equipmentSearchTerm, setEquipmentSearchTerm] = useState('');
 
   // Validation functions
   const validateEmail = (email) => {
@@ -199,6 +203,31 @@ const EmployeePage = () => {
     }
   };
 
+  const loadAvailableEquipment = async () => {
+    try {
+      const res = await fetch('/api/equipment');
+      const data = await res.json();
+      if (data.success) {
+        // Handle both data structures (data.data or data.data.data)
+        const equipmentList = Array.isArray(data.data) ? data.data : (data.data.data || []);
+        
+        // Map equipment with category information
+        const equipmentWithCategories = equipmentList.map(item => ({
+          ...item,
+          category: item.category || { id: null, name: 'Uncategorized' }
+        }));
+        
+        // Filter only available equipment
+        const available = equipmentWithCategories.filter(eq => 
+          eq.status === 'available' || eq.status === 'Available'
+        );
+        setAvailableEquipment(available);
+      }
+    } catch (e) {
+      console.error('Failed to load equipment:', e);
+    }
+  };
+
   const loadDropdownOptions = async () => {
     try {
       const endpoints = {
@@ -292,6 +321,28 @@ const EmployeePage = () => {
     };
   }, []);
 
+  const addEquipmentToIssued = (equipment) => {
+    // Check if already added
+    if (issuedEquipment.find(eq => eq.id === equipment.id)) {
+      return;
+    }
+    setIssuedEquipment(prev => [...prev, equipment]);
+  };
+
+  const removeEquipmentFromIssued = (equipmentId) => {
+    setIssuedEquipment(prev => prev.filter(eq => eq.id !== equipmentId));
+  };
+
+  const openEquipmentModal = () => {
+    loadAvailableEquipment();
+    setIsEquipmentModalOpen(true);
+  };
+
+  const closeEquipmentModal = () => {
+    setIsEquipmentModalOpen(false);
+    setEquipmentSearchTerm('');
+  };
+
   const resetAll = () => {
     setForm({
       firstName: '',
@@ -312,6 +363,7 @@ const EmployeePage = () => {
       role: 'employee'
     });
     setErrors({});
+    setIssuedEquipment([]);
   };
 
   const closeModal = () => {
@@ -350,6 +402,14 @@ const EmployeePage = () => {
       return;
     }
 
+    // Prepare issued equipment data
+    const equipmentData = issuedEquipment.map(eq => ({
+      id: eq.id,
+      name: eq.name,
+      specs: eq.specs,
+      serial_number: eq.serial_number
+    }));
+
     fetch('/api/employees', {
       method: 'POST',
       headers: {
@@ -366,7 +426,8 @@ const EmployeePage = () => {
         client: form.client.trim(),
         position: form.position.trim(),
         department: form.department.trim(),
-        issued_item: form.issuedItem.trim(),
+        issued_item: JSON.stringify(equipmentData),
+        issued_equipment_ids: issuedEquipment.map(eq => eq.id),
         status: 'active',
       })
     })
@@ -376,6 +437,8 @@ const EmployeePage = () => {
           closeModal();
           resetAll();
           refreshEmployees();
+          // Dispatch event to refresh equipment page
+          window.dispatchEvent(new Event('equipment:updated'));
         } else {
           alert(data.message || 'Failed to save employee');
         }
@@ -401,6 +464,21 @@ const EmployeePage = () => {
       department: emp.department || '',
       issuedItem: emp.issuedItem || ''
     });
+    
+    // Load issued equipment if exists
+    if (emp.issuedItem) {
+      try {
+        const parsedEquipment = JSON.parse(emp.issuedItem);
+        if (Array.isArray(parsedEquipment)) {
+          setIssuedEquipment(parsedEquipment);
+        }
+      } catch (e) {
+        setIssuedEquipment([]);
+      }
+    } else {
+      setIssuedEquipment([]);
+    }
+    
     setErrors({});
     setIsAddOpen(false);
   };
@@ -416,6 +494,15 @@ const EmployeePage = () => {
     }
 
     if (!editing) return;
+    
+    // Prepare issued equipment data
+    const equipmentData = issuedEquipment.map(eq => ({
+      id: eq.id,
+      name: eq.name,
+      specs: eq.specs,
+      serial_number: eq.serial_number
+    }));
+    
     fetch(`/api/employees/${editing.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
@@ -430,7 +517,8 @@ const EmployeePage = () => {
         client: form.client.trim(),
         position: form.position.trim(),
         department: form.department.trim(),
-        issued_item: form.issuedItem.trim(),
+        issued_item: JSON.stringify(equipmentData),
+        issued_equipment_ids: issuedEquipment.map(eq => eq.id),
         status: 'active'
       })
     })
@@ -439,6 +527,8 @@ const EmployeePage = () => {
         if (data.success) {
           closeEdit();
           refreshEmployees();
+          // Dispatch event to refresh equipment page
+          window.dispatchEvent(new Event('equipment:updated'));
         } else {
           alert(data.message || 'Failed to update employee');
         }
@@ -457,6 +547,8 @@ const EmployeePage = () => {
         if (data.success) {
           closeDelete();
           refreshEmployees();
+          // Dispatch event to refresh equipment page
+          window.dispatchEvent(new Event('equipment:updated'));
         } else {
           alert(data.message || 'Failed to delete employee');
         }
@@ -786,26 +878,64 @@ const EmployeePage = () => {
                         <div>Serial no.</div>
                       </div>
                     </div>
-                    <div className="max-h-40 overflow-y-auto">
+                    <div className="max-h-60 overflow-y-auto">
                       <div className="divide-y divide-gray-200">
-                        <div className="px-4 py-3">
-                          <div className="grid grid-cols-3 gap-4 items-center">
-                            <div className="text-blue-600 underline cursor-pointer font-medium">Laptop</div>
-                            <div className="text-gray-700 text-sm leading-tight">23.8" IPS panel, 1920x1080</div>
-                            <div className="text-gray-700 text-sm">JS23434</div>
+                        {issuedEquipment.length === 0 ? (
+                          <div className="px-4 py-6 text-center text-gray-400 text-sm">
+                            No equipment issued yet. Click "Add New" to assign equipment.
                           </div>
-                        </div>
-                        <div className="px-4 py-3">
-                          <div className="grid grid-cols-3 gap-4 items-center">
-                            <div className="text-blue-600 underline cursor-pointer font-medium">Mouse</div>
-                            <div className="text-gray-700 text-sm leading-tight">Logitech G Pro X Superlight 2</div>
-                            <div className="text-gray-700 text-sm">YT56456</div>
-                          </div>
-                        </div>
+                        ) : (
+                          issuedEquipment.map((equipment) => (
+                            <div key={equipment.id} className="px-4 py-3 hover:bg-gray-50 transition-colors">
+                              <div className="flex items-start space-x-3">
+                                {/* Equipment Image */}
+                                {equipment.item_image ? (
+                                  <img 
+                                    src={`/storage/${equipment.item_image}`} 
+                                    alt={equipment.name}
+                                    className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
+                                  />
+                                ) : (
+                                  <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                    <span className="text-gray-400 text-xs">No img</span>
+                                  </div>
+                                )}
+                                
+                                {/* Equipment Details */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1 min-w-0">
+                                      <h5 className="text-blue-600 font-medium text-sm truncate">
+                                        {equipment.name || equipment.brand}
+                                      </h5>
+                                      <p className="text-gray-600 text-xs mt-0.5 line-clamp-1">
+                                        {equipment.specifications || equipment.brand || 'No specifications'}
+                                      </p>
+                                      <p className="text-gray-500 text-xs mt-0.5">
+                                        Serial: {equipment.serial_number || 'N/A'}
+                                      </p>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => removeEquipmentFromIssued(equipment.id)}
+                                      className="ml-2 text-red-500 hover:text-red-700 text-xs font-medium flex-shrink-0"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        )}
                       </div>
                     </div>
                     <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
-                      <button className="px-4 py-2 bg-blue-500 border border-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium">
+                      <button
+                        type="button"
+                        onClick={openEquipmentModal}
+                        className="px-4 py-2 bg-blue-500 border border-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
+                      >
                         Add New
                       </button>
                     </div>
@@ -977,6 +1107,142 @@ const EmployeePage = () => {
                     className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 font-medium transition-colors"
                   >
                     Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Equipment Selection Modal */}
+        {isEquipmentModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/30" onClick={closeEquipmentModal} />
+            <div className="relative bg-white rounded-2xl shadow-2xl w-[700px] max-w-[95vw] max-h-[80vh] overflow-hidden border border-gray-200">
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-semibold text-blue-600">Select Equipment</h3>
+                  <button onClick={closeEquipmentModal} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+                </div>
+                <div className="mt-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                    <input
+                      type="text"
+                      placeholder="Search equipment..."
+                      value={equipmentSearchTerm}
+                      onChange={(e) => setEquipmentSearchTerm(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 overflow-y-auto" style={{ maxHeight: 'calc(80vh - 200px)' }}>
+                <div className="space-y-3">
+                  {availableEquipment
+                    .filter(eq => 
+                      eq.name?.toLowerCase().includes(equipmentSearchTerm.toLowerCase()) ||
+                      eq.brand?.toLowerCase().includes(equipmentSearchTerm.toLowerCase()) ||
+                      (eq.specifications && eq.specifications.toLowerCase().includes(equipmentSearchTerm.toLowerCase())) ||
+                      (eq.serial_number && eq.serial_number.toLowerCase().includes(equipmentSearchTerm.toLowerCase())) ||
+                      eq.category?.name?.toLowerCase().includes(equipmentSearchTerm.toLowerCase())
+                    )
+                    .map((equipment) => {
+                      const isAdded = issuedEquipment.find(eq => eq.id === equipment.id);
+                      return (
+                        <div 
+                          key={equipment.id} 
+                          className={`p-4 border rounded-lg transition-all ${
+                            isAdded ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between space-x-4">
+                            <div className="flex items-start space-x-4 flex-1">
+                              {/* Equipment Image */}
+                              {equipment.item_image ? (
+                                <img 
+                                  src={`/storage/${equipment.item_image}`} 
+                                  alt={equipment.name}
+                                  className="w-16 h-16 rounded-lg object-cover flex-shrink-0"
+                                />
+                              ) : (
+                                <div className="w-16 h-16 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                  <span className="text-gray-400 text-xs">No img</span>
+                                </div>
+                              )}
+                              
+                              {/* Equipment Details */}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center space-x-2 mb-1">
+                                  <h4 className="font-semibold text-gray-900 truncate">{equipment.name || equipment.brand}</h4>
+                                  <span className={`px-2 py-0.5 text-xs rounded-full flex-shrink-0 ${
+                                    equipment.status === 'available' || equipment.status === 'Available'
+                                      ? 'bg-green-100 text-green-700' 
+                                      : 'bg-gray-100 text-gray-700'
+                                  }`}>
+                                    {equipment.status}
+                                  </span>
+                                </div>
+                                
+                                {equipment.brand && equipment.name !== equipment.brand && (
+                                  <p className="text-sm text-gray-600 mb-1">{equipment.brand}</p>
+                                )}
+                                
+                                <p className="text-sm text-gray-600 mb-1">
+                                  {equipment.specifications || 'No specifications'}
+                                </p>
+                                
+                                <div className="flex items-center space-x-4 text-xs text-gray-500 mt-2">
+                                  <span>
+                                    <span className="font-medium">Category:</span> {equipment.category?.name || 'Uncategorized'}
+                                  </span>
+                                  <span>
+                                    <span className="font-medium">Serial:</span> {equipment.serial_number || 'N/A'}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Add/Remove Button */}
+                            <button
+                              onClick={() => isAdded ? removeEquipmentFromIssued(equipment.id) : addEquipmentToIssued(equipment)}
+                              className={`px-4 py-2 rounded-lg font-medium transition-colors flex-shrink-0 ${
+                                isAdded 
+                                  ? 'bg-red-100 text-red-600 hover:bg-red-200' 
+                                  : 'bg-blue-500 text-white hover:bg-blue-600'
+                              }`}
+                            >
+                              {isAdded ? 'Remove' : 'Add'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  {availableEquipment.filter(eq => 
+                    eq.name?.toLowerCase().includes(equipmentSearchTerm.toLowerCase()) ||
+                    eq.brand?.toLowerCase().includes(equipmentSearchTerm.toLowerCase()) ||
+                    (eq.specifications && eq.specifications.toLowerCase().includes(equipmentSearchTerm.toLowerCase())) ||
+                    (eq.serial_number && eq.serial_number.toLowerCase().includes(equipmentSearchTerm.toLowerCase())) ||
+                    eq.category?.name?.toLowerCase().includes(equipmentSearchTerm.toLowerCase())
+                  ).length === 0 && (
+                    <div className="text-center py-8 text-gray-500">
+                      {equipmentSearchTerm ? 'No equipment found matching your search.' : 'No available equipment at the moment.'}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-gray-200 bg-gray-50">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">
+                    {issuedEquipment.length} equipment selected
+                  </span>
+                  <button
+                    onClick={closeEquipmentModal}
+                    className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium transition-colors"
+                  >
+                    Done
                   </button>
                 </div>
               </div>

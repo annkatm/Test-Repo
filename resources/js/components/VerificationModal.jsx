@@ -20,27 +20,25 @@ const VerificationModal = ({
   const isApprove = type === 'approve';
   const isReject = type === 'reject';
 
-  // Mock data for demonstration - replace with actual data
-  const mockItems = [
-    {
-      id: 1,
-      name: 'Laptop',
-      icon: Laptop,
-      specifications: 'MacBook Pro 16" M3'
-    },
-    {
-      id: 2,
-      name: 'Mouse',
-      icon: Mouse,
-      specifications: 'Wireless Mouse'
-    },
-    {
-      id: 3,
-      name: 'Keyboard',
-      icon: Keyboard,
-      specifications: 'Mechanical Keyboard'
-    }
-  ];
+  // Get icon based on item name
+  const getItemIcon = (itemName) => {
+    const name = itemName?.toLowerCase() || '';
+    if (name.includes('laptop') || name.includes('computer')) return Laptop;
+    if (name.includes('mouse')) return Mouse;
+    if (name.includes('keyboard')) return Keyboard;
+    if (name.includes('monitor') || name.includes('display')) return Package;
+    return Package; // Default icon
+  };
+
+  // Parse items from requestData
+  const items = requestData?.items || [];
+  
+  // Format date
+  const formatDate = (dateString) => {
+    if (!dateString) return new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+  };
 
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
@@ -94,13 +92,13 @@ const VerificationModal = ({
             
             {/* Employee Info */}
             <div className="flex-1">
-              <h4 className="text-base font-bold text-white">{requestData?.name || 'Rica D. Alorro'}</h4>
-              <p className="text-xs text-blue-100">Employee</p>
+              <h4 className="text-base font-bold text-white">{requestData?.employee_name || requestData?.name || 'Employee'}</h4>
+              <p className="text-xs text-blue-100">{requestData?.role || 'Employee'}</p>
             </div>
             
             {/* Status */}
             <div className="text-white font-medium text-sm">
-              Regular
+              {requestData?.employee_type || 'Regular'}
             </div>
           </div>
         </div>
@@ -113,7 +111,7 @@ const VerificationModal = ({
             <div className="relative">
               <input
                 type="text"
-                value="08/17/2025"
+                value={formatDate(requestData?.created_at || requestData?.request_date)}
                 readOnly
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 text-sm"
               />
@@ -125,20 +123,32 @@ const VerificationModal = ({
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">Items</label>
             <div className="space-y-2">
-              {mockItems.map((item) => {
-                const IconComponent = item.icon;
-                return (
-                  <div key={item.id} className="bg-gray-50 border border-gray-200 rounded-lg p-2">
-                    <div className="flex items-center space-x-2">
-                      <IconComponent className="h-4 w-4 text-gray-600 flex-shrink-0" />
-                      <div className="flex items-center space-x-2 min-w-0">
-                        <h5 className="text-sm font-semibold text-gray-900 flex-shrink-0">{item.name}</h5>
-                        <span className="text-sm text-gray-600 truncate">{item.specifications}</span>
+              {items.length > 0 ? (
+                items.map((item, index) => {
+                  const IconComponent = getItemIcon(item.equipment_name || item.name);
+                  return (
+                    <div key={item.id || index} className="bg-gray-50 border border-gray-200 rounded-lg p-2">
+                      <div className="flex items-center space-x-2">
+                        <IconComponent className="h-4 w-4 text-gray-600 flex-shrink-0" />
+                        <div className="flex items-center space-x-2 min-w-0">
+                          <h5 className="text-sm font-semibold text-gray-900 flex-shrink-0">
+                            {item.equipment_name || item.name || 'Item'}
+                          </h5>
+                          {(item.specifications || item.specs) && (
+                            <span className="text-sm text-gray-600 truncate">
+                              {item.specifications || item.specs}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              ) : (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
+                  <p className="text-sm text-gray-500">No items requested</p>
+                </div>
+              )}
             </div>
           </div>
 

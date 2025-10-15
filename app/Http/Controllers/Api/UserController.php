@@ -11,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class UserController extends Controller
 {
@@ -56,7 +57,7 @@ class UserController extends Controller
         try {
             $validator = Validator::make($request->all(), [
                 'name' => 'required|string|max:255',
-                'email' => 'required|email|unique:users,email',
+                'email' => ['required', 'email', Rule::unique('users')->whereNull('deleted_at')],
                 'password' => 'required|string|min:6',
                 'username' => 'nullable|string|max:255',
                 'accountType' => 'required|in:admin,employee',
@@ -91,30 +92,40 @@ class UserController extends Controller
 
             $user->load(['role', 'userPermissions']);
 
-            // If this is an employee account, ensure an employee record exists/updates
+            // If this is an employee account, link to existing employee or create new one
             if ($roleName === 'employee') {
-                $nameParts = preg_split('/\s+/', trim((string) $request->name));
-                $firstName = $nameParts[0] ?? '';
-                $lastName = count($nameParts) > 1 ? implode(' ', array_slice($nameParts, 1)) : '';
+                // First, check if employee already exists by email
+                $existingEmployee = DB::table('employees')->where('email', $request->email)->first();
+                
+                if ($existingEmployee) {
+                    // Employee exists, just update the user_id link
+                    DB::table('employees')
+                        ->where('id', $existingEmployee->id)
+                        ->update([
+                            'user_id' => $user->id,
+                            'updated_at' => now(),
+                        ]);
+                } else {
+                    // Employee doesn't exist, create new record
+                    $nameParts = preg_split('/\s+/', trim((string) $request->name));
+                    $firstName = $nameParts[0] ?? '';
+                    $lastName = count($nameParts) > 1 ? implode(' ', array_slice($nameParts, 1)) : '';
 
-                DB::table('employees')->updateOrInsert(
-                    // Prefer employee_id match; fall back to email if username absent
-                    $request->username
-                        ? ['employee_id' => $request->username]
-                        : ['email' => $request->email],
-                    [
-                        'employee_id' => $request->username,
+                    DB::table('employees')->insert([
+                        'user_id' => $user->id,
+                        'employee_id' => $request->username ?: 'EMP' . time(),
                         'first_name' => $firstName,
                         'last_name' => $lastName,
                         'email' => $request->email,
+                        'position' => $request->position,
                         'department' => $request->department,
                         'phone' => $request->phone,
                         'employee_type' => $request->input('employee_type', 'Regular'),
                         'status' => 'active',
-                        'updated_at' => now(),
                         'created_at' => now(),
-                    ]
-                );
+                        'updated_at' => now(),
+                    ]);
+                }
             }
 
             // Log the activity
@@ -169,7 +180,7 @@ class UserController extends Controller
             
             $validator = Validator::make($request->all(), [
                 'name' => 'required|string|max:255',
-                'email' => 'required|email|unique:users,email,' . $id,
+                'email' => ['required', 'email', Rule::unique('users')->ignore($id)->whereNull('deleted_at')],
                 'password' => 'nullable|string|min:6',
                 'username' => 'nullable|string|max:255',
                 'accountType' => 'required|in:admin,employee',
@@ -213,27 +224,41 @@ class UserController extends Controller
 
             // Sync employee record when switching/keeping employee role
             if (($role && $role->name === 'employee') || (!$role && $user->role && $user->role->name === 'employee')) {
-                $nameParts = preg_split('/\s+/', trim((string) $request->name));
-                $firstName = $nameParts[0] ?? '';
-                $lastName = count($nameParts) > 1 ? implode(' ', array_slice($nameParts, 1)) : '';
+                // Check if employee already exists by email
+                $existingEmployee = DB::table('employees')->where('email', $request->email)->first();
+                
+                if ($existingEmployee) {
+                    // Employee exists, update the record and link user_id
+                    DB::table('employees')
+                        ->where('id', $existingEmployee->id)
+                        ->update([
+                            'user_id' => $user->id,
+                            'position' => $request->position,
+                            'department' => $request->department,
+                            'phone' => $request->phone,
+                            'updated_at' => now(),
+                        ]);
+                } else {
+                    // Employee doesn't exist, create new record
+                    $nameParts = preg_split('/\s+/', trim((string) $request->name));
+                    $firstName = $nameParts[0] ?? '';
+                    $lastName = count($nameParts) > 1 ? implode(' ', array_slice($nameParts, 1)) : '';
 
-                DB::table('employees')->updateOrInsert(
-                    $request->username
-                        ? ['employee_id' => $request->username]
-                        : ['email' => $request->email],
-                    [
-                        'employee_id' => $request->username,
+                    DB::table('employees')->insert([
+                        'user_id' => $user->id,
+                        'employee_id' => $request->username ?: 'EMP' . time(),
                         'first_name' => $firstName,
                         'last_name' => $lastName,
                         'email' => $request->email,
+                        'position' => $request->position,
                         'department' => $request->department,
                         'phone' => $request->phone,
                         'employee_type' => $request->input('employee_type', 'Regular'),
                         'status' => 'active',
-                        'updated_at' => now(),
                         'created_at' => now(),
-                    ]
-                );
+                        'updated_at' => now(),
+                    ]);
+                }
             }
 
             // Log the activity

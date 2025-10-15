@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Models\Employee;
 
 class EmployeeController extends Controller
 {
@@ -17,35 +18,40 @@ class EmployeeController extends Controller
                 'first_name' => 'required|string|max:255',
                 'last_name' => 'required|string|max:255',
                 'email' => 'required|email|max:255|unique:employees,email',
-                'employee_type' => 'required|in:Regular,Contractor,Temporary',
+                'employee_type' => 'nullable|string|max:255',
                 'department' => 'nullable|string|max:255',
+                'position' => 'nullable|string|max:255',
+                'client' => 'nullable|string|max:255',
                 'phone' => 'nullable|string|max:50',
-                'status' => 'required|in:active,inactive,terminated',
+                'address' => 'nullable|string',
+                'issued_item' => 'nullable|string',
+                'status' => 'nullable|in:active,inactive,terminated',
                 'hire_date' => 'nullable|date',
             ]);
 
             // Generate a unique employee_id (e.g., EMP + timestamp)
-            $employee_id = 'EMP' . time();
+            $validated['employee_id'] = 'EMP' . time();
+            $validated['status'] = $validated['status'] ?? 'active';
 
-            $id = DB::table('employees')->insertGetId([
-                'employee_id' => $employee_id,
-                'first_name' => $validated['first_name'],
-                'last_name' => $validated['last_name'],
-                'email' => $validated['email'],
-                'employee_type' => $validated['employee_type'],
-                'department' => $validated['department'] ?? null,
-                'phone' => $validated['phone'] ?? null,
-                'status' => $validated['status'],
-                'hire_date' => $validated['hire_date'] ?? null,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
+            $employee = Employee::create($validated);
+
+            // Update equipment status to 'in_use' if equipment IDs are provided
+            if ($request->has('issued_equipment_ids') && is_array($request->issued_equipment_ids)) {
+                foreach ($request->issued_equipment_ids as $equipmentId) {
+                    DB::table('equipment')
+                        ->where('id', $equipmentId)
+                        ->update([
+                            'status' => 'in_use',
+                            'updated_at' => now()
+                        ]);
+                }
+            }
 
             return response()->json([
                 'success' => true,
                 'message' => 'Employee created successfully',
-                'id' => $id
-            ]);
+                'data' => $employee
+            ], 201);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'success' => false,
@@ -66,7 +72,8 @@ class EmployeeController extends Controller
     public function update(Request $request, $id)
     {
         try {
-            $employee = DB::table('employees')->where('id', $id)->first();
+            $employee = Employee::find($id);
+            
             if (!$employee) {
                 return response()->json([
                     'success' => false,
@@ -78,24 +85,54 @@ class EmployeeController extends Controller
                 'first_name' => 'required|string|max:255',
                 'last_name' => 'required|string|max:255',
                 'email' => 'required|email|max:255|unique:employees,email,' . $id,
-                'employee_type' => 'required|in:Regular,Contractor,Temporary',
+                'employee_type' => 'nullable|string|max:255',
                 'department' => 'nullable|string|max:255',
+                'position' => 'nullable|string|max:255',
+                'client' => 'nullable|string|max:255',
                 'phone' => 'nullable|string|max:50',
-                'status' => 'required|in:active,inactive,terminated',
+                'address' => 'nullable|string',
+                'issued_item' => 'nullable|string',
+                'status' => 'nullable|in:active,inactive,terminated',
                 'hire_date' => 'nullable|date',
             ]);
 
-            DB::table('employees')->where('id', $id)->update([
-                'first_name' => $validated['first_name'],
-                'last_name' => $validated['last_name'],
-                'email' => $validated['email'],
-                'employee_type' => $validated['employee_type'],
-                'department' => $validated['department'] ?? null,
-                'phone' => $validated['phone'] ?? null,
-                'status' => $validated['status'],
-                'hire_date' => $validated['hire_date'] ?? null,
-                'updated_at' => now(),
-            ]);
+            // Get old issued equipment IDs from current issued_item JSON
+            $oldEquipmentIds = [];
+            if ($employee->issued_item) {
+                $oldIssuedData = json_decode($employee->issued_item, true);
+                if (is_array($oldIssuedData)) {
+                    $oldEquipmentIds = array_column($oldIssuedData, 'id');
+                }
+            }
+
+            // Get new equipment IDs from request
+            $newEquipmentIds = $request->has('issued_equipment_ids') && is_array($request->issued_equipment_ids) 
+                ? $request->issued_equipment_ids 
+                : [];
+
+            // Equipment that was removed - set back to 'available'
+            $removedEquipmentIds = array_diff($oldEquipmentIds, $newEquipmentIds);
+            foreach ($removedEquipmentIds as $equipmentId) {
+                DB::table('equipment')
+                    ->where('id', $equipmentId)
+                    ->update([
+                        'status' => 'available',
+                        'updated_at' => now()
+                    ]);
+            }
+
+            // Equipment that was added - set to 'in_use'
+            $addedEquipmentIds = array_diff($newEquipmentIds, $oldEquipmentIds);
+            foreach ($addedEquipmentIds as $equipmentId) {
+                DB::table('equipment')
+                    ->where('id', $equipmentId)
+                    ->update([
+                        'status' => 'in_use',
+                        'updated_at' => now()
+                    ]);
+            }
+
+            $employee->update($validated);
 
             return response()->json([
                 'success' => true,
@@ -116,12 +153,13 @@ class EmployeeController extends Controller
     }
 
     /**
-     * Delete an employee
+     * Delete an employee (soft delete)
      */
     public function destroy($id)
     {
         try {
-            $employee = DB::table('employees')->where('id', $id)->first();
+            $employee = Employee::find($id);
+            
             if (!$employee) {
                 return response()->json([
                     'success' => false,
@@ -129,10 +167,24 @@ class EmployeeController extends Controller
                 ], 404);
             }
 
-            $employee = Employee::find($id);
-            if ($employee) {
-                $employee->delete(); // This will now soft delete due to SoftDeletes trait
+            // Release all issued equipment back to 'available' status
+            if ($employee->issued_item) {
+                $issuedData = json_decode($employee->issued_item, true);
+                if (is_array($issuedData)) {
+                    $equipmentIds = array_column($issuedData, 'id');
+                    foreach ($equipmentIds as $equipmentId) {
+                        DB::table('equipment')
+                            ->where('id', $equipmentId)
+                            ->update([
+                                'status' => 'available',
+                                'updated_at' => now()
+                            ]);
+                    }
+                }
             }
+
+            // Soft delete the employee
+            $employee->delete();
 
             return response()->json([
                 'success' => true,
@@ -146,15 +198,13 @@ class EmployeeController extends Controller
         }
     }
     /**
-     * Get all employees
+     * Get all employees (excluding soft-deleted)
      */
     public function index()
     {
         try {
-            $employees = DB::table('employees')
-                ->where('status', 'active')
-                ->orderBy('first_name', 'asc')
-                ->get();
+            // Using Employee model to respect soft deletes
+            $employees = Employee::orderBy('first_name', 'asc')->get();
 
             return response()->json([
                 'success' => true,
@@ -170,12 +220,12 @@ class EmployeeController extends Controller
     }
 
     /**
-     * Get employee by ID
+     * Get employee by ID (excluding soft-deleted)
      */
     public function show($id)
     {
         try {
-            $employee = DB::table('employees')->where('id', $id)->first();
+            $employee = Employee::find($id);
             
             if (!$employee) {
                 return response()->json([
