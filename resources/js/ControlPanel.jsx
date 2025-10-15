@@ -9,12 +9,20 @@ const ControlPanel = () => {
   // Page-level data only (cards)
 
   const controlPanelCards = [
+ 
     { id: 1, title: 'Position', subtitle: 'Manage', icon: UserCog },
     { id: 2, title: 'Equipment Categories', subtitle: 'Manage', icon: UserCog },
     { id: 3, title: 'Department', subtitle: 'Manage', icon: UserCog },
     { id: 4, title: 'Client', subtitle: 'Manage', icon: UserCog },
     { id: 5, title: 'Employee Type', subtitle: 'Manage', icon: UserCog },
     { id: 6, title: 'Account Type', subtitle: 'Manage', icon: UserCog },
+
+    { id: 1, title: 'Admin Position', subtitle: 'Manage', icon: UserCog },
+    { id: 2, title: 'Equipment Categories', subtitle: 'Manage', icon: UserCog },
+    { id: 3, title: 'Item Condition', subtitle: 'Manage', icon: UserCog },
+    { id: 4, title: 'Admin Position', subtitle: 'Manage', icon: UserCog },
+    { id: 5, title: 'Admin Position', subtitle: 'Manage', icon: UserCog },
+ 
   ];
 
   const [showCategoryModal, setShowCategoryModal] = React.useState(false);

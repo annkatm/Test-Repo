@@ -145,10 +145,8 @@ const EmployeePage = () => {
       newErrors.email = 'Please enter a valid email address';
     }
 
-    // Password validation (required for new employees, optional for edit)
-    if (!isEdit && !form.password) {
-      newErrors.password = 'Password is required';
-    } else if (form.password && !validatePassword(form.password)) {
+    // Password validation (optional for edit only)
+    if (form.password && !validatePassword(form.password)) {
       newErrors.password = 'Password must be at least 8 characters with uppercase, lowercase, and number';
     }
 
@@ -362,7 +360,6 @@ const EmployeePage = () => {
         first_name: form.firstName.trim(),
         last_name: form.lastName.trim(),
         email: form.email.trim(),
-        password: form.password,
         phone: form.contact.trim(),
         address: form.address.trim(),
         employee_type: form.employeeType,
@@ -577,7 +574,7 @@ const EmployeePage = () => {
         {viewing && (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/20" onClick={closeView} />
-            <div className="relative bg-white rounded-3xl shadow-2xl w-[700px] max-w-[95vw] p-8 border border-gray-200">
+            <div className="relative bg-white rounded-3xl shadow-2xl w-[600px] max-w-[95vw] max-h-[90vh] overflow-y-auto p-6 border border-gray-200">
               <button onClick={closeView} className="absolute right-6 top-6 text-gray-400 hover:text-gray-600 text-xl">✕</button>
               <h3 className="text-2xl font-semibold text-blue-600 mb-8">Employee Details</h3>
               
@@ -669,7 +666,7 @@ const EmployeePage = () => {
         {isAddOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/20" onClick={closeModal} />
-            <div className="relative bg-white rounded-2xl shadow-2xl w-[700px] max-w-[95vw] p-8 border border-gray-200">
+            <div className="relative bg-white rounded-2xl shadow-2xl w-[600px] max-w-[95vw] max-h-[70vh] overflow-y-auto p-6 border border-gray-200" style={{scrollbarWidth: 'none', msOverflowStyle: 'none'}}>
               <button onClick={closeModal} className="absolute right-4 top-4 text-gray-400 hover:text-gray-600 text-xl">✕</button>
               <h3 className="text-xl font-semibold text-blue-500 text-center mb-8">Add employee</h3>
 
@@ -703,7 +700,7 @@ const EmployeePage = () => {
                     placeholder="Enter phone number" 
                     required={true}
                     error={errors.contact}
-                    tabIndex={5}
+                    tabIndex={4}
                   />
                   <ValidatedSelect
                     label="Client"
@@ -714,7 +711,7 @@ const EmployeePage = () => {
                       ...dropdownOptions.clients
                     ]}
                     error={errors.client}
-                    tabIndex={7}
+                    tabIndex={6}
                   />
                   <ValidatedSelect
                     label="Department"
@@ -725,15 +722,7 @@ const EmployeePage = () => {
                       ...dropdownOptions.departments
                     ]}
                     error={errors.department}
-                    tabIndex={9}
-                  />
-                  <ValidatedInput 
-                    label="Issued Item" 
-                    value={form.issuedItem}
-                    onChange={(val) => handleInputChange('issuedItem', val)}
-                    placeholder="Enter issued item" 
-                    error={errors.issuedItem}
-                    tabIndex={11}
+                    tabIndex={8}
                   />
                 </div>
 
@@ -749,23 +738,13 @@ const EmployeePage = () => {
                     tabIndex={2}
                   />
                   <ValidatedInput 
-                    label="Password" 
-                    value={form.password}
-                    onChange={(val) => handleInputChange('password', val)}
-                    type="password" 
-                    placeholder="Enter password" 
-                    required={true}
-                    error={errors.password}
-                    tabIndex={4}
-                  />
-                  <ValidatedInput 
                     label="Address" 
                     value={form.address}
                     onChange={(val) => handleInputChange('address', val)}
                     placeholder="Enter complete address" 
                     required={true}
                     error={errors.address}
-                    tabIndex={6}
+                    tabIndex={4}
                   />
                   <ValidatedSelect
                     label="Employee Type"
@@ -777,7 +756,7 @@ const EmployeePage = () => {
                       ...dropdownOptions.employeeTypes
                     ]}
                     error={errors.employeeType}
-                    tabIndex={8}
+                    tabIndex={6}
                   />
                   <ValidatedSelect
                     label="Position"
@@ -788,8 +767,49 @@ const EmployeePage = () => {
                       ...dropdownOptions.positions
                     ]}
                     error={errors.position}
-                    tabIndex={10}
+                    tabIndex={8}
                   />
+                </div>
+              </div>
+
+              {/* Issued Item Section - Full Width */}
+              <div className="mt-6">
+                <div className="space-y-4">
+                  <label className="block text-sm text-gray-700 font-medium mb-2">
+                    Issued Item
+                  </label>
+                  <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="bg-gray-100 px-4 py-3 border-b border-gray-300">
+                      <div className="grid grid-cols-3 gap-4 text-sm font-bold text-gray-800">
+                        <div>Items</div>
+                        <div>Specs</div>
+                        <div>Serial no.</div>
+                      </div>
+                    </div>
+                    <div className="max-h-40 overflow-y-auto">
+                      <div className="divide-y divide-gray-200">
+                        <div className="px-4 py-3">
+                          <div className="grid grid-cols-3 gap-4 items-center">
+                            <div className="text-blue-600 underline cursor-pointer font-medium">Laptop</div>
+                            <div className="text-gray-700 text-sm leading-tight">23.8" IPS panel, 1920x1080</div>
+                            <div className="text-gray-700 text-sm">JS23434</div>
+                          </div>
+                        </div>
+                        <div className="px-4 py-3">
+                          <div className="grid grid-cols-3 gap-4 items-center">
+                            <div className="text-blue-600 underline cursor-pointer font-medium">Mouse</div>
+                            <div className="text-gray-700 text-sm leading-tight">Logitech G Pro X Superlight 2</div>
+                            <div className="text-gray-700 text-sm">YT56456</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
+                      <button className="px-4 py-2 bg-blue-500 border border-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium">
+                        Add New
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -805,7 +825,7 @@ const EmployeePage = () => {
         {editing && (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/20" onClick={closeEdit} />
-            <div className="relative bg-white rounded-2xl shadow-2xl w-[700px] max-w-[95vw] p-8 border border-gray-200">
+            <div className="relative bg-white rounded-2xl shadow-2xl w-[600px] max-w-[95vw] max-h-[70vh] overflow-y-auto p-6 border border-gray-200" style={{scrollbarWidth: 'none', msOverflowStyle: 'none'}}>
               <button onClick={closeEdit} className="absolute right-4 top-4 text-gray-400 hover:text-gray-600 text-xl">✕</button>
               <h3 className="text-xl font-semibold text-blue-500 text-center mb-8">Edit employee</h3>
               <div className="grid grid-cols-2 gap-6">

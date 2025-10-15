@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { Package, CheckCircle, User } from 'lucide-react';
 import HomeSidebar from "./HomeSidebar";
 import GlobalHeader from "./components/GlobalHeader";
 import api from './services/api';
@@ -226,21 +227,21 @@ const HomePage = () => {
                   <h4 className="text-xs uppercase tracking-wider opacity-80">Total Number of Equipment</h4>
                   <div className="mt-2 flex items-center justify-between">
                     <p className="text-2xl font-bold">{loading ? '...' : dashboardData.totalEquipment}</p>
-                    <div className="w-6 h-6 rounded-full bg-white/30"></div>
+                    <Package className="w-8 h-8 text-white/70" />
                   </div>
                 </div>
                 <div className="bg-gray-100 rounded-2xl p-3 shadow flex flex-col h-26">
                   <h4 className="text-xs font-semibold text-gray-600">Available stock</h4>
                   <div className="mt-2 flex items-center justify-between">
                     <p className="text-2xl font-bold text-gray-900">{loading ? '...' : dashboardData.availableStock}</p>
-                    <div className="w-6 h-6 rounded-full bg-gray-300"></div>
+                    <CheckCircle className="w-8 h-8 text-gray-500" />
                   </div>
                 </div>
                 <div className="bg-gray-100 rounded-2xl p-3 shadow flex flex-col h-26">
                   <h4 className="text-xs font-semibold text-gray-600">Current holder</h4>
                   <div className="mt-2 flex items-center justify-between">
                     <p className="text-2xl font-bold text-gray-900">{loading ? '...' : dashboardData.currentHolder}</p>
-                    <div className="w-6 h-6 rounded-full bg-gray-300"></div>
+                    <User className="w-8 h-8 text-gray-500" />
                   </div>
                 </div>
               </div>

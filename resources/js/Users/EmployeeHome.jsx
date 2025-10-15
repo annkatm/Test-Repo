@@ -473,7 +473,7 @@ const EmployeeHome = () => {
 
             {/* Scrollable Items Section - Fixed height of 138px */}
             <div className=" px-6 h-[200px] flex-shrink-0 border-b border-gray-200">
-              <div className="h-[140px] h-full overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+              <div className="h-[140px] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                 <div className="space-y-2">
                   {cartItems.map((item) =>  (
                     <div key={item.id} className="flex items-center justify-between py-1.5">

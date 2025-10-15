@@ -357,7 +357,10 @@ class RequestController extends Controller
             ], 422);
         }
 
-            DB::table('requests')->where('id', $id)->delete();
+            $request = Request::find($id);
+            if ($request) {
+                $request->delete(); // This will now soft delete due to SoftDeletes trait
+            }
 
         return response()->json([
             'success' => true,

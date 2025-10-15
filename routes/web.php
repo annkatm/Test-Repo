@@ -78,6 +78,13 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/api/requests/{id}', [RequestController::class, 'destroy'])->name('requests.destroy');
     Route::post('/api/requests/{id}/approve', [RequestController::class, 'approve'])->name('requests.approve');
     Route::post('/api/requests/{id}/reject', [RequestController::class, 'reject'])->name('requests.reject');
+
+    // Archive routes (session auth with CSRF protection)
+    Route::get('/archive', [App\Http\Controllers\ArchiveController::class, 'index'])->name('archive');
+    Route::post('/archive/{type}/{id}/restore', [App\Http\Controllers\ArchiveController::class, 'restore'])->name('archive.restore');
+    Route::delete('/archive/{type}/{id}/force-delete', [App\Http\Controllers\ArchiveController::class, 'forceDelete'])->name('archive.force-delete');
+    Route::post('/archive/bulk-restore', [App\Http\Controllers\ArchiveController::class, 'bulkRestore'])->name('archive.bulk-restore');
+    Route::post('/archive/bulk-delete', [App\Http\Controllers\ArchiveController::class, 'bulkForceDelete'])->name('archive.bulk-delete');
 });
 
 Route::get('/equipment', function () {
@@ -104,8 +111,3 @@ Route::get('/control-panel', function () {
 Route::get('/reports', function () {
     return view('reports');
 })->name('reports');
-
-// Archive page
-Route::get('/archive', function () {
-    return view('archive');
-})->name('archive');
