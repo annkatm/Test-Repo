@@ -542,14 +542,6 @@ const EmployeePage = () => {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-2">Password</label>
-                  <div className="bg-gray-100 rounded-lg p-3 flex items-center justify-end w-full">
-                    <button className="text-gray-400 hover:text-gray-600">
-                      <Eye className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
 
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-2">Contact Number</label>
@@ -593,10 +585,40 @@ const EmployeePage = () => {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-2">Issued Item</label>
-                  <div className="bg-gray-100 rounded-lg p-3 text-gray-900 w-full">
-                    {viewing.issuedItem}
+              </div>
+
+              {/* Issued Item Section - Full Width */}
+              <div className="mt-6">
+                <div className="space-y-4">
+                  <label className="block text-sm text-gray-700 font-medium mb-2">
+                    Issued Item
+                  </label>
+                  <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="bg-gray-100 px-4 py-3 border-b border-gray-300">
+                      <div className="grid grid-cols-3 gap-4 text-sm font-bold text-gray-800">
+                        <div>Items</div>
+                        <div>Specs</div>
+                        <div>Serial no.</div>
+                      </div>
+                    </div>
+                    <div className="max-h-40 overflow-y-auto">
+                      <div className="divide-y divide-gray-200">
+                        <div className="px-4 py-3">
+                          <div className="grid grid-cols-3 gap-4 items-center">
+                            <div className="text-blue-600 underline cursor-pointer font-medium">Laptop</div>
+                            <div className="text-gray-700 text-sm leading-tight">23.8" IPS panel, 1920x1080</div>
+                            <div className="text-gray-700 text-sm">JS23434</div>
+                          </div>
+                        </div>
+                        <div className="px-4 py-3">
+                          <div className="grid grid-cols-3 gap-4 items-center">
+                            <div className="text-blue-600 underline cursor-pointer font-medium">Mouse</div>
+                            <div className="text-gray-700 text-sm leading-tight">Logitech G Pro X Superlight 2</div>
+                            <div className="text-gray-700 text-sm">YT56456</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -724,7 +746,7 @@ const EmployeePage = () => {
               </div>
 
               {/* Issued Item Section - Full Width */}
-              <div className="mt-6">
+              <div className="mt-6 mb-6">
                 <div className="space-y-4">
                   <label className="block text-sm text-gray-700 font-medium mb-2">
                     Issued Item
@@ -838,14 +860,6 @@ const EmployeePage = () => {
                     error={errors.department}
                     tabIndex={9}
                   />
-                  <ValidatedInput 
-                    label="Issued Item" 
-                    value={form.issuedItem}
-                    onChange={(val) => handleInputChange('issuedItem', val)}
-                    placeholder="Enter issued item" 
-                    error={errors.issuedItem}
-                    tabIndex={11}
-                  />
                 </div>
                 
                 <div className="space-y-6">
@@ -859,21 +873,13 @@ const EmployeePage = () => {
                     tabIndex={2}
                   />
                   <ValidatedInput 
-                    label="Password" 
-                    value={form.password}
-                    onChange={(val) => handleInputChange('password', val)}
-                    type="password" 
-                    placeholder="Leave blank to keep current password" 
-                    tabIndex={4}
-                  />
-                  <ValidatedInput 
                     label="Address" 
                     value={form.address}
                     onChange={(val) => handleInputChange('address', val)}
                     placeholder="Enter complete address" 
                     required={true}
                     error={errors.address}
-                    tabIndex={6}
+                    tabIndex={4}
                   />
                   <ValidatedSelect
                     label="Employee Type"
@@ -886,7 +892,7 @@ const EmployeePage = () => {
                       { value: 'Temporary', label: 'Temporary' }
                     ]}
                     error={errors.employeeType}
-                    tabIndex={8}
+                    tabIndex={6}
                   />
                   <ValidatedSelect
                     label="Position"
@@ -899,10 +905,52 @@ const EmployeePage = () => {
                       { value: 'Staff', label: 'Staff' }
                     ]}
                     error={errors.position}
-                    tabIndex={10}
+                    tabIndex={8}
                   />
                 </div>
               </div>
+
+              {/* Issued Item Section - Full Width */}
+              <div className="mt-6">
+                <div className="space-y-4">
+                  <label className="block text-sm text-gray-700 font-medium mb-2">
+                    Issued Item
+                  </label>
+                  <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="bg-gray-100 px-4 py-3 border-b border-gray-300">
+                      <div className="grid grid-cols-3 gap-4 text-sm font-bold text-gray-800">
+                        <div>Items</div>
+                        <div>Specs</div>
+                        <div>Serial no.</div>
+                      </div>
+                    </div>
+                    <div className="max-h-40 overflow-y-auto">
+                      <div className="divide-y divide-gray-200">
+                        <div className="px-4 py-3">
+                          <div className="grid grid-cols-3 gap-4 items-center">
+                            <div className="text-blue-600 underline cursor-pointer font-medium">Laptop</div>
+                            <div className="text-gray-700 text-sm leading-tight">23.8" IPS panel, 1920x1080</div>
+                            <div className="text-gray-700 text-sm">JS23434</div>
+                          </div>
+                        </div>
+                        <div className="px-4 py-3">
+                          <div className="grid grid-cols-3 gap-4 items-center">
+                            <div className="text-blue-600 underline cursor-pointer font-medium">Mouse</div>
+                            <div className="text-gray-700 text-sm leading-tight">Logitech G Pro X Superlight 2</div>
+                            <div className="text-gray-700 text-sm">YT56456</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
+                      <button className="px-4 py-2 bg-blue-500 border border-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium">
+                        Add New
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div className="mt-8 flex items-center justify-between">
                 <button onClick={resetAll} className="text-blue-500 hover:text-blue-600 font-medium">Reset</button>
                 <button onClick={updateEmployee} className="px-8 py-3 rounded-full bg-blue-500 text-white hover:bg-blue-600 font-medium transition-colors">Update →</button>
