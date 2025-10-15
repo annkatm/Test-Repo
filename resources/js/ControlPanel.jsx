@@ -9,11 +9,12 @@ const ControlPanel = () => {
   // Page-level data only (cards)
 
   const controlPanelCards = [
-    { id: 1, title: 'Admin Position', subtitle: 'Manage', icon: UserCog },
+    { id: 1, title: 'Position', subtitle: 'Manage', icon: UserCog },
     { id: 2, title: 'Equipment Categories', subtitle: 'Manage', icon: UserCog },
-    { id: 3, title: 'Item Condition', subtitle: 'Manage', icon: UserCog },
-    { id: 4, title: 'Admin Position', subtitle: 'Manage', icon: UserCog },
-    { id: 5, title: 'Admin Position', subtitle: 'Manage', icon: UserCog },
+    { id: 3, title: 'Department', subtitle: 'Manage', icon: UserCog },
+    { id: 4, title: 'Client', subtitle: 'Manage', icon: UserCog },
+    { id: 5, title: 'Employee Type', subtitle: 'Manage', icon: UserCog },
+    { id: 6, title: 'Account Type', subtitle: 'Manage', icon: UserCog },
   ];
 
   const [showCategoryModal, setShowCategoryModal] = React.useState(false);
@@ -25,6 +26,19 @@ const ControlPanel = () => {
   const [showSuccess, setShowSuccess] = React.useState(false);
   const [categoryItems, setCategoryItems] = React.useState([]);
   const [showExisting, setShowExisting] = React.useState(true);
+
+  // Generic dropdown management states
+  const [activeModal, setActiveModal] = React.useState(null);
+  const [dropdownItems, setDropdownItems] = React.useState({
+    positions: [],
+    departments: [],
+    clients: [],
+    employeeTypes: [],
+    accountTypes: []
+  });
+  const [newItemName, setNewItemName] = React.useState('');
+  const [itemError, setItemError] = React.useState('');
+  const [itemLoading, setItemLoading] = React.useState(false);
 
   const handleCardClick = async (card) => {
     if (card.title === 'Equipment Categories') {
@@ -40,7 +54,87 @@ const ControlPanel = () => {
         setCategoryItems([]);
       }
       setShowCategoryModal(true);
+    } else {
+      // Handle other dropdown management cards
+      const modalType = card.title.toLowerCase().replace(' ', '');
+      setActiveModal(modalType);
+      await loadDropdownItems(modalType);
     }
+  };
+
+  const loadDropdownItems = async (type) => {
+    try {
+      const endpoint = getEndpointForType(type);
+      const res = await api.get(endpoint);
+      if (res?.data?.success && Array.isArray(res.data.data)) {
+        setDropdownItems(prev => ({
+          ...prev,
+          [type]: res.data.data.map(item => ({ id: item.id, name: item.name }))
+        }));
+      }
+    } catch (e) {
+      console.error(`Failed to load ${type}:`, e);
+    }
+  };
+
+  const getEndpointForType = (type) => {
+    const endpoints = {
+      'position': '/positions',
+      'department': '/departments', 
+      'client': '/clients',
+      'employeetype': '/employee-types',
+      'accounttype': '/account-types'
+    };
+    return endpoints[type] || '/items';
+  };
+
+  const addNewItem = async () => {
+    if (!newItemName.trim()) {
+      setItemError('Name is required');
+      return;
+    }
+
+    setItemLoading(true);
+    setItemError('');
+    
+    try {
+      const endpoint = getEndpointForType(activeModal);
+      const res = await api.post(endpoint, { name: newItemName.trim() });
+      
+      if (res?.data?.success) {
+        setNewItemName('');
+        await loadDropdownItems(activeModal);
+        // Notify other components
+        window.dispatchEvent(new CustomEvent(`${activeModal}:updated`));
+      } else {
+        setItemError(res?.data?.message || 'Failed to add item');
+      }
+    } catch (e) {
+      setItemError('Failed to add item');
+    } finally {
+      setItemLoading(false);
+    }
+  };
+
+  const removeItem = async (idx) => {
+    const item = dropdownItems[activeModal][idx];
+    if (!item) return;
+
+    try {
+      const endpoint = getEndpointForType(activeModal);
+      await api.delete(`${endpoint}/${item.id}`);
+      await loadDropdownItems(activeModal);
+      // Notify other components
+      window.dispatchEvent(new CustomEvent(`${activeModal}:updated`));
+    } catch (e) {
+      setItemError('Failed to delete item');
+    }
+  };
+
+  const closeGenericModal = () => {
+    setActiveModal(null);
+    setNewItemName('');
+    setItemError('');
   };
 
   const removeCategoryItem = async (idx) => {
@@ -217,6 +311,67 @@ const ControlPanel = () => {
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          )}
+
+          {/* Generic Dropdown Management Modal */}
+          {activeModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center">
+              <div className="absolute inset-0 bg-black/30" onClick={closeGenericModal} />
+              <div className="relative bg-white rounded-2xl shadow-2xl w-[460px] max-w-[95vw] p-8 border border-blue-100" style={{ boxShadow: '0 8px 32px rgba(29, 78, 216, 0.35)' }}>
+                <h3 className="text-lg font-bold text-blue-600 text-center mb-6">Manage {activeModal.charAt(0).toUpperCase() + activeModal.slice(1)}</h3>
+                
+                {/* Add new item */}
+                <div className="mb-4">
+                  <label className="block text-[12px] text-gray-600 mb-1">Add New {activeModal.charAt(0).toUpperCase() + activeModal.slice(1)}</label>
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      value={newItemName}
+                      onChange={(e) => setNewItemName(e.target.value)}
+                      className="flex-1 px-3 py-2 rounded-md bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder={`Enter ${activeModal} name`}
+                    />
+                    <button
+                      type="button"
+                      onClick={addNewItem}
+                      disabled={itemLoading}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {itemLoading ? 'Adding...' : 'Add'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Existing items list */}
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="block text-[12px] text-gray-600">Existing {activeModal.charAt(0).toUpperCase() + activeModal.slice(1)}</span>
+                </div>
+                
+                <div className="mb-5">
+                  <div className="w-full rounded-xl border border-blue-100 bg-white shadow-[0_6px_16px_rgba(29,78,216,0.15)]">
+                    <div className="max-h-40 overflow-y-auto divide-y divide-gray-100">
+                      {dropdownItems[activeModal]?.map((item, idx) => (
+                        <div key={item.id ?? idx} className="flex items-center justify-between px-4 py-2 text-sm hover:bg-blue-50">
+                          <span className="text-gray-700">{item.name}</span>
+                          <button type="button" onClick={() => removeItem(idx)} className="text-red-500 hover:text-red-600">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M6 7h12l-1 12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 7Zm3-3h6l1 2H8l1-2Z"/></svg>
+                          </button>
+                        </div>
+                      ))}
+                      {(!dropdownItems[activeModal] || dropdownItems[activeModal].length === 0) && (
+                        <div className="px-4 py-3 text-sm text-gray-400">No {activeModal} yet.</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {itemError && <div className="mb-2 text-xs text-red-600">{itemError}</div>}
+                
+                <div className="flex justify-end mt-6 space-x-2">
+                  <button type="button" className="px-4 py-2 rounded bg-gray-200 text-gray-700" onClick={closeGenericModal}>Close</button>
+                </div>
               </div>
             </div>
           )}

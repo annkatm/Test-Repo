@@ -28,7 +28,7 @@ const UsersPage = () => {
     password: "",
     confirmPassword: "",
     accountType: "",
-    employeeType: ""
+    position: ""
   });
 
   const [errors, setErrors] = useState({});
@@ -74,9 +74,9 @@ const UsersPage = () => {
       newErrors.confirmPassword = 'Passwords do not match';
     }
 
-    // Employee Type validation (for employees)
-    if (activeFilter === "EMPLOYEE" && !newUser.employeeType.trim()) {
-      newErrors.employeeType = 'Employee type is required';
+    // Position validation (for employees)
+    if (activeFilter === "EMPLOYEE" && !newUser.position.trim()) {
+      newErrors.position = 'Position is required';
     }
 
     setErrors(newErrors);
@@ -178,7 +178,7 @@ const UsersPage = () => {
       ...newUser,
       name: employee.name,
       email: employee.email,
-      employeeType: employee.employeeType,
+      position: employee.position || '', // Use position from employee data
       username: employee.email.split('@')[0] // Auto-generate username from email
     });
     setShowEmployeeDropdown(false);
@@ -186,7 +186,7 @@ const UsersPage = () => {
     
     // Clear name-related errors
     if (errors.name) {
-      setErrors({ ...errors, name: '', email: '', employeeType: '' });
+      setErrors({ ...errors, name: '', email: '', position: '' });
     }
   };
 
@@ -213,8 +213,7 @@ const UsersPage = () => {
           password: newUser.password,
           accountType: activeFilter === "ADMIN" ? "admin" : "employee",
           username: newUser.username.trim() || newUser.email.split('@')[0], // Auto-generate if not provided
-          employeeType: newUser.employeeType.trim(),
-          position: selectedEmployee?.position || "Employee",
+          position: newUser.position.trim() || selectedEmployee?.position || "Employee",
           department: selectedEmployee?.department || null,
           phone: null,
         }),
@@ -253,8 +252,7 @@ const UsersPage = () => {
             password: newUser.password || null,
             accountType: selectedUser?.accountType === "IT Admin" ? "admin" : "employee",
             username: newUser.username.trim() || newUser.email.split('@')[0],
-            employeeType: newUser.employeeType.trim(),
-            position: selectedUser.position || "Employee",
+            position: newUser.position.trim() || selectedUser.position || "Employee",
             department: selectedUser.department || null,
             phone: selectedUser.phone || null,
           }),
@@ -310,7 +308,7 @@ const UsersPage = () => {
       password: "",
       confirmPassword: "",
       accountType: "",
-      employeeType: ""
+      position: ""
     });
     setSelectedEmployee(null);
     setEmployeeSearchTerm("");
@@ -331,7 +329,7 @@ const UsersPage = () => {
       password: "",
       confirmPassword: "",
       accountType: user.accountType,
-      employeeType: user.employeeType || ""
+      position: user.position || ""
     });
     setErrors({});
     setShowEditModal(true);
@@ -526,67 +524,58 @@ const UsersPage = () => {
             <div className="p-8 bg-white">
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-4">
-                  {/* Name Field - Dropdown for Employees */}
-                  {activeFilter === "EMPLOYEE" ? (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Name<span className="text-red-500">*</span>
-                      </label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          value={employeeSearchTerm}
-                          onChange={(e) => {
-                            setEmployeeSearchTerm(e.target.value);
-                            setShowEmployeeDropdown(true);
-                            if (errors.name) setErrors({ ...errors, name: '' });
-                          }}
-                          onFocus={() => setShowEmployeeDropdown(true)}
-                          className={`w-full border rounded-md px-3 py-2 pr-8 focus:outline-none focus:ring-2 ${
-                            errors.name 
-                              ? 'border-red-300 focus:ring-red-500 focus:border-red-500 bg-red-50' 
-                              : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
-                          }`}
-                          placeholder="Search and select employee..."
-                        />
-                        <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                        
-                        {showEmployeeDropdown && (
-                          <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                            {loadingEmployees ? (
-                              <div className="px-3 py-2 text-gray-500">Loading employees...</div>
-                            ) : filteredEmployees.length > 0 ? (
-                              filteredEmployees.map((employee) => (
-                                <button
-                                  key={employee.id}
-                                  onClick={() => handleEmployeeSelect(employee)}
-                                  className="w-full text-left px-3 py-2 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
-                                >
-                                  <div className="font-medium">{employee.name}</div>
-                                  <div className="text-xs text-gray-500">{employee.email} • {employee.employeeType}</div>
-                                </button>
-                              ))
-                            ) : (
-                              <div className="px-3 py-2 text-gray-500">No employees found</div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      {errors.name && (
-                        <div className="flex items-center mt-1 text-red-500 text-xs">
-                          <AlertCircle className="h-3 w-3 mr-1" />
-                          {errors.name}
+                  {/* Name Field - Searchable dropdown for both ADMIN and EMPLOYEE */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Name<span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={employeeSearchTerm}
+                        onChange={(e) => {
+                          setEmployeeSearchTerm(e.target.value);
+                          setShowEmployeeDropdown(true);
+                          if (errors.name) setErrors({ ...errors, name: '' });
+                        }}
+                        onFocus={() => setShowEmployeeDropdown(true)}
+                        className={`w-full border rounded-md px-3 py-2 pr-8 focus:outline-none focus:ring-2 ${
+                          errors.name 
+                            ? 'border-red-300 focus:ring-red-500 focus:border-red-500 bg-red-50' 
+                            : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+                        }`}
+                        placeholder="Search and select employee..."
+                      />
+                      <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      
+                      {showEmployeeDropdown && (
+                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                          {loadingEmployees ? (
+                            <div className="px-3 py-2 text-gray-500">Loading employees...</div>
+                          ) : filteredEmployees.length > 0 ? (
+                            filteredEmployees.map((employee) => (
+                              <button
+                                key={employee.id}
+                                onClick={() => handleEmployeeSelect(employee)}
+                                className="w-full text-left px-3 py-2 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
+                              >
+                                <div className="font-medium">{employee.name}</div>
+                                <div className="text-xs text-gray-500">{employee.email} • {employee.position || employee.employeeType}</div>
+                              </button>
+                            ))
+                          ) : (
+                            <div className="px-3 py-2 text-gray-500">No employees found</div>
+                          )}
                         </div>
                       )}
                     </div>
-                  ) : (
-                    <ValidatedInput 
-                      label="Name" 
-                      field="name" 
-                      placeholder="Enter full name" 
-                      required={true} 
-                    />
-                  )}
+                    {errors.name && (
+                      <div className="flex items-center mt-1 text-red-500 text-xs">
+                        <AlertCircle className="h-3 w-3 mr-1" />
+                        {errors.name}
+                      </div>
+                    )}
+                  </div>
 
                   <ValidatedInput 
                     label="Email" 
@@ -606,43 +595,33 @@ const UsersPage = () => {
                 </div>
                 
                 <div className="space-y-4">
-                  {/* Employee Type Field - Now in the right column */}
-                  {activeFilter === "EMPLOYEE" ? (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Employee Type<span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={newUser.employeeType}
-                        readOnly
-                        className="w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-50 text-gray-600"
-                        placeholder="Select employee first"
-                      />
-                      {errors.employeeType && (
-                        <div className="flex items-center mt-1 text-red-500 text-xs">
-                          <AlertCircle className="h-3 w-3 mr-1" />
-                          {errors.employeeType}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Employee Type
-                      </label>
-                      <div className="w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-50 text-gray-600">
-                        Admin
+                  {/* Position Field - Auto-filled from selected employee's position */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Position
+                    </label>
+                    <input
+                      type="text"
+                      value={newUser.position || (selectedEmployee ? selectedEmployee.position : '')}
+                      readOnly
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-50 text-gray-600"
+                      placeholder="Select employee first"
+                    />
+                    {errors.position && (
+                      <div className="flex items-center mt-1 text-red-500 text-xs">
+                        <AlertCircle className="h-3 w-3 mr-1" />
+                        {errors.position}
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
 
+                  {/* Account Type Field - Auto-filled based on filter */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Account type
                     </label>
                     <div className="w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-50 text-gray-600">
-                      {activeFilter === "ADMIN" ? "IT Admin" : "Employee"}
+                      {activeFilter === "ADMIN" ? "ADMIN" : "Employee"}
                     </div>
                   </div>
                   
@@ -725,25 +704,21 @@ const UsersPage = () => {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Employee Type
+                      Position
                     </label>
-                    <select
-                      value={newUser.employeeType || ''}
-                      onChange={(e) => handleInputChange('employeeType', e.target.value)}
+                    <input
+                      type="text"
+                      value={newUser.position || ''}
+                      onChange={(e) => handleInputChange('position', e.target.value)}
                       className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 ${
-                        errors.employeeType ? 'border-red-500 focus:ring-red-500 bg-red-50' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+                        errors.position ? 'border-red-500 focus:ring-red-500 bg-red-50' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
                       }`}
-                    >
-                      <option value="">Select employee type</option>
-                      <option value="Regular">Regular</option>
-                      <option value="Contractor">Contractor</option>
-                      <option value="Temporary">Temporary</option>
-                      <option value="Admin">Admin</option>
-                    </select>
-                    {errors.employeeType && (
+                      placeholder="Enter position"
+                    />
+                    {errors.position && (
                       <div className="flex items-center mt-1 text-red-500 text-xs">
                         <AlertCircle className="h-3 w-3 mr-1" />
-                        {errors.employeeType}
+                        {errors.position}
                       </div>
                     )}
                   </div>
@@ -841,7 +816,7 @@ const UsersPage = () => {
               <div className="space-y-3 text-sm">
                 <div><span className="text-gray-500">Name:</span> <span className="text-gray-900">{selectedUser?.name}</span></div>
                 <div><span className="text-gray-500">Email:</span> <span className="text-gray-900">{selectedUser?.email}</span></div>
-                <div><span className="text-gray-500">Employee Type:</span> <span className="text-gray-900">{selectedUser?.employeeType || 'N/A'}</span></div>
+                <div><span className="text-gray-500">Position:</span> <span className="text-gray-900">{selectedUser?.position || 'N/A'}</span></div>
                 <div><span className="text-gray-500">Account type:</span> <span className="text-gray-900">{selectedUser?.accountType}</span></div>
               </div>
               <div className="mt-6 text-right">

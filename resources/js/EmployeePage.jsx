@@ -92,6 +92,13 @@ const EmployeePage = () => {
   });
   const [errors, setErrors] = useState({});
   const [employees, setEmployees] = useState([]);
+  const [dropdownOptions, setDropdownOptions] = useState({
+    positions: [],
+    departments: [],
+    clients: [],
+    employeeTypes: [],
+    accountTypes: []
+  });
 
   // Validation functions
   const validateEmail = (email) => {
@@ -194,7 +201,42 @@ const EmployeePage = () => {
     }
   };
 
+  const loadDropdownOptions = async () => {
+    try {
+      const endpoints = {
+        positions: '/api/positions',
+        departments: '/api/departments',
+        clients: '/api/clients',
+        employeeTypes: '/api/employee-types',
+        accountTypes: '/api/account-types'
+      };
+
+      const promises = Object.entries(endpoints).map(async ([key, endpoint]) => {
+        try {
+          const res = await fetch(endpoint);
+          const data = await res.json();
+          return [key, data.success && Array.isArray(data.data) ? data.data.map(item => ({ value: item.name, label: item.name })) : []];
+        } catch (e) {
+          return [key, []];
+        }
+      });
+
+      const results = await Promise.all(promises);
+      const newOptions = {};
+      results.forEach(([key, options]) => {
+        newOptions[key] = options;
+      });
+
+      setDropdownOptions(newOptions);
+    } catch (e) {
+      console.error('Failed to load dropdown options:', e);
+    }
+  };
+
   useEffect(() => {
+    // Load dropdown options first
+    loadDropdownOptions();
+
     // Support deep-linking via /employee?email=... or ?employee_id=...
     const params = new URLSearchParams(window.location.search);
     const filterEmail = params.get('email');
@@ -234,6 +276,22 @@ const EmployeePage = () => {
 
         setEmployees(list);
       });
+
+    // Listen for dropdown updates
+    const handleDropdownUpdate = (event) => {
+      loadDropdownOptions();
+    };
+
+    const eventTypes = ['positions:updated', 'departments:updated', 'clients:updated', 'employeetypes:updated', 'accounttypes:updated'];
+    eventTypes.forEach(eventType => {
+      window.addEventListener(eventType, handleDropdownUpdate);
+    });
+
+    return () => {
+      eventTypes.forEach(eventType => {
+        window.removeEventListener(eventType, handleDropdownUpdate);
+      });
+    };
   }, []);
 
   const resetAll = () => {
@@ -653,9 +711,7 @@ const EmployeePage = () => {
                     onChange={(val) => handleInputChange('client', val)}
                     options={[
                       { value: '', label: 'Select client' },
-                      { value: 'Client A', label: 'Client A' },
-                      { value: 'Client B', label: 'Client B' },
-                      { value: 'Client C', label: 'Client C' }
+                      ...dropdownOptions.clients
                     ]}
                     error={errors.client}
                     tabIndex={7}
@@ -666,11 +722,7 @@ const EmployeePage = () => {
                     onChange={(val) => handleInputChange('department', val)}
                     options={[
                       { value: '', label: 'Select department' },
-                      { value: 'IT Department', label: 'IT Department' },
-                      { value: 'HR Department', label: 'HR Department' },
-                      { value: 'Sales Department', label: 'Sales Department' },
-                      { value: 'Marketing Department', label: 'Marketing Department' },
-                      { value: 'Finance Department', label: 'Finance Department' }
+                      ...dropdownOptions.departments
                     ]}
                     error={errors.department}
                     tabIndex={9}
@@ -721,9 +773,8 @@ const EmployeePage = () => {
                     onChange={(val) => handleInputChange('employeeType', val)}
                     required={true}
                     options={[
-                      { value: 'Regular', label: 'Regular' },
-                      { value: 'Contractor', label: 'Contractor' },
-                      { value: 'Temporary', label: 'Temporary' }
+                      { value: '', label: 'Select employee type' },
+                      ...dropdownOptions.employeeTypes
                     ]}
                     error={errors.employeeType}
                     tabIndex={8}
@@ -734,9 +785,7 @@ const EmployeePage = () => {
                     onChange={(val) => handleInputChange('position', val)}
                     options={[
                       { value: '', label: 'Select position' },
-                      { value: 'Manager', label: 'Manager' },
-                      { value: 'Supervisor', label: 'Supervisor' },
-                      { value: 'Staff', label: 'Staff' }
+                      ...dropdownOptions.positions
                     ]}
                     error={errors.position}
                     tabIndex={10}
@@ -796,9 +845,7 @@ const EmployeePage = () => {
                     onChange={(val) => handleInputChange('client', val)}
                     options={[
                       { value: '', label: 'Select client' },
-                      { value: 'Client A', label: 'Client A' },
-                      { value: 'Client B', label: 'Client B' },
-                      { value: 'Client C', label: 'Client C' }
+                      ...dropdownOptions.clients
                     ]}
                     error={errors.client}
                     tabIndex={7}
@@ -809,11 +856,7 @@ const EmployeePage = () => {
                     onChange={(val) => handleInputChange('department', val)}
                     options={[
                       { value: '', label: 'Select department' },
-                      { value: 'IT Department', label: 'IT Department' },
-                      { value: 'HR Department', label: 'HR Department' },
-                      { value: 'Sales Department', label: 'Sales Department' },
-                      { value: 'Marketing Department', label: 'Marketing Department' },
-                      { value: 'Finance Department', label: 'Finance Department' }
+                      ...dropdownOptions.departments
                     ]}
                     error={errors.department}
                     tabIndex={9}
@@ -861,9 +904,8 @@ const EmployeePage = () => {
                     onChange={(val) => handleInputChange('employeeType', val)}
                     required={true}
                     options={[
-                      { value: 'Regular', label: 'Regular' },
-                      { value: 'Contractor', label: 'Contractor' },
-                      { value: 'Temporary', label: 'Temporary' }
+                      { value: '', label: 'Select employee type' },
+                      ...dropdownOptions.employeeTypes
                     ]}
                     error={errors.employeeType}
                     tabIndex={8}
@@ -874,9 +916,7 @@ const EmployeePage = () => {
                     onChange={(val) => handleInputChange('position', val)}
                     options={[
                       { value: '', label: 'Select position' },
-                      { value: 'Manager', label: 'Manager' },
-                      { value: 'Supervisor', label: 'Supervisor' },
-                      { value: 'Staff', label: 'Staff' }
+                      ...dropdownOptions.positions
                     ]}
                     error={errors.position}
                     tabIndex={10}
