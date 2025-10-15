@@ -46,6 +46,9 @@ const ViewRequest = () => {
   const [scrollY, setScrollY] = useState(0);
   const scrollContainerRef = useRef(null);
   
+  // Local loading state for modal operations
+  const [modalLoading, setModalLoading] = useState(false);
+  
   // Modal state
   const [modalState, setModalState] = useState({
     isOpen: false,
@@ -189,7 +192,7 @@ const ViewRequest = () => {
     const { type, requestData } = modalState;
     
     try {
-      setLoading(true);
+      setModalLoading(true);
       
       if (type === 'approve') {
         const response = await api.post(`/requests/${requestData.id}/approve`, {
@@ -251,12 +254,11 @@ const ViewRequest = () => {
       handleModalClose();
     } catch (err) {
       console.error('Error processing request:', err);
-      setError('Error processing request: ' + (err.response?.data?.message || err.message));
       
-      // Show error toast or modal
+      // Show error alert
       alert('Error processing request: ' + (err.response?.data?.message || err.message));
     } finally {
-      setLoading(false);
+      setModalLoading(false);
     }
   };
 
@@ -1004,6 +1006,7 @@ const ViewRequest = () => {
         showReasonInput={modalState.type === 'reject'}
         reason={modalState.reason}
         onReasonChange={handleReasonChange}
+        loading={modalLoading}
       />
 
       {/* Success Modal */}
