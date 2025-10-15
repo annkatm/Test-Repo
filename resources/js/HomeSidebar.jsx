@@ -217,20 +217,22 @@ const HomeSidebar = ({ onSelect }) => {
             className={sectionButtonClass(
               isActive("/viewrequest") || isActive("/viewapproved")
             )}
-            onClick={() => {
-              if (openTransaction) {
-                // If currently open, close it
-                setOpenTransaction(false);
-              } else {
-                // If currently closed, close equipment dropdown and open transaction
-                setOpenEquipment(false);
-                setOpenTransaction(true);
-              }
-            }}
+            onClick={(e) => handleMenuClick("/viewrequest", e)}
           >
             <ArrowLeftRight className="h-5 w-5" />
             <span>Transaction</span>
-            <span className="ml-auto text-xs">
+            <span
+              className="ml-auto text-xs"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (openTransaction) {
+                  setOpenTransaction(false);
+                } else {
+                  setOpenEquipment(false);
+                  setOpenTransaction(true);
+                }
+              }}
+            >
               {openTransaction ? "▾" : "▸"}
             </span>
           </button>
@@ -276,20 +278,22 @@ const HomeSidebar = ({ onSelect }) => {
             className={sectionButtonClass(
               isActive("/equipment") || isActive("/addstocks")
             )}
-            onClick={() => {
-              if (openEquipment) {
-                // If currently open, close it
-                setOpenEquipment(false);
-              } else {
-                // If currently closed, close transaction dropdown and open equipment
-                setOpenTransaction(false);
-                setOpenEquipment(true);
-              }
-            }}
+            onClick={(e) => handleMenuClick("/equipment", e)}
           >
             <Folder className="h-5 w-5" />
             <span>Equipment</span>
-            <span className="ml-auto text-xs">
+            <span
+              className="ml-auto text-xs"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (openEquipment) {
+                  setOpenEquipment(false);
+                } else {
+                  setOpenTransaction(false);
+                  setOpenEquipment(true);
+                }
+              }}
+            >
               {openEquipment ? "▾" : "▸"}
             </span>
           </button>

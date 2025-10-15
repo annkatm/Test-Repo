@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Search, Eye, Edit, Trash2, Plus, Bell, Settings, ArrowRight, X, AlertCircle, ChevronDown } from "lucide-react";
+import { Search, Eye, EyeOff, Edit, Trash2, Plus, Bell, Settings, ArrowRight, X, AlertCircle, ChevronDown } from "lucide-react";
 import HomeSidebar from "./HomeSidebar";
 import GlobalHeader from "./components/GlobalHeader";
 
@@ -20,6 +20,10 @@ const UsersPage = () => {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [showEmployeeDropdown, setShowEmployeeDropdown] = useState(false);
   const [employeeSearchTerm, setEmployeeSearchTerm] = useState("");
+  
+  // Password visibility states
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
   const [newUser, setNewUser] = useState({ 
     name: "", 
@@ -74,22 +78,13 @@ const UsersPage = () => {
       newErrors.confirmPassword = 'Passwords do not match';
     }
 
-    // Position validation (for employees)
-    if (activeFilter === "EMPLOYEE" && !newUser.position.trim()) {
+    // Position validation (ADMIN only)
+    if (activeFilter === "ADMIN" && !newUser.position.trim()) {
       newErrors.position = 'Position is required';
     }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  };
-
-  const handleInputChange = (field, value) => {
-    setNewUser({ ...newUser, [field]: value });
-    
-    // Clear error for this field when user starts typing
-    if (errors[field]) {
-      setErrors({ ...errors, [field]: '' });
-    }
   };
 
   // Load users from API
@@ -174,20 +169,18 @@ const UsersPage = () => {
 
   const handleEmployeeSelect = (employee) => {
     setSelectedEmployee(employee);
-    setNewUser({
-      ...newUser,
+    setNewUser(prev => ({
+      ...prev,
       name: employee.name,
       email: employee.email,
       position: employee.position || '', // Use position from employee data
       username: employee.email.split('@')[0] // Auto-generate username from email
-    });
+    }));
     setShowEmployeeDropdown(false);
     setEmployeeSearchTerm(employee.name);
     
-    // Clear name-related errors
-    if (errors.name) {
-      setErrors({ ...errors, name: '', email: '', position: '' });
-    }
+    // Clear errors when employee is selected
+    setErrors({});
   };
 
   const filteredEmployees = employeesList.filter(emp =>
@@ -313,6 +306,8 @@ const UsersPage = () => {
     setSelectedEmployee(null);
     setEmployeeSearchTerm("");
     setErrors({});
+    setShowPassword(false);
+    setShowConfirmPassword(false);
   };
 
   const openAddModal = () => {
@@ -332,6 +327,8 @@ const UsersPage = () => {
       position: user.position || ""
     });
     setErrors({});
+    setShowPassword(false);
+    setShowConfirmPassword(false);
     setShowEditModal(true);
   };
 
@@ -357,32 +354,6 @@ const UsersPage = () => {
       window.location.href = '/employee';
     }
   };
-
-  // Input component with validation
-  const ValidatedInput = ({ label, field, type = "text", placeholder, required = false }) => (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        {label}{required && <span className="text-red-500">*</span>}
-      </label>
-      <input
-        type={type}
-        value={newUser[field] || ''}
-        onChange={(e) => handleInputChange(field, e.target.value)}
-        className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 ${
-          errors[field] 
-            ? 'border-red-300 focus:ring-red-500 focus:border-red-500 bg-red-50' 
-            : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
-        }`}
-        placeholder={placeholder}
-      />
-      {errors[field] && (
-        <div className="flex items-center mt-1 text-red-500 text-xs">
-          <AlertCircle className="h-3 w-3 mr-1" />
-          {errors[field]}
-        </div>
-      )}
-    </div>
-  );
 
   return (
     <div className="h-screen overflow-hidden bg-white flex">
@@ -536,7 +507,6 @@ const UsersPage = () => {
                         onChange={(e) => {
                           setEmployeeSearchTerm(e.target.value);
                           setShowEmployeeDropdown(true);
-                          if (errors.name) setErrors({ ...errors, name: '' });
                         }}
                         onFocus={() => setShowEmployeeDropdown(true)}
                         className={`w-full border rounded-md px-3 py-2 pr-8 focus:outline-none focus:ring-2 ${
@@ -577,43 +547,101 @@ const UsersPage = () => {
                     )}
                   </div>
 
-                  <ValidatedInput 
-                    label="Email" 
-                    field="email" 
-                    type="email" 
-                    placeholder="Enter email address" 
-                    required={true} 
-                  />
-                  
-                  <ValidatedInput 
-                    label="Password" 
-                    field="password" 
-                    type="password" 
-                    placeholder="Enter password" 
-                    required={true} 
-                  />
-                </div>
-                
-                <div className="space-y-4">
-                  {/* Position Field - Auto-filled from selected employee's position */}
+                  {/* Email Field */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Position
+                      Email<span className="text-red-500">*</span>
                     </label>
                     <input
-                      type="text"
-                      value={newUser.position || (selectedEmployee ? selectedEmployee.position : '')}
-                      readOnly
-                      className="w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-50 text-gray-600"
-                      placeholder="Select employee first"
+                      type="email"
+                      value={newUser.email}
+                      onChange={(e) => setNewUser(prev => ({ ...prev, email: e.target.value }))}
+                      className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 ${
+                        errors.email 
+                          ? 'border-red-300 focus:ring-red-500 focus:border-red-500 bg-red-50' 
+                          : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+                      }`}
+                      placeholder="Enter email address"
                     />
-                    {errors.position && (
+                    {errors.email && (
                       <div className="flex items-center mt-1 text-red-500 text-xs">
                         <AlertCircle className="h-3 w-3 mr-1" />
-                        {errors.position}
+                        {errors.email}
                       </div>
                     )}
                   </div>
+                  
+                  {/* Password Field */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Password<span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        value={newUser.password}
+                        onChange={(e) => setNewUser(prev => ({ ...prev, password: e.target.value }))}
+                        className={`w-full border rounded-md px-3 py-2 pr-10 focus:outline-none focus:ring-2 ${
+                          errors.password 
+                            ? 'border-red-300 focus:ring-red-500 focus:border-red-500 bg-red-50' 
+                            : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+                        }`}
+                        placeholder="Enter password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                    {errors.password && (
+                      <div className="flex items-center mt-1 text-red-500 text-xs">
+                        <AlertCircle className="h-3 w-3 mr-1" />
+                        {errors.password}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="space-y-4">
+                  {/* ADMIN: Position (read-only, tab skipped). EMPLOYEE: Employee Type (read-only, tab skipped) */}
+                  {activeFilter === 'ADMIN' ? (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Position</label>
+                      <input
+                        type="text"
+                        value={newUser.position || (selectedEmployee ? selectedEmployee.position : '')}
+                        readOnly
+                        tabIndex={-1}
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-50 text-gray-600"
+                        placeholder="Select employee first"
+                      />
+                      {errors.position && (
+                        <div className="flex items-center mt-1 text-red-500 text-xs">
+                          <AlertCircle className="h-3 w-3 mr-1" />
+                          {errors.position}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Employee Type</label>
+                      <input
+                        type="text"
+                        value={selectedEmployee ? (selectedEmployee.employeeType || selectedEmployee.position || '') : ''}
+                        readOnly
+                        tabIndex={-1}
+                        className="w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-50 text-gray-600"
+                        placeholder="Select employee first"
+                      />
+                    </div>
+                  )}
 
                   {/* Account Type Field - Auto-filled based on filter */}
                   <div>
@@ -625,13 +653,42 @@ const UsersPage = () => {
                     </div>
                   </div>
                   
-                  <ValidatedInput 
-                    label="Confirm Password" 
-                    field="confirmPassword" 
-                    type="password" 
-                    placeholder="Confirm password" 
-                    required={true} 
-                  />
+                  {/* Confirm Password Field */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Confirm Password<span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showConfirmPassword ? "text" : "password"}
+                        value={newUser.confirmPassword}
+                        onChange={(e) => setNewUser(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                        className={`w-full border rounded-md px-3 py-2 pr-10 focus:outline-none focus:ring-2 ${
+                          errors.confirmPassword 
+                            ? 'border-red-300 focus:ring-red-500 focus:border-red-500 bg-red-50' 
+                            : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+                        }`}
+                        placeholder="Confirm password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                      >
+                        {showConfirmPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                    {errors.confirmPassword && (
+                      <div className="flex items-center mt-1 text-red-500 text-xs">
+                        <AlertCircle className="h-3 w-3 mr-1" />
+                        {errors.confirmPassword}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
               
@@ -680,25 +737,85 @@ const UsersPage = () => {
               </div>
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-4">
-                  <ValidatedInput 
-                    label="Name" 
-                    field="name" 
-                    placeholder="Enter full name" 
-                    required={true} 
-                  />
-                  <ValidatedInput 
-                    label="Email" 
-                    field="email" 
-                    type="email" 
-                    placeholder="Enter email address" 
-                    required={true} 
-                  />
-                  <ValidatedInput 
-                    label="Password" 
-                    field="password" 
-                    type="password" 
-                    placeholder="Leave blank to keep current password" 
-                  />
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Name<span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={newUser.name}
+                      onChange={(e) => setNewUser(prev => ({ ...prev, name: e.target.value }))}
+                      className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 ${
+                        errors.name 
+                          ? 'border-red-300 focus:ring-red-500 focus:border-red-500 bg-red-50' 
+                          : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+                      }`}
+                      placeholder="Enter full name"
+                    />
+                    {errors.name && (
+                      <div className="flex items-center mt-1 text-red-500 text-xs">
+                        <AlertCircle className="h-3 w-3 mr-1" />
+                        {errors.name}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Email<span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      value={newUser.email}
+                      onChange={(e) => setNewUser(prev => ({ ...prev, email: e.target.value }))}
+                      className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 ${
+                        errors.email 
+                          ? 'border-red-300 focus:ring-red-500 focus:border-red-500 bg-red-50' 
+                          : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+                      }`}
+                      placeholder="Enter email address"
+                    />
+                    {errors.email && (
+                      <div className="flex items-center mt-1 text-red-500 text-xs">
+                        <AlertCircle className="h-3 w-3 mr-1" />
+                        {errors.email}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Password
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        value={newUser.password}
+                        onChange={(e) => setNewUser(prev => ({ ...prev, password: e.target.value }))}
+                        className={`w-full border rounded-md px-3 py-2 pr-10 focus:outline-none focus:ring-2 ${
+                          errors.password 
+                            ? 'border-red-300 focus:ring-red-500 focus:border-red-500 bg-red-50' 
+                            : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+                        }`}
+                        placeholder="Leave blank to keep current password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                    {errors.password && (
+                      <div className="flex items-center mt-1 text-red-500 text-xs">
+                        <AlertCircle className="h-3 w-3 mr-1" />
+                        {errors.password}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 
                 <div className="space-y-4">
@@ -709,7 +826,7 @@ const UsersPage = () => {
                     <input
                       type="text"
                       value={newUser.position || ''}
-                      onChange={(e) => handleInputChange('position', e.target.value)}
+                      onChange={(e) => setNewUser(prev => ({ ...prev, position: e.target.value }))}
                       className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 ${
                         errors.position ? 'border-red-500 focus:ring-red-500 bg-red-50' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
                       }`}
@@ -730,12 +847,41 @@ const UsersPage = () => {
                       {selectedUser?.accountType || "Employee"}
                     </div>
                   </div>
-                  <ValidatedInput 
-                    label="Confirm Password" 
-                    field="confirmPassword" 
-                    type="password" 
-                    placeholder="Confirm new password" 
-                  />
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Confirm Password
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showConfirmPassword ? "text" : "password"}
+                        value={newUser.confirmPassword}
+                        onChange={(e) => setNewUser(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                        className={`w-full border rounded-md px-3 py-2 pr-10 focus:outline-none focus:ring-2 ${
+                          errors.confirmPassword 
+                            ? 'border-red-300 focus:ring-red-500 focus:border-red-500 bg-red-50' 
+                            : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+                        }`}
+                        placeholder="Confirm new password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                      >
+                        {showConfirmPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                    {errors.confirmPassword && (
+                      <div className="flex items-center mt-1 text-red-500 text-xs">
+                        <AlertCircle className="h-3 w-3 mr-1" />
+                        {errors.confirmPassword}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
               
@@ -835,13 +981,6 @@ const UsersPage = () => {
         </div>
       )}
 
-      {/* Click outside to close dropdown */}
-      {showEmployeeDropdown && (
-        <div 
-          className="fixed inset-0 z-5" 
-          onClick={() => setShowEmployeeDropdown(false)}
-        />
-      )}
     </div>
   );
 };
