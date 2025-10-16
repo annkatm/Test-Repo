@@ -287,7 +287,7 @@ const HomePage = () => {
                                 ? 'bg-yellow-100 text-yellow-700'
                                 : 'bg-red-100 text-red-700'
                             }`}>
-                              {category.percentage === 0 ? '0% Unavailable' : `${category.percentage}% Available`}
+                              {category.percentage === 0 ? 'Unavailable' : `${category.percentage}% Available`}
                             </span>
                           </td>
                         </tr>

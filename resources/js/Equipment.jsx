@@ -140,6 +140,26 @@ const Equipment = () => {
     setDeletingItem(null);
   };
 
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'available': return 'text-green-600 bg-green-50';
+      case 'in_use': return 'text-orange-600 bg-orange-50';
+      case 'borrowed': return 'text-orange-600 bg-orange-50';
+      case 'issued': return 'text-red-600 bg-red-50';
+      default: return 'text-gray-600 bg-gray-50';
+    }
+  };
+
+  const getStatusText = (status) => {
+    switch (status) {
+      case 'available': return 'Available';
+      case 'in_use': return 'Borrowed';
+      case 'borrowed': return 'Borrowed';
+      case 'issued': return 'Issued';
+      default: return status;
+    }
+  };
+
   const fetchData = async () => {
     try {
       const catRes = await api.get('/categories');
@@ -296,10 +316,8 @@ const Equipment = () => {
                                   className="p-4 cursor-pointer hover:bg-gray-50 transition-colors duration-200 grid grid-cols-3 gap-4 items-center"
                                   onClick={() => toggleExpanded(group.name)}
                                 >
-                                  <div className="text-left font-medium text-gray-800">{group.name}</div>
-                                  <div className="text-center text-gray-700">{group.available}/{group.total}</div>
-                                  <div className="text-right text-gray-800 flex items-center justify-end">
-                                    <span>₱{Number(group.price).toFixed(2)}</span>
+                                  <div className="text-left font-medium text-gray-800 flex items-center">
+                                    {group.name}
                                     <svg 
                                       className={`ml-2 h-4 w-4 text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
                                       fill="none" 
@@ -309,6 +327,8 @@ const Equipment = () => {
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                     </svg>
                                   </div>
+                                  <div className="text-center text-gray-700">{group.available}/{group.total}</div>
+                                  <div className="text-right text-gray-800">₱{Number(group.price).toFixed(2)}</div>
                                 </div>
                                 
                                 {isExpanded && (
@@ -331,14 +351,8 @@ const Equipment = () => {
                                               <div className="grid grid-cols-5 gap-4 items-center text-sm">
                                                 <div className="font-medium text-gray-900">{item.serial_number || 'N/A'}</div>
                                                 <div>
-                                                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                                    item.status === 'available' ? 'bg-green-100 text-green-800' :
-                                                    item.status === 'in_use' ? 'bg-blue-100 text-blue-800' :
-                                                    item.status === 'borrowed' ? 'bg-orange-100 text-orange-800' :
-                                                    item.status === 'issued' ? 'bg-red-100 text-red-800' :
-                                                    'bg-gray-100 text-gray-800'
-                                                  }`}>
-                                                    {item.status ? item.status.charAt(0).toUpperCase() + item.status.slice(1).replace('_', ' ') : 'Unknown'}
+                                                  <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(item.status)}`}>
+                                                    {getStatusText(item.status)}
                                                   </span>
                                                 </div>
                                                 <div className="text-gray-600">
