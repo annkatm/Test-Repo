@@ -160,93 +160,95 @@ const ReturnItems = () => {
       </div>
 
       {/* Pagination */}
-<div className="flex items-center justify-center mt-6 space-x-2">
-  {/* Previous Button */}
-  <button
-    onClick={() => handleChangePage(currentPage - 1)}
-    disabled={currentPage === 1}
-    className="px-3 py-1 border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
-  >
-    <ChevronLeft size={16} />
-  </button>
+      <div className="flex items-center justify-between mt-6">
+        <div className="flex items-center space-x-2">
+          {/* Previous Button */}
+          <button
+            onClick={() => handleChangePage(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="px-3 py-1 border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <ChevronLeft size={16} />
+          </button>
 
-  {/* Page Numbers with Ellipsis */}
-  {(() => {
-    const pages = [];
-    const maxVisible = 3;
+          {/* Page Numbers with Ellipsis */}
+          {(() => {
+            const pages = [];
+            const maxVisible = 3;
 
-    if (totalPages <= maxVisible + 2) {
-      for (let i = 1; i <= totalPages; i++) pages.push(i);
-    } else {
-      if (currentPage <= maxVisible) {
-        for (let i = 1; i <= maxVisible; i++) pages.push(i);
-        pages.push("...");
-        pages.push(totalPages);
-      } else if (currentPage >= totalPages - maxVisible + 1) {
-        pages.push(1);
-        pages.push("...");
-        for (let i = totalPages - maxVisible + 1; i <= totalPages; i++)
-          pages.push(i);
-      } else {
-        pages.push(1);
-        pages.push("...");
-        pages.push(currentPage - 1);
-        pages.push(currentPage);
-        pages.push(currentPage + 1);
-        pages.push("...");
-        pages.push(totalPages);
-      }
-    }
+            if (totalPages <= maxVisible + 2) {
+              for (let i = 1; i <= totalPages; i++) pages.push(i);
+            } else {
+              if (currentPage <= maxVisible) {
+                for (let i = 1; i <= maxVisible; i++) pages.push(i);
+                pages.push("...");
+                pages.push(totalPages);
+              } else if (currentPage >= totalPages - maxVisible + 1) {
+                pages.push(1);
+                pages.push("...");
+                for (let i = totalPages - maxVisible + 1; i <= totalPages; i++)
+                  pages.push(i);
+              } else {
+                pages.push(1);
+                pages.push("...");
+                pages.push(currentPage - 1);
+                pages.push(currentPage);
+                pages.push(currentPage + 1);
+                pages.push("...");
+                pages.push(totalPages);
+              }
+            }
 
-    return pages.map((p, index) =>
-      p === "..." ? (
-        <span key={index} className="px-2 text-gray-500">
-          ...
-        </span>
-      ) : (
-        <button
-          key={index}
-          onClick={() => handleChangePage(p)}
-          className={`px-3 py-1 border rounded-md text-sm font-medium transition-colors ${
-            currentPage === p
-              ? "bg-blue-600 text-white border-blue-600"
-              : "bg-white text-gray-700 border-gray-300 hover:bg-blue-100"
-          }`}
-        >
-          {p}
-        </button>
-      )
-    );
-  })()}
+            return pages.map((p, index) =>
+              p === "..." ? (
+                <span key={index} className="px-2 text-gray-500">
+                  ...
+                </span>
+              ) : (
+                <button
+                  key={index}
+                  onClick={() => handleChangePage(p)}
+                  className={`px-3 py-1 border rounded-md text-sm font-medium transition-colors ${
+                    currentPage === p
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white text-gray-700 border-gray-300 hover:bg-blue-100"
+                  }`}
+                >
+                  {p}
+                </button>
+              )
+            );
+          })()}
 
-  {/* Next Button */}
-  <button
-    onClick={() => handleChangePage(currentPage + 1)}
-    disabled={currentPage === totalPages}
-    className="px-3 py-1 border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
-  >
-    <ChevronRight size={16} />
-  </button>
+          {/* Next Button */}
+          <button
+            onClick={() => handleChangePage(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="px-3 py-1 border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
 
-  {/* Items per page */}
-  <div className="flex items-center space-x-2 ml-4">
-    <label className="text-sm text-gray-700">Items per page:</label>
-    <select
-      value={itemsPerPage}
-      onChange={(e) => {
-        setItemsPerPage(Number(e.target.value));
-        setCurrentPage(1);
-      }}
-      className="border border-gray-300 rounded-md text-sm px-2 py-1 focus:ring-2 focus:ring-blue-400 focus:outline-none"
-    >
-      {[5, 10, 15, 20, 30, 40, 50].map((n) => (
-        <option key={n} value={n}>
-          {n}
-        </option>
-      ))}
-    </select>
-  </div>
-</div>
+        {/* Items per page */}
+        <div className="flex items-center space-x-2">
+          <label className="text-sm text-gray-700">Items per page:</label>
+          <select
+            value={itemsPerPage}
+            onChange={(e) => {
+              setItemsPerPage(Number(e.target.value));
+              setCurrentPage(1);
+            }}
+            className="border border-gray-300 rounded-md text-sm px-2 py-1 focus:ring-2 focus:ring-blue-400 focus:outline-none"
+          >
+            {[5, 10, 15, 20, 30, 40, 50].map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
     </div>
   );
 }
