@@ -44,26 +44,17 @@ const UsersPage = () => {
   };
 
   const validatePassword = (password) => {
-    return password.length >= 6;
+    return password.length >= 8;
   };
 
   const validateForm = (isEdit = false) => {
     const newErrors = {};
 
-    // For employee accounts, must select from dropdown first
-    if (activeFilter === "EMPLOYEE" && !selectedEmployee && !isEdit) {
-      newErrors.name = 'Please select an employee from the dropdown';
-      setErrors(newErrors);
-      return false;
-    }
-
-    // Name validation (required) - only if not already errored
-    if (!newErrors.name) {
-      if (!newUser.name.trim()) {
-        newErrors.name = 'Name is required';
-      } else if (newUser.name.trim().length < 2) {
-        newErrors.name = 'Name must be at least 2 characters';
-      }
+    // Name validation (required)
+    if (!newUser.name.trim()) {
+      newErrors.name = 'Name is required';
+    } else if (newUser.name.trim().length < 2) {
+      newErrors.name = 'Name must be at least 2 characters';
     }
 
     // Email validation
@@ -77,7 +68,7 @@ const UsersPage = () => {
     if (!isEdit && !newUser.password) {
       newErrors.password = 'Password is required';
     } else if (newUser.password && !validatePassword(newUser.password)) {
-      newErrors.password = 'Password must be at least 6 characters';
+      newErrors.password = 'Password must be at least 8 characters';
     }
 
     // Confirm password validation
@@ -202,19 +193,6 @@ const UsersPage = () => {
     }
     
     try {
-      const userData = {
-        name: newUser.name?.trim() || '',
-        email: newUser.email?.trim() || '',
-        password: newUser.password || '',
-        accountType: activeFilter === "ADMIN" ? "admin" : "employee",
-        username: newUser.username?.trim() || newUser.email?.split('@')[0] || '', // Auto-generate if not provided
-        position: newUser.position?.trim() || selectedEmployee?.position || null,
-        department: selectedEmployee?.department || null,
-        phone: selectedEmployee?.phone || null,
-      };
-
-      console.log('Creating user with data:', userData);
-
       const response = await fetch('/api/users', {
         method: 'POST',
         headers: {
@@ -222,22 +200,28 @@ const UsersPage = () => {
           'Accept': 'application/json',
           'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
         },
-        body: JSON.stringify(userData),
+        body: JSON.stringify({
+          name: newUser.name.trim(),
+          email: newUser.email.trim(),
+          password: newUser.password,
+          accountType: activeFilter === "ADMIN" ? "admin" : "employee",
+          username: newUser.username.trim() || newUser.email.split('@')[0], // Auto-generate if not provided
+          position: newUser.position.trim() || selectedEmployee?.position || "Employee",
+          department: selectedEmployee?.department || null,
+          phone: null,
+        }),
       });
 
       const result = await response.json();
-      console.log('Server response:', result);
       
       if (result.success) {
         window.location.reload();
       } else {
-        const errorMsg = result.message || 'Failed to create user';
-        const errors = result.errors ? '\n' + Object.values(result.errors).flat().join('\n') : '';
-        alert(errorMsg + errors);
+        alert(result.message || 'Failed to create user');
       }
     } catch (error) {
       console.error('Error creating user:', error);
-      alert('Failed to create user. Please check your input and try again.\n\nError: ' + error.message);
+      alert('Failed to create user. Please try again.');
     }
   };
 
@@ -256,12 +240,12 @@ const UsersPage = () => {
             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
           },
           body: JSON.stringify({
-            name: newUser.name?.trim() || '',
-            email: newUser.email?.trim() || '',
+            name: newUser.name.trim(),
+            email: newUser.email.trim(),
             password: newUser.password || null,
             accountType: selectedUser?.accountType === "IT Admin" ? "admin" : "employee",
-            username: newUser.username?.trim() || newUser.email?.split('@')[0] || '',
-            position: newUser.position?.trim() || selectedUser.position || null,
+            username: newUser.username.trim() || newUser.email.split('@')[0],
+            position: newUser.position.trim() || selectedUser.position || "Employee",
             department: selectedUser.department || null,
             phone: selectedUser.phone || null,
           }),
@@ -272,13 +256,11 @@ const UsersPage = () => {
         if (result.success) {
           window.location.reload();
         } else {
-          const errorMsg = result.message || 'Failed to update user';
-          const errors = result.errors ? '\n' + Object.values(result.errors).flat().join('\n') : '';
-          alert(errorMsg + errors);
+          alert(result.message || 'Failed to update user');
         }
       } catch (error) {
         console.error('Error updating user:', error);
-        alert('Failed to update user. Please check your input and try again.');
+        alert('Failed to update user. Please try again.');
       }
     }
   };
@@ -373,8 +355,31 @@ const UsersPage = () => {
     }
   };
 
+  // Handle input changes
+  const handleInputChange = (field, value) => {
+    setNewUser(prev => ({ ...prev, [field]: value }));
+    // Clear error when user starts typing
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: '' }));
+    }
+  };
+
   return (
     <div className="h-screen overflow-hidden bg-white flex">
+      {/* Add CSS to hide browser's default password reveal button */}
+      <style>
+        {`
+          input[type="password"]::-ms-reveal,
+          input[type="password"]::-ms-clear {
+            display: none;
+          }
+          input[type="password"]::-webkit-credentials-auto-fill-button,
+          input[type="password"]::-webkit-strong-password-auto-fill-button {
+            display: none !important;
+          }
+        `}
+      </style>
+      
       <HomeSidebar />
       
       <div className="flex-1 flex flex-col">
@@ -523,17 +528,8 @@ const UsersPage = () => {
                         type="text"
                         value={employeeSearchTerm}
                         onChange={(e) => {
-                          const value = e.target.value;
-                          setEmployeeSearchTerm(value);
+                          setEmployeeSearchTerm(e.target.value);
                           setShowEmployeeDropdown(true);
- 
-
-                          // For ADMIN, allow direct typing
-                          if (activeFilter === "ADMIN") {
-                            setNewUser({ ...newUser, name: value });
-                            setSelectedEmployee(null); // Clear selected employee for admin
-                          }
-                          if (errors.name) setErrors({ ...errors, name: '' }); 
                         }}
                         onFocus={() => setShowEmployeeDropdown(true)}
                         className={`w-full border rounded-md px-3 py-2 pr-8 focus:outline-none focus:ring-2 ${
@@ -541,13 +537,11 @@ const UsersPage = () => {
                             ? 'border-red-300 focus:ring-red-500 focus:border-red-500 bg-red-50' 
                             : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
                         }`}
-                        placeholder={activeFilter === "ADMIN" ? "Enter admin name..." : "Search and select employee..."}
+                        placeholder="Search and select employee..."
                       />
-                      {activeFilter === "EMPLOYEE" && (
-                        <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      )}
+                      <ChevronDown className="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                       
-                      {showEmployeeDropdown && activeFilter === "EMPLOYEE" && (
+                      {showEmployeeDropdown && (
                         <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
                           {loadingEmployees ? (
                             <div className="px-3 py-2 text-gray-500">Loading employees...</div>
@@ -559,7 +553,7 @@ const UsersPage = () => {
                                 className="w-full text-left px-3 py-2 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
                               >
                                 <div className="font-medium">{employee.name}</div>
-                                <div className="text-xs text-gray-500">{employee.email} • {employee.position || employee.position}</div>
+                                <div className="text-xs text-gray-500">{employee.email} • {employee.position || employee.employeeType}</div>
                               </button>
                             ))
                           ) : (
@@ -609,18 +603,21 @@ const UsersPage = () => {
                       <input
                         type={showPassword ? "text" : "password"}
                         value={newUser.password}
-                        onChange={(e) => setNewUser(prev => ({ ...prev, password: e.target.value }))}
+                        onChange={(e) => handleInputChange('password', e.target.value)}
                         className={`w-full border rounded-md px-3 py-2 pr-10 focus:outline-none focus:ring-2 ${
                           errors.password 
                             ? 'border-red-300 focus:ring-red-500 focus:border-red-500 bg-red-50' 
                             : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
                         }`}
                         placeholder="Enter password"
+                        style={{
+                          WebkitTextSecurity: showPassword ? 'none' : 'disc',
+                        }}
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 z-10"
                       >
                         {showPassword ? (
                           <EyeOff className="h-4 w-4" />
@@ -691,24 +688,23 @@ const UsersPage = () => {
                       <input
                         type={showConfirmPassword ? "text" : "password"}
                         value={newUser.confirmPassword}
-                        onChange={(e) => setNewUser(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                        onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
                         className={`w-full border rounded-md px-3 py-2 pr-10 focus:outline-none focus:ring-2 ${
                           errors.confirmPassword 
                             ? 'border-red-300 focus:ring-red-500 focus:border-red-500 bg-red-50' 
                             : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
                         }`}
                         placeholder="Confirm password"
+                        style={{
+                          WebkitTextSecurity: showConfirmPassword ? 'none' : 'disc',
+                        }}
                       />
                       <button
                         type="button"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 z-10"
                       >
-                        {showConfirmPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
+                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
                     </div>
                     {errors.confirmPassword && (
@@ -818,18 +814,21 @@ const UsersPage = () => {
                       <input
                         type={showPassword ? "text" : "password"}
                         value={newUser.password}
-                        onChange={(e) => setNewUser(prev => ({ ...prev, password: e.target.value }))}
+                        onChange={(e) => handleInputChange('password', e.target.value)}
                         className={`w-full border rounded-md px-3 py-2 pr-10 focus:outline-none focus:ring-2 ${
                           errors.password 
                             ? 'border-red-300 focus:ring-red-500 focus:border-red-500 bg-red-50' 
                             : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
                         }`}
                         placeholder="Leave blank to keep current password"
+                        style={{
+                          WebkitTextSecurity: showPassword ? 'none' : 'disc',
+                        }}
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 z-10"
                       >
                         {showPassword ? (
                           <EyeOff className="h-4 w-4" />
@@ -884,24 +883,23 @@ const UsersPage = () => {
                       <input
                         type={showConfirmPassword ? "text" : "password"}
                         value={newUser.confirmPassword}
-                        onChange={(e) => setNewUser(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                        onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
                         className={`w-full border rounded-md px-3 py-2 pr-10 focus:outline-none focus:ring-2 ${
                           errors.confirmPassword 
                             ? 'border-red-300 focus:ring-red-500 focus:border-red-500 bg-red-50' 
                             : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
                         }`}
                         placeholder="Confirm new password"
+                        style={{
+                          WebkitTextSecurity: showConfirmPassword ? 'none' : 'disc',
+                        }}
                       />
                       <button
                         type="button"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 z-10"
                       >
-                        {showConfirmPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
+                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
                     </div>
                     {errors.confirmPassword && (

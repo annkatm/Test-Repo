@@ -46,6 +46,9 @@ const ViewRequest = () => {
   const [scrollY, setScrollY] = useState(0);
   const scrollContainerRef = useRef(null);
   
+  // Local loading state for modal operations
+  const [modalLoading, setModalLoading] = useState(false);
+  
   // Modal state
   const [modalState, setModalState] = useState({
     isOpen: false,
@@ -84,24 +87,48 @@ const ViewRequest = () => {
     setIsMenuOpen(false);
   };
 
+  // Group pending requests by employee
+  const groupRequestsByEmployee = (requests) => {
+    const grouped = {};
+    requests.forEach(req => {
+      const employeeName = req.full_name || req.employee_name || req.name || 'Unknown';
+      if (!grouped[employeeName]) {
+        grouped[employeeName] = {
+          id: req.id, // Use first request ID as group ID
+          full_name: employeeName,
+          position: req.position || req.employee_type || 'Regular',
+          requests: [],
+          items: []
+        };
+      }
+      grouped[employeeName].requests.push(req);
+      grouped[employeeName].items.push({
+        id: req.equipment_id,
+        requestId: req.id,
+        equipment_name: req.equipment_name || 'Unknown Item',
+        name: req.equipment_name || 'Unknown Item',
+        specifications: [req.brand, req.model].filter(Boolean).join(' ') || req.category_name || '',
+        specs: [req.brand, req.model].filter(Boolean).join(' ') || req.category_name || ''
+      });
+    });
+    return Object.values(grouped);
+  };
+
+  const groupedRequests = groupRequestsByEmployee(pendingRequests);
+
   // Handler functions for approve and reject actions
-  const handleCheckApprove = (requestId) => {
-    const requestToApprove = pendingRequests.find(req => req.id === requestId);
+  const handleCheckApprove = (groupId) => {
+    const group = groupedRequests.find(g => g.id === groupId);
     
-    if (requestToApprove) {
-      // Format request data for modal with items array
+    if (group) {
+      // Format request data for modal with all items from this employee
       const requestWithDetails = {
-        ...requestToApprove,
-        employee_name: requestToApprove.full_name || requestToApprove.employee_name || requestToApprove.name || 'Unknown',
-        employee_type: requestToApprove.position || requestToApprove.employee_type || 'Regular',
+        id: group.id,
+        employee_name: group.full_name,
+        employee_type: group.position,
         role: 'Employee',
-        items: [{
-          id: requestToApprove.equipment_id,
-          equipment_name: requestToApprove.equipment_name || 'Unknown Item',
-          name: requestToApprove.equipment_name || 'Unknown Item',
-          specifications: [requestToApprove.brand, requestToApprove.model].filter(Boolean).join(' ') || requestToApprove.category_name || '',
-          specs: [requestToApprove.brand, requestToApprove.model].filter(Boolean).join(' ') || requestToApprove.category_name || ''
-        }]
+        requests: group.requests,
+        items: group.items
       };
       
       setModalState({
@@ -113,22 +140,17 @@ const ViewRequest = () => {
     }
   };
 
-  const handleApprove = (req) => {
-    if (!req) return;
+  const handleApprove = (group) => {
+    if (!group) return;
     
-    // Format request data for modal with items array
+    // Format request data for modal with all items from this employee
     const requestWithDetails = {
-      ...req,
-      employee_name: req.full_name || req.employee_name || req.name || 'Unknown',
-      employee_type: req.position || req.employee_type || 'Regular',
+      id: group.id,
+      employee_name: group.full_name,
+      employee_type: group.position,
       role: 'Employee',
-      items: [{
-        id: req.equipment_id,
-        equipment_name: req.equipment_name || 'Unknown Item',
-        name: req.equipment_name || 'Unknown Item',
-        specifications: [req.brand, req.model].filter(Boolean).join(' ') || req.category_name || '',
-        specs: [req.brand, req.model].filter(Boolean).join(' ') || req.category_name || ''
-      }]
+      requests: group.requests,
+      items: group.items
     };
     
     setModalState({
@@ -140,30 +162,25 @@ const ViewRequest = () => {
   };
 
   // Row click opens the detailed approval modal
-  const handleRowClick = (requestId) => {
-    const req = pendingRequests.find(r => r.id === requestId);
-    if (!req) return;
+  const handleRowClick = (groupId) => {
+    const group = groupedRequests.find(g => g.id === groupId);
+    if (!group) return;
     
-    handleApprove(req);
+    handleApprove(group);
   };
 
-  const handleReject = (requestId) => {
-    const requestToReject = pendingRequests.find(req => req.id === requestId);
+  const handleReject = (groupId) => {
+    const group = groupedRequests.find(g => g.id === groupId);
     
-    if (requestToReject) {
-      // Format request data for modal with items array
+    if (group) {
+      // Format request data for modal with all items from this employee
       const requestWithDetails = {
-        ...requestToReject,
-        employee_name: requestToReject.full_name || requestToReject.employee_name || requestToReject.name || 'Unknown',
-        employee_type: requestToReject.position || requestToReject.employee_type || 'Regular',
+        id: group.id,
+        employee_name: group.full_name,
+        employee_type: group.position,
         role: 'Employee',
-        items: [{
-          id: requestToReject.equipment_id,
-          equipment_name: requestToReject.equipment_name || 'Unknown Item',
-          name: requestToReject.equipment_name || 'Unknown Item',
-          specifications: [requestToReject.brand, requestToReject.model].filter(Boolean).join(' ') || requestToReject.category_name || '',
-          specs: [requestToReject.brand, requestToReject.model].filter(Boolean).join(' ') || requestToReject.category_name || ''
-        }]
+        requests: group.requests,
+        items: group.items
       };
       
       setModalState({
@@ -189,74 +206,87 @@ const ViewRequest = () => {
     const { type, requestData } = modalState;
     
     try {
-      setLoading(true);
+      setModalLoading(true);
       
       if (type === 'approve') {
-        const response = await api.post(`/requests/${requestData.id}/approve`, {
-          approval_notes: modalState.reason
-        });
+        // Process all requests in the group
+        const requests = requestData.requests || [requestData];
+        const approvedRequests = [];
         
-        if (response.data.success) {
-          // Log the approval activity
-          await activityLogService.logRequestApproval(requestData.id, requestData);
-          
-          // Remove from pending requests
-          setPendingRequests(prev => prev.filter(req => req.id !== requestData.id));
-          
-          // Add to approved requests
-          const approvedRequest = {
-            ...requestData,
-            status: "approved",
-            approved_by_name: "Admin",
-            approved_at: new Date().toISOString()
-          };
-          
-          setApprovedRequests(prev => [...prev, approvedRequest]);
-          
-          // Show success message
-          setSuccessModal({
-            isOpen: true,
-            type: 'approve',
-            requestData: requestData
+        for (const request of requests) {
+          const response = await api.post(`/requests/${request.id}/approve`, {
+            approval_notes: modalState.reason
           });
           
-          // Redirect to dedicated View Approved page after a short delay
-          setTimeout(() => {
-            if (typeof window !== 'undefined') {
-              window.location.href = '/viewapproved';
-            }
-          }, 2000);
+          if (response.data.success) {
+            // Log the approval activity
+            await activityLogService.logRequestApproval(request.id, request);
+            
+            // Add to approved requests list
+            approvedRequests.push({
+              ...request,
+              status: "approved",
+              approved_by_name: "Admin",
+              approved_at: new Date().toISOString()
+            });
+          }
         }
+        
+        // Remove all processed requests from pending
+        const processedIds = requests.map(r => r.id);
+        setPendingRequests(prev => prev.filter(req => !processedIds.includes(req.id)));
+        
+        // Add all approved requests
+        setApprovedRequests(prev => [...prev, ...approvedRequests]);
+        
+        // Show success message
+        setSuccessModal({
+          isOpen: true,
+          type: 'approve',
+          requestData: requestData
+        });
+        
+        // Redirect to dedicated View Approved page after a short delay
+        setTimeout(() => {
+          if (typeof window !== 'undefined') {
+            window.location.href = '/viewapproved';
+          }
+        }, 2000);
       } else if (type === 'reject') {
-        const response = await api.post(`/requests/${requestData.id}/reject`, {
-          rejection_reason: modalState.reason
-        });
+        // Process all requests in the group
+        const requests = requestData.requests || [requestData];
         
-        if (response.data.success) {
-          // Log the rejection activity
-          await activityLogService.logRequestRejection(requestData.id, requestData, modalState.reason);
-          
-          // Remove from pending requests
-          setPendingRequests(prev => prev.filter(req => req.id !== requestData.id));
-          
-          // Show success message
-          setSuccessModal({
-            isOpen: true,
-            type: 'reject',
-            requestData: requestData
+        for (const request of requests) {
+          const response = await api.post(`/requests/${request.id}/reject`, {
+            rejection_reason: modalState.reason
           });
+          
+          if (response.data.success) {
+            // Log the rejection activity
+            await activityLogService.logRequestRejection(request.id, request, modalState.reason);
+          }
         }
+        
+        // Remove all processed requests from pending
+        const processedIds = requests.map(r => r.id);
+        setPendingRequests(prev => prev.filter(req => !processedIds.includes(req.id)));
+        
+        // Show success message
+        setSuccessModal({
+          isOpen: true,
+          type: 'reject',
+          requestData: requestData
+        });
       }
       
       handleModalClose();
     } catch (err) {
       console.error('Error processing request:', err);
-      setError('Error processing request: ' + (err.response?.data?.message || err.message));
       
-      // Show error toast or modal
+      // Show error alert
       alert('Error processing request: ' + (err.response?.data?.message || err.message));
     } finally {
-      setLoading(false);
+      setModalLoading(false);
     }
   };
 
@@ -699,28 +729,37 @@ const ViewRequest = () => {
         <div className="py-8 text-center text-red-500">
           Error: {error}
         </div>
-      ) : pendingRequests.length === 0 ? (
+      ) : groupedRequests.length === 0 ? (
         <div className="py-8 text-center text-gray-500">
           No pending requests found
         </div>
       ) : (
         <div className="space-y-3">
-          {pendingRequests.map((req, index) => (
+          {groupedRequests.map((group, index) => (
             <div
-              key={req.id}
-              onClick={() => handleRowClick(req.id)}
+              key={group.id}
+              onClick={() => handleRowClick(group.id)}
               className="flex items-center py-4 px-4 rounded-xl cursor-pointer border-2 bg-white border-gray-300 hover:bg-blue-50 hover:border-blue-400 transition-all duration-200"
             >
               {/* Name */}
               <div className="flex-1">
-              <div className="text-base font-medium text-gray-900">{req.full_name}</div>
+                <div className="text-base font-medium text-gray-900">{group.full_name}</div>
               </div>
               
-              {/* Item  */}
+              {/* Items with count */}
               <div className="flex-1">
-                <span className="inline-block text-gray-900 text-sm font-medium px-3 py-1 rounded-md">
-                  {req.equipment_name}
-                </span>
+                <div className="flex items-center space-x-2">
+                  <span className="inline-block text-gray-900 text-sm font-medium px-3 py-1 rounded-md">
+                    {group.items.length === 1 
+                      ? group.items[0].equipment_name 
+                      : `${group.items.length} items`}
+                  </span>
+                  {group.items.length > 1 && (
+                    <span className="inline-flex items-center justify-center w-6 h-6 text-xs font-bold text-white bg-blue-600 rounded-full">
+                      {group.items.length}
+                    </span>
+                  )}
+                </div>
               </div>
               
               {/* Action Buttons */}
@@ -729,7 +768,7 @@ const ViewRequest = () => {
                   <button 
                     onClick={(e) => { 
                       e.stopPropagation(); 
-                      setConfirmModal({ isOpen: true, mode: 'approve', requestId: req.id });
+                      setConfirmModal({ isOpen: true, mode: 'approve', requestId: group.id });
                     }}
                     className="btn"
                     title="Approve Request"
@@ -769,7 +808,7 @@ const ViewRequest = () => {
                 <button 
                   onClick={(e) => { 
                     e.stopPropagation(); 
-                    handleReject(req.id);
+                    handleReject(group.id);
                   }}
                   className="w-7 h-7 flex items-center justify-center rounded-md border-2 border-red-400 hover:border-red-500 text-red-500 hover:text-red-600 hover:bg-red-50 transition-all duration-200"
                   title="Reject Request"
@@ -1004,6 +1043,7 @@ const ViewRequest = () => {
         showReasonInput={modalState.type === 'reject'}
         reason={modalState.reason}
         onReasonChange={handleReasonChange}
+        loading={modalLoading}
       />
 
       {/* Success Modal */}
@@ -1022,19 +1062,31 @@ const ViewRequest = () => {
         onConfirm={async () => {
           if (confirmModal.mode === 'approve') {
             try {
-              const response = await api.post(`/requests/${confirmModal.requestId}/approve`);
-              if (response.data.success) {
-            const requestToApprove = pendingRequests.find(req => req.id === confirmModal.requestId);
-            if (requestToApprove) {
-              setPendingRequests(prev => prev.filter(req => req.id !== confirmModal.requestId));
-              const approvedRequest = {
-                ...requestToApprove,
-                    status: 'approved',
-                    approved_by_name: 'Admin',
-                    approved_at: new Date().toISOString()
-              };
-              setApprovedRequests(prev => [...prev, approvedRequest]);
+              // Find the group by ID
+              const group = groupedRequests.find(g => g.id === confirmModal.requestId);
+              if (group) {
+                const requests = group.requests || [];
+                const approvedRequests = [];
+                
+                // Approve all requests in the group
+                for (const request of requests) {
+                  const response = await api.post(`/requests/${request.id}/approve`);
+                  if (response.data.success) {
+                    approvedRequests.push({
+                      ...request,
+                      status: 'approved',
+                      approved_by_name: 'Admin',
+                      approved_at: new Date().toISOString()
+                    });
+                  }
                 }
+                
+                // Remove all processed requests from pending
+                const processedIds = requests.map(r => r.id);
+                setPendingRequests(prev => prev.filter(req => !processedIds.includes(req.id)));
+                
+                // Add all approved requests
+                setApprovedRequests(prev => [...prev, ...approvedRequests]);
               }
             } catch (err) {
               console.error('Error approving request:', err);
@@ -1042,20 +1094,15 @@ const ViewRequest = () => {
             }
           } else if (confirmModal.mode === 'delete') {
             // For delete, open the detailed reject modal to capture optional reason
-            const requestToReject = pendingRequests.find(req => req.id === confirmModal.requestId);
-            if (requestToReject) {
+            const group = groupedRequests.find(g => g.id === confirmModal.requestId);
+            if (group) {
               const requestWithDetails = {
-                ...requestToReject,
-                employee_name: requestToReject.full_name || requestToReject.employee_name || requestToReject.name || 'Unknown',
-                employee_type: requestToReject.position || requestToReject.employee_type || 'Regular',
+                id: group.id,
+                employee_name: group.full_name,
+                employee_type: group.position,
                 role: 'Employee',
-                items: [{
-                  id: requestToReject.equipment_id,
-                  equipment_name: requestToReject.equipment_name || 'Unknown Item',
-                  name: requestToReject.equipment_name || 'Unknown Item',
-                  specifications: [requestToReject.brand, requestToReject.model].filter(Boolean).join(' ') || requestToReject.category_name || '',
-                  specs: [requestToReject.brand, requestToReject.model].filter(Boolean).join(' ') || requestToReject.category_name || ''
-                }]
+                requests: group.requests,
+                items: group.items
               };
               setModalState({ isOpen: true, type: 'reject', requestData: requestWithDetails, reason: '' });
             }
