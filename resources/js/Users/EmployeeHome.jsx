@@ -180,19 +180,11 @@ const EmployeeHome = () => {
 
     const itemsSection = document.getElementById('items-section');
     if (itemsSection) {
-      itemsSection.style.border = '3px solid #3B82F6';
-      itemsSection.style.borderRadius = '8px';
-      
       itemsSection.scrollIntoView({ 
         behavior: 'smooth',
         block: 'start',
         inline: 'nearest'
       });
-      
-      setTimeout(() => {
-        itemsSection.style.border = '';
-        itemsSection.style.borderRadius = '';
-      }, 2000);
     }
   };
 
@@ -399,21 +391,32 @@ const EmployeeHome = () => {
 
           console.log('Submitting request:', requestData);
 
+          // Build headers suitable for Laravel session auth; include Authorization only if present
+          const headers = {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest',
+          };
+          const authToken = typeof localStorage !== 'undefined' ? localStorage.getItem('auth_token') : null;
+          if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+
           const response = await fetch('/api/requests', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-CSRF-TOKEN': csrfToken,
-              'X-Requested-With': 'XMLHttpRequest',
-              'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-            },
+            headers,
             credentials: 'same-origin',
             body: JSON.stringify(requestData)
           });
 
-          const data = await response.json();
+          let data = null;
+          try {
+            data = await response.json();
+          } catch (parseErr) {
+            data = { success: false, message: 'Invalid JSON response', parseErr: String(parseErr) };
+          }
           console.log('Response status:', response.status, 'Response data:', data);
-          results.push({ success: response.ok && data.success, data });
+          const ok = response.ok && (data?.success === true || data?.status === 'success');
+          results.push({ success: ok, status: response.status, data });
         }
       }
 
@@ -435,7 +438,9 @@ const EmployeeHome = () => {
           setCartItems(cartItems);
         }
       } else {
-        alert('All requests failed. Please check your inputs and try again.');
+        const firstFailure = results[0] || {};
+        const msg = firstFailure?.data?.message || firstFailure?.data?.error || `HTTP ${firstFailure?.status || 'unknown'}`;
+        alert(`All requests failed. Please check your inputs and try again.\n\nDetails: ${msg}`);
       }
     } catch (error) {
       console.error('Failed to submit request:', error);
@@ -467,7 +472,7 @@ const EmployeeHome = () => {
         <h1 className="text-4xl font-bold text-[#2262C6] transition-all duration-300">Homepage</h1>
       </div>
 
-      <div className="pl-5 grid grid-cols-12 gap-8 items-start bg-gray-50 ">
+      <div className="pl-5 grid grid-cols-12 gap-8 items-start bg-white ">
         <div id="categories-section" className="rounded-xl shadow-xl shadow-gray-500/70 col-span-3 overflow-y-auto h-138 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           <div className="p-6 h-full">
             <h2 className="text-lg font-semibold text-gray-900 mb-6">Item Categories</h2>

@@ -5,6 +5,7 @@ import EmployeeSidebar from './employeesidebar.jsx';
 import EmployeeHome from './EmployeeHome.jsx';
 import EmployeeTransaction from './EmployeeTransaction.jsx';
 import EmployeeReturnItems from './EmployeeReturnItems.jsx';
+import { AppProvider } from '../contexts/AppContext.jsx';
 
 const EmployeeDashboard = ({ 
   employeeName: propEmployeeName,
@@ -107,7 +108,8 @@ const EmployeeDashboard = ({
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 w-full pl-60">
+    <AppProvider>
+    <div className="min-h-screen bg-white w-full pl-60">
       {/* Employee Sidebar Component */}
       <EmployeeSidebar 
         activeMenu={activeMenu}
@@ -126,11 +128,12 @@ const EmployeeDashboard = ({
           onLogoutClick={handleLogoutClick}
         />
   
-        <div className="flex-1 p-6 bg-gray-50">
+        <div className="flex-1 p-6 bg-white">
           {renderContent()}
         </div>
       </div>
     </div>
+    </AppProvider>
   );
 };
 
