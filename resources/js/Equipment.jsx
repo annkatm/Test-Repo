@@ -40,6 +40,47 @@ const Equipment = () => {
   const [categories, setCategories] = useState([]);
   const [equipment, setEquipment] = useState([]);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [expandedItems, setExpandedItems] = useState(new Set());
+  const [stockData, setStockData] = useState({});
+
+  const toggleItemExpansion = (itemName) => {
+    const newExpanded = new Set(expandedItems);
+    if (newExpanded.has(itemName)) {
+      newExpanded.delete(itemName);
+    } else {
+      newExpanded.add(itemName);
+    }
+    setExpandedItems(newExpanded);
+  };
+
+  const getStockDataForItem = (itemName, categoryId) => {
+    // Filter equipment for this specific item and category
+    return equipment.filter(eq => 
+      eq.category_id === categoryId && 
+      (eq.name === itemName || eq.brand === itemName) &&
+      (eq.status === 'available' || eq.status === 'in_use')
+    );
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'available': return 'text-green-600 bg-green-50';
+      case 'in_use': return 'text-orange-600 bg-orange-50';
+      case 'borrowed': return 'text-orange-600 bg-orange-50';
+      case 'issued': return 'text-red-600 bg-red-50';
+      default: return 'text-gray-600 bg-gray-50';
+    }
+  };
+
+  const getStatusText = (status) => {
+    switch (status) {
+      case 'available': return 'Available';
+      case 'in_use': return 'Borrowed';
+      case 'borrowed': return 'Borrowed';
+      case 'issued': return 'Issued';
+      default: return status;
+    }
+  };
 
   const fetchData = async () => {
       try {
@@ -186,15 +227,111 @@ const Equipment = () => {
                             return acc;
                           }, {});
 
-                          return Object.values(groupedEquipment).map((group, index) => (
-                            <div key={`${group.name}-${index}`} className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
-                              <div className="grid grid-cols-3 gap-4 items-center">
-                                <div className="text-left font-medium text-gray-800">{group.name}</div>
-                                <div className="text-center text-gray-700">{group.available}/{group.total}</div>
-                                <div className="text-right text-gray-800">₱{Number(group.price).toFixed(2)}</div>
+                          return Object.values(groupedEquipment).map((group, index) => {
+                            const isExpanded = expandedItems.has(group.name);
+                            const stockItems = getStockDataForItem(group.name, cat.id);
+                            
+                            return (
+                              <div key={`${group.name}-${index}`} className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+                                {/* Clickable Item Row */}
+                                <div 
+                                  className="grid grid-cols-3 gap-4 items-center p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                                  onClick={() => toggleItemExpansion(group.name)}
+                                >
+                                  <div className="text-left font-medium text-gray-800 flex items-center">
+                                    {group.name}
+                                    <svg 
+                                      className={`ml-2 h-4 w-4 text-gray-400 transition-transform duration-200 ${
+                                        isExpanded ? 'rotate-180' : ''
+                                      }`}
+                                      fill="none" 
+                                      stroke="currentColor" 
+                                      viewBox="0 0 24 24"
+                                    >
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                  </div>
+                                  <div className="text-center text-gray-700">{group.available}/{group.total}</div>
+                                  <div className="text-right text-gray-800">₱{Number(group.price).toFixed(2)}</div>
+                                </div>
+                                
+                                {/* Expandable Stock Details */}
+                                <div className={`transition-all duration-300 ease-in-out ${
+                                  isExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+                                } overflow-hidden`}>
+                                  <div className="border-t border-gray-100 bg-gray-50">
+                                    <div className="p-4">
+                                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                                        {/* Stock Table Header */}
+                                        <div className="bg-gray-100 px-4 py-3 border-b border-gray-200">
+                                          <div className="grid grid-cols-5 gap-4 text-sm font-semibold text-gray-700">
+                                            <div>Serial Number</div>
+                                            <div>Status</div>
+                                            <div>Date Added</div>
+                                            <div>Last Updated</div>
+                                            <div className="text-center">Actions</div>
+                                          </div>
+                                        </div>
+                                        
+                                        {/* Stock Table Body */}
+                                        <div className="divide-y divide-gray-200">
+                                          {stockItems.length > 0 ? (
+                                            stockItems.map((stock, stockIndex) => (
+                                              <div 
+                                                key={stock.id || stockIndex} 
+                                                className={`px-4 py-3 ${
+                                                  stockIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'
+                                                }`}
+                                              >
+                                                <div className="grid grid-cols-5 gap-4 items-center text-sm">
+                                                  <div className="font-medium text-gray-900">
+                                                    {stock.serial_number || 'N/A'}
+                                                  </div>
+                                                  <div>
+                                                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(stock.status)}`}>
+                                                      {getStatusText(stock.status)}
+                                                    </span>
+                                                  </div>
+                                                  <div className="text-gray-600">
+                                                    {stock.created_at ? new Date(stock.created_at).toLocaleDateString() : 'N/A'}
+                                                  </div>
+                                                  <div className="text-gray-600">
+                                                    {stock.updated_at ? new Date(stock.updated_at).toLocaleDateString() : 'N/A'}
+                                                  </div>
+                                                  <div className="flex justify-center space-x-2">
+                                                    <button 
+                                                      className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
+                                                      title="Edit"
+                                                    >
+                                                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                      </svg>
+                                                    </button>
+                                                    <button 
+                                                      className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors"
+                                                      title="Delete"
+                                                    >
+                                                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                      </svg>
+                                                    </button>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            ))
+                                          ) : (
+                                            <div className="px-4 py-8 text-center text-gray-500 text-sm">
+                                              No stock items found for this equipment.
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-                          ));
+                            );
+                          });
                         })()}
                       </div>
                     </div>
