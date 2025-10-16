@@ -785,7 +785,7 @@ const EmployeePage = () => {
               <h3 className="text-xl font-semibold text-blue-500 text-center mb-8">Add employee</h3>
 
               <div className="grid grid-cols-2 gap-6">
-                {/* LEFT SIDE */}
+                {/* LEFT SIDE - Z-pattern: 1, 3, 5, 7, 9 */}
                 <div className="space-y-6">
                   <ValidatedInput 
                     label="First Name" 
@@ -814,7 +814,7 @@ const EmployeePage = () => {
                     placeholder="Enter phone number" 
                     required={true}
                     error={errors.contact}
-                    tabIndex={4}
+                    tabIndex={5}
                   />
                   <ValidatedSelect
                     label="Client"
@@ -825,7 +825,7 @@ const EmployeePage = () => {
                       ...dropdownOptions.clients
                     ]}
                     error={errors.client}
-                    tabIndex={6}
+                    tabIndex={7}
                   />
                   <ValidatedSelect
                     label="Department"
@@ -836,11 +836,11 @@ const EmployeePage = () => {
                       ...dropdownOptions.departments
                     ]}
                     error={errors.department}
-                    tabIndex={8}
+                    tabIndex={9}
                   />
                 </div>
 
-                {/* RIGHT SIDE */}
+                {/* RIGHT SIDE - Z-pattern: 2, 4, 6, 8, 10 */}
                 <div className="space-y-6">
                   <ValidatedInput 
                     label="Last Name" 
@@ -957,6 +957,7 @@ const EmployeePage = () => {
                         type="button"
                         onClick={openEquipmentModal}
                         className="px-4 py-2 bg-blue-500 border border-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
+                        tabIndex={10}
                       >
                         Add New
                       </button>
@@ -966,8 +967,8 @@ const EmployeePage = () => {
               </div>
 
               <div className="mt-8 flex items-center justify-between">
-                <button onClick={resetAll} className="text-blue-500 hover:text-blue-600 font-medium">Reset all</button>
-                <button onClick={saveEmployee} className="px-8 py-3 rounded-full bg-blue-500 text-white hover:bg-blue-600 font-medium transition-colors">Save →</button>
+                <button onClick={resetAll} className="text-blue-500 hover:text-blue-600 font-medium" tabIndex={12}>Reset all</button>
+                <button onClick={saveEmployee} className="px-8 py-3 rounded-full bg-blue-500 text-white hover:bg-blue-600 font-medium transition-colors" tabIndex={11}>Save →</button>
               </div>
             </div>
           </div>
@@ -981,6 +982,7 @@ const EmployeePage = () => {
               <button onClick={closeEdit} className="absolute right-4 top-4 text-gray-400 hover:text-gray-600 text-xl">✕</button>
               <h3 className="text-xl font-semibold text-blue-500 text-center mb-8">Edit employee</h3>
               <div className="grid grid-cols-2 gap-6">
+                {/* LEFT SIDE - Z-pattern: 1, 3, 5, 7, 9 */}
                 <div className="space-y-6">
                   <ValidatedInput 
                     label="First Name" 
@@ -1035,6 +1037,7 @@ const EmployeePage = () => {
                   />
                 </div>
                 
+                {/* RIGHT SIDE - Z-pattern: 2, 4, 6, 8, 10 */}
                 <div className="space-y-6">
                   <ValidatedInput 
                     label="Last Name" 
@@ -1113,7 +1116,10 @@ const EmployeePage = () => {
                       </div>
                     </div>
                     <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
-                      <button className="px-4 py-2 bg-blue-500 border border-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium">
+                      <button 
+                        className="px-4 py-2 bg-blue-500 border border-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
+                        tabIndex={10}
+                      >
                         Add New
                       </button>
                     </div>
@@ -1122,8 +1128,8 @@ const EmployeePage = () => {
               </div>
 
               <div className="mt-8 flex items-center justify-between">
-                <button onClick={resetAll} className="text-blue-500 hover:text-blue-600 font-medium">Reset</button>
-                <button onClick={updateEmployee} className="px-8 py-3 rounded-full bg-blue-500 text-white hover:bg-blue-600 font-medium transition-colors">Update →</button>
+                <button onClick={resetAll} className="text-blue-500 hover:text-blue-600 font-medium" tabIndex={12}>Reset</button>
+                <button onClick={updateEmployee} className="px-8 py-3 rounded-full bg-blue-500 text-white hover:bg-blue-600 font-medium transition-colors" tabIndex={11}>Update →</button>
               </div>
             </div>
           </div>
@@ -1147,12 +1153,14 @@ const EmployeePage = () => {
                   <button 
                     onClick={closeDelete}
                     className="px-4 py-2 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300 font-medium transition-colors"
+                    tabIndex={1}
                   >
                     Cancel
                   </button>
                   <button 
                     onClick={confirmDelete}
                     className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 font-medium transition-colors"
+                    tabIndex={2}
                   >
                     Delete
                   </button>
@@ -1181,6 +1189,7 @@ const EmployeePage = () => {
                       value={equipmentSearchTerm}
                       onChange={(e) => setEquipmentSearchTerm(e.target.value)}
                       className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      tabIndex={1}
                     />
                   </div>
                 </div>
@@ -1289,6 +1298,7 @@ const EmployeePage = () => {
                   <button
                     onClick={closeEquipmentModal}
                     className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium transition-colors"
+                    tabIndex={2}
                   >
                     Done
                   </button>

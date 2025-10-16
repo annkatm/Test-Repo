@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Search, Bell } from "lucide-react";
 
 const EmployeeTaskbar = ({ 
@@ -15,6 +15,7 @@ const EmployeeTaskbar = ({
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [employeeName, setEmployeeName] = useState(initialEmployeeName);
+  const [searchQuery, setSearchQuery] = useState("");
   const [formData, setFormData] = useState({
     firstName: "Balmond",
     lastName: "Gwapo",
@@ -98,7 +99,25 @@ const EmployeeTaskbar = ({
               type="text"
               placeholder="Search equipment, requests, or transactions..."
               className="w-full pl-10 pr-4 py-3 rounded-full bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-colors"
-              onChange={(e) => onSearch && onSearch(e.target.value)}
+              value={searchQuery}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSearchQuery(val);
+                onSearch?.(val);
+                window.dispatchEvent(new CustomEvent('employee-search', { detail: val }));
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const val = searchQuery.trim();
+                  onSearch?.(val);
+                  window.dispatchEvent(new CustomEvent('employee-search', { detail: val }));
+                  window.dispatchEvent(new CustomEvent('employee-search-submit', { detail: val }));
+                  const target = document.querySelector('[data-employee-search-target]') || document.getElementById('items-section');
+                  if (target && typeof target.scrollIntoView === 'function') {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }
+              }}
             />
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           </div>
