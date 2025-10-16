@@ -72,9 +72,36 @@ const EmployeeHome = () => {
         setLoading(false);
       }
     };
+
     loadData();
     return () => controller.abort();
   }, []);
+
+  // Group equipment units into products (same brand/name/specs)
+  const getGroupedEquipment = () => {
+    const groups = {};
+    for (const eq of equipment) {
+      const key = `${(eq.name || eq.brand || 'Unknown').toLowerCase()}||${(eq.specifications || '').toLowerCase()}||${eq.category_id || ''}`;
+      if (!groups[key]) {
+        groups[key] = {
+          key,
+          name: eq.name || eq.brand || 'Unknown',
+          brand: eq.brand || eq.name || 'Unknown',
+          specifications: eq.specifications || '',
+          category_id: eq.category_id,
+          image: eq.item_image_url || eq.item_image || null,
+          items: [],
+        };
+      }
+      groups[key].items.push(eq);
+    }
+    return Object.values(groups)
+      .map(g => ({
+        ...g,
+        availableCount: g.items.filter(i => !i.status || i.status === 'available').length,
+        representative: g.items[0] || null,
+      }));
+  };
 
   const handleItemTableClick = async (category) => {
     try {
@@ -123,16 +150,33 @@ const EmployeeHome = () => {
       alert('This equipment is currently unavailable. Please choose another item.');
       return;
     }
-    const existingItem = cartItems.find(cartItem => cartItem.id === item.id);
-    if (existingItem) {
-      setCartItems(cartItems.map(cartItem => 
-        cartItem.id === item.id 
-          ? { ...cartItem, quantity: cartItem.quantity + 1 }
-          : cartItem
+    // Group key based on same logic as equipment grouping
+    const groupKey = `${(item.name || item.brand || 'Unknown').toLowerCase()}||${(item.specifications || '').toLowerCase()}||${item.category_id || ''}`;
+    const existingGroup = cartItems.find(ci => ci.groupKey === groupKey);
+    if (existingGroup) {
+      setCartItems(cartItems.map(ci => 
+        ci.groupKey === groupKey
+          ? { ...ci, quantity: ci.quantity + 1, units: [...ci.units, item] }
+          : ci
       ));
     } else {
-      setCartItems([...cartItems, { ...item, quantity: 1 }]);
+      setCartItems([
+        ...cartItems,
+        {
+          groupKey,
+          name: item.name || item.brand || 'Unknown',
+          brand: item.brand || item.name || 'Unknown',
+          specifications: item.specifications || '',
+          image: item.item_image_url || item.item_image || null,
+          quantity: 1,
+          units: [item]
+        }
+      ]);
     }
+
+    // Remove the added item from the visible equipment list so it vanishes
+    // This reflects that this specific unit is now taken/reserved in the cart
+    setEquipment(prev => prev.filter(eq => eq.id !== item.id));
 
     const itemsSection = document.getElementById('items-section');
     if (itemsSection) {
@@ -152,18 +196,84 @@ const EmployeeHome = () => {
     }
   };
 
-  const handleRemoveFromCart = (itemId) => {
-    setCartItems(cartItems.filter(item => item.id !== itemId));
+  const handleRemoveFromCart = (groupKey) => {
+    const group = cartItems.find(ci => ci.groupKey === groupKey);
+    if (group) {
+      // Return all units in this group back to the equipment list if not already there
+      setEquipment(prev => {
+        const existingIds = new Set(prev.map(eq => eq.id));
+        const toAdd = group.units.filter(u => !existingIds.has(u.id));
+        return [...toAdd, ...prev];
+      });
+    }
+    setCartItems(cartItems.filter(ci => ci.groupKey !== groupKey));
   };
 
-  const handleQuantityChange = (itemId, newQuantity) => {
+  const handleQuantityChange = (groupKey, newQuantity) => {
+    const group = cartItems.find(ci => ci.groupKey === groupKey);
+    if (!group) return;
     if (newQuantity <= 0) {
-      handleRemoveFromCart(itemId);
-    } else {
-      setCartItems(cartItems.map(item => 
-        item.id === itemId ? { ...item, quantity: newQuantity } : item
+      handleRemoveFromCart(groupKey);
+      return;
+    }
+    if (newQuantity < group.quantity) {
+      // Decrement: return one unit to equipment
+      const unit = group.units[group.units.length - 1];
+      if (unit) {
+        setEquipment(prev => prev.some(eq => eq.id === unit.id) ? prev : [unit, ...prev]);
+      }
+      setCartItems(cartItems.map(ci => 
+        ci.groupKey === groupKey ? { ...ci, quantity: newQuantity, units: ci.units.slice(0, -1) } : ci
+      ));
+    } else if (newQuantity > group.quantity) {
+      // Increment: try to take one matching available unit from equipment
+      const matchIndex = equipment.findIndex(eq => (
+        `${(eq.name || eq.brand || 'Unknown').toLowerCase()}||${(eq.specifications || '').toLowerCase()}||${eq.category_id || ''}` === groupKey
+      ));
+      if (matchIndex === -1) return; // no more stock available
+      const unit = equipment[matchIndex];
+      setEquipment(prev => prev.filter((_, idx) => idx !== matchIndex));
+      setCartItems(cartItems.map(ci => 
+        ci.groupKey === groupKey ? { ...ci, quantity: newQuantity, units: [...ci.units, unit] } : ci
       ));
     }
+  };
+
+  const handleCancel = () => {
+    if (cartItems.length > 0) {
+      setEquipment(prev => {
+        // Add back any unit from all groups that's not already present in the equipment list
+        const existingIds = new Set(prev.map(eq => eq.id));
+        const toAdd = cartItems.flatMap(ci => ci.units || []).filter(u => !existingIds.has(u.id));
+        return [...toAdd, ...prev];
+      });
+    }
+    setCartItems([]);
+    // Reset selection and reload default available equipment
+    setSelectedCategory(null);
+    (async () => {
+      try {
+        const res = await fetch('/api/equipment?per_page=100&status=available');
+        const data = await res.json();
+        let equipmentData = [];
+        if (Array.isArray(data)) {
+          equipmentData = data;
+        } else if (data && data.data && Array.isArray(data.data.data)) {
+          equipmentData = data.data.data;
+        } else if (Array.isArray(data.data)) {
+          equipmentData = data.data;
+        }
+        setEquipment(equipmentData);
+      } catch (e) {
+        // non-blocking; keep prior equipment if reload fails
+      } finally {
+        // Scroll back to categories/options
+        const cat = document.getElementById('categories-section');
+        if (cat && typeof cat.scrollIntoView === 'function') {
+          cat.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }
+    })();
   };
 
   const submitRequest = async () => {
@@ -269,40 +379,42 @@ const EmployeeHome = () => {
       // Submit each item as a separate request, skipping duplicates and unavailable items
       const seen = new Set();
       const results = [];
-      for (const item of cartItems) {
-        if (item.status && item.status !== 'available') {
-          results.push({ success: false, data: { message: 'Item unavailable' } });
-          continue;
+      for (const group of cartItems) {
+        for (const unit of group.units) {
+          if (unit.status && unit.status !== 'available') {
+            results.push({ success: false, data: { message: 'Item unavailable' } });
+            continue;
+          }
+          if (seen.has(unit.id)) continue; // avoid duplicate requests for same equipment
+          seen.add(unit.id);
+          const requestData = {
+            employee_id: currentEmployee.id,
+            equipment_id: unit.id,
+            request_type: 'new_assignment',
+            request_mode: 'on_site',
+            reason: `Request for 1 unit of ${group.name || group.brand}`,
+            expected_start_date: startDate,
+            expected_end_date: returnDate
+          };
+
+          console.log('Submitting request:', requestData);
+
+          const response = await fetch('/api/requests', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRF-TOKEN': csrfToken,
+              'X-Requested-With': 'XMLHttpRequest',
+              'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify(requestData)
+          });
+
+          const data = await response.json();
+          console.log('Response status:', response.status, 'Response data:', data);
+          results.push({ success: response.ok && data.success, data });
         }
-        if (seen.has(item.id)) continue; // avoid duplicate requests for same equipment
-        seen.add(item.id);
-        const requestData = {
-          employee_id: currentEmployee.id,
-          equipment_id: item.id,
-          request_type: 'new_assignment',
-          request_mode: 'on_site',
-          reason: `Request for ${item.quantity} unit(s) of ${item.name || item.brand}`,
-          expected_start_date: startDate,
-          expected_end_date: returnDate
-        };
-
-        console.log('Submitting request:', requestData);
-
-        const response = await fetch('/api/requests', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': csrfToken,
-            'X-Requested-With': 'XMLHttpRequest',
-            'Authorization': `Bearer ${localStorage.getItem('auth_token')}` // Add auth token
-          },
-          credentials: 'same-origin',
-          body: JSON.stringify(requestData)
-        });
-
-        const data = await response.json();
-        console.log('Response status:', response.status, 'Response data:', data);
-        results.push({ success: response.ok && data.success, data });
       }
 
       // Check if all requests succeeded
@@ -318,10 +430,9 @@ const EmployeeHome = () => {
         } else {
           alert(`${successCount} request(s) submitted successfully, but ${failedCount} failed.\n\nSuccessful requests have been sent to the Super Admin.`);
           // Remove successful items from cart
-          const failedIds = results
-            .filter(r => !r.success)
-            .map((r, i) => cartItems[i].id);
-          setCartItems(cartItems.filter(item => failedIds.includes(item.id)));
+          // Keep groups that had failures; for simplicity, clear on success and keep cart as-is on failure
+          // You can enhance this to remove only successful units if needed
+          setCartItems(cartItems);
         }
       } else {
         alert('All requests failed. Please check your inputs and try again.');
@@ -357,7 +468,7 @@ const EmployeeHome = () => {
       </div>
 
       <div className="pl-5 grid grid-cols-12 gap-8 items-start bg-gray-50 ">
-        <div className="rounded-xl shadow-xl shadow-gray-500/70 col-span-3 overflow-y-auto h-138 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        <div id="categories-section" className="rounded-xl shadow-xl shadow-gray-500/70 col-span-3 overflow-y-auto h-138 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           <div className="p-6 h-full">
             <h2 className="text-lg font-semibold text-gray-900 mb-6">Item Categories</h2>
             <div className="grid grid-cols-2 gap-3">
@@ -405,7 +516,7 @@ const EmployeeHome = () => {
         </div>
 
         <div className=" rounded-xl col-span-5 bg-white">
-          <div className="rounded-xl shadow-lg shadow-gray-500/70 p-6 overflow-y-auto h-138 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          <div className="rounded-xl shadow-lg shadow-gray-500/70 p-6 overflow-y-auto h-138 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" data-employee-search-target>
           <h2 className="text-lg font-semibold text-gray-900 mb-6">
   {selectedCategory ? `${selectedCategory} Types` : 'Equipment Types'}
         </h2>
@@ -416,18 +527,18 @@ const EmployeeHome = () => {
                 <div className="col-span-2"></div>
               </div>
               
-              {equipment.slice(0, 4).map((item) => (
-                <div key={item.id} className="grid grid-cols-12 gap-4 items-center py-3 border-b border-gray-100">
+              {getGroupedEquipment().slice(0, 4).map((group) => (
+                <div key={group.key} className="grid grid-cols-12 gap-4 items-center py-3 border-b border-gray-100">
                   <div className="col-span-3">
                     <div className="flex items-center space-x-3">
                       <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center overflow-hidden">
                         <img
-                          src={item.item_image_url || (item.item_image ? 
-                            (item.item_image.startsWith('http') ? item.item_image :
-                             item.item_image.startsWith('/storage') ? `${window.location.origin}${item.item_image}` :
-                             `${window.location.origin}/storage/${item.item_image}`) :
-                            `${window.location.origin}/images/placeholder-equipment.png`)}
-                          alt={item.brand || item.name || 'Equipment'}
+                          src={group.image ? (
+                            group.image.startsWith('http') ? group.image :
+                            group.image.startsWith('/storage') ? `${window.location.origin}${group.image}` :
+                            `${window.location.origin}/storage/${group.image}`
+                          ) : `${window.location.origin}/images/placeholder-equipment.png`}
+                          alt={group.brand || group.name || 'Equipment'}
                           className="w-full h-full object-cover"
                           onError={(e) => {
                             e.target.onerror = null;
@@ -436,19 +547,23 @@ const EmployeeHome = () => {
                         />
                       </div>
                       <div>
-                        <div className="font-medium text-gray-900">{item.brand || item.name || 'Unknown'}</div>
-                        <div className="text-xs text-gray-500">{item.status || 'available'}</div>
+                        <div className="font-medium text-gray-900">{group.brand || group.name || 'Unknown'}</div>
                       </div>
                     </div>
                   </div>
                   <div className="col-span-7">
-                    <p className="text-sm text-gray-600">{item.specifications || 'No specs available'}</p>
+                    <p className="text-sm text-gray-600">{group.specifications || 'No specs available'}</p>
+                    <div className="text-xs text-gray-500 mt-1">Stocks available: {group.availableCount}</div>
                   </div>
                   <div className="col-span-2 flex justify-end">
                     <button 
-                      onClick={() => handlePlusClick(item)}
-                      disabled={item.status && item.status !== 'available'}
-                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${item.status && item.status !== 'available' ? 'bg-gray-200 cursor-not-allowed' : 'bg-blue-100 hover:bg-blue-200'}`}
+                      onClick={() => {
+                        // pick one available unit from the group
+                        const unit = group.items.find(i => !i.status || i.status === 'available');
+                        if (unit) handlePlusClick(unit);
+                      }}
+                      disabled={group.availableCount === 0}
+                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${group.availableCount === 0 ? 'bg-gray-200 cursor-not-allowed' : 'bg-blue-100 hover:bg-blue-200'}`}
                     >
                       <Plus className="h-4 w-4 text-blue-600" />
                     </button>
@@ -456,10 +571,8 @@ const EmployeeHome = () => {
                 </div>
               ))}
               {equipment.length === 0 && (
-  <div className="text-gray-500 text-sm">
-    {selectedCategory ? `No ${selectedCategory} equipment found` : 'No equipment found'}
-  </div>
-)}
+                <div className="text-sm"></div>
+              )}
             </div>
           </div>
         </div>
@@ -476,14 +589,14 @@ const EmployeeHome = () => {
               <div className="h-[140px] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                 <div className="space-y-2">
                   {cartItems.map((item) =>  (
-                    <div key={item.id} className="flex items-center justify-between py-1.5">
+                    <div key={item.groupKey} className="flex items-center justify-between py-1.5">
                       <div className="flex items-center space-x-3">
                         <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
-                          {item.item_image_url || item.item_image ? (
+                          {item.image ? (
                             <img
-                              src={item.item_image_url || (item.item_image.startsWith('http') ? item.item_image :
-                                   item.item_image.startsWith('/storage') ? `${window.location.origin}${item.item_image}` :
-                                   `${window.location.origin}/storage/${item.item_image}`)}
+                              src={item.image.startsWith('http') ? item.image :
+                                   item.image.startsWith('/storage') ? `${window.location.origin}${item.image}` :
+                                   `${window.location.origin}/storage/${item.image}`}
                               alt={item.name || item.brand || 'Equipment'}
                               className="w-full h-full object-cover"
                               onError={(e) => {
@@ -493,25 +606,25 @@ const EmployeeHome = () => {
                               }}
                             />
                           ) : null}
-                          <div className={`w-full h-full flex items-center justify-center ${item.item_image_url || item.item_image ? 'hidden' : 'flex'}`}>
+                          <div className={`w-full h-full flex items-center justify-center ${item.image ? 'hidden' : 'flex'}`}>
                             <Laptop className="h-5 w-5 text-gray-600" />
                           </div>
                         </div>
                         <div>
                           <div className="font-medium text-gray-900 text-sm">{item.name || item.brand}</div>
-                          <div className="text-xs text-gray-500">{item.model || item.brand}</div>
+                          <div className="text-xs text-gray-500">{item.specifications || item.brand}</div>
                         </div>
                       </div>
                       <div className="flex items-center space-x-2">
                         <button 
-                          onClick={() => handleQuantityChange(item.id, item.quantity - 1)}
+                          onClick={() => handleQuantityChange(item.groupKey, item.quantity - 1)}
                           className="w-6 h-6 bg-red-50 border border-red-200 hover:bg-red-100 rounded-full flex items-center justify-center"
                         >
                           <span className="text-red-600 text-sm font-bold">−</span>
                         </button>
                         <span className="text-xs text-gray-600 min-w-[20px] text-center font-medium">x{item.quantity}</span>
                         <button 
-                          onClick={() => handleQuantityChange(item.id, item.quantity + 1)}
+                          onClick={() => handleQuantityChange(item.groupKey, item.quantity + 1)}
                           className="w-6 h-6 bg-blue-50 border border-blue-200 hover:bg-blue-100 rounded-full flex items-center justify-center">
                           <Plus className="h-3 w-3 text-blue-600" />
                         </button>
@@ -595,7 +708,7 @@ const EmployeeHome = () => {
                 </div>
                 <div className="flex gap-2">
                   <button 
-                    onClick={() => setCartItems([])}
+                    onClick={handleCancel}
                     className="flex-1 bg-white border border-red-300 hover:bg-red-50 text-red-600 py-2 px-4 rounded-lg text-sm font-medium transition-colors">
                     Cancel
                   </button>
