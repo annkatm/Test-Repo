@@ -746,19 +746,12 @@ const ViewRequest = () => {
                 <div className="text-base font-medium text-gray-900">{group.full_name}</div>
               </div>
               
-              {/* Items with count */}
+              {/* Items (plain text, aligned like Name) */}
               <div className="flex-1">
-                <div className="flex items-center space-x-2">
-                  <span className="inline-block text-gray-900 text-sm font-medium px-3 py-1 rounded-md">
-                    {group.items.length === 1 
-                      ? group.items[0].equipment_name 
-                      : `${group.items.length} items`}
-                  </span>
-                  {group.items.length > 1 && (
-                    <span className="inline-flex items-center justify-center w-6 h-6 text-xs font-bold text-white bg-blue-600 rounded-full">
-                      {group.items.length}
-                    </span>
-                  )}
+                <div className="text-base font-medium text-gray-900">
+                  {group.items.length === 1
+                    ? group.items[0].equipment_name
+                    : `${group.items.length} items`}
                 </div>
               </div>
               

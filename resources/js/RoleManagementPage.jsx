@@ -316,7 +316,7 @@ const RoleManagementPage = () => {
           {/* Table Headers */}
           <div className="grid grid-cols-2 gap-4 mb-4 text-sm font-medium text-gray-800 uppercase tracking-wider">
             <div>Names</div>
-            <div>Positions</div>
+            <div className="text-center">Positions</div>
           </div>
           
           {/* Admin List */}
@@ -335,7 +335,7 @@ const RoleManagementPage = () => {
                     : 'bg-white border-gray-200 hover:shadow'
                 }`}
               >
-                <div className="grid grid-cols-2 items-center">
+                <div className="grid grid-cols-2 items-center gap-4">
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-gray-600 truncate">{admin.name}</span>
                     {admin.isCustomPermissions && (
@@ -344,7 +344,7 @@ const RoleManagementPage = () => {
                       </span>
                     )}
                   </div>
-                  <div className="text-right text-gray-900 uppercase text-meduim tracking-wide">{admin.position}</div>
+                  <div className="text-center text-gray-900 uppercase text-meduim tracking-wide">{admin.position}</div>
                 </div>
               </div>
             ))}
