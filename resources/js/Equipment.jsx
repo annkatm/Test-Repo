@@ -406,7 +406,7 @@ const Equipment = () => {
       {/* Success Popup */}
       {showSuccess && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black bg-opacity-10" onClick={() => setShowSuccess(false)} />
+          <div className="absolute inset-0" onClick={() => setShowSuccess(false)} />
           <div className="relative bg-white rounded-lg shadow-lg p-4 flex items-center max-w-sm w-full mx-4 animate-fade-in">
             <div className="flex items-start w-full">
               <div className="flex-shrink-0 mt-0.5">
@@ -439,7 +439,7 @@ const Equipment = () => {
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && deletingItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black bg-opacity-50" onClick={cancelDelete} />
+          <div className="absolute inset-0" onClick={cancelDelete} />
           <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
             <div className="p-6">
               <div className="flex items-center mb-4">
@@ -494,7 +494,7 @@ const Equipment = () => {
       {/* Edit Serial Number Modal */}
       {showEditModal && editingItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black bg-opacity-50" onClick={cancelEdit} />
+          <div className="absolute inset-0" onClick={cancelEdit} />
           <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
             <div className="p-6">
               <div className="flex items-center mb-4">

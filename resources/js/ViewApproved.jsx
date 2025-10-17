@@ -166,7 +166,16 @@ const ViewApproved = () => {
       }
 
       if (!txId) {
-        alert('No transaction found for this approved request to release.');
+        if (window.showToast) {
+          window.showToast({
+            type: 'error',
+            title: 'Release Failed',
+            message: 'No transaction found for this approved request to release.',
+            duration: 6000
+          });
+        } else {
+          alert('No transaction found for this approved request to release.');
+        }
         return;
       }
 
@@ -190,12 +199,30 @@ const ViewApproved = () => {
         setConfirmModal({ isOpen: false, type: null, transactionData: null });
         
         // Show success message
-        alert('Equipment released successfully!');
+        if (window.showToast) {
+          window.showToast({
+            type: 'success',
+            title: 'Equipment Released',
+            message: 'Equipment released successfully!',
+            duration: 4000
+          });
+        } else {
+          alert('Equipment released successfully!');
+        }
       }
     } catch (err) {
       console.error('Error releasing equipment:', err);
       const errorMessage = err.response?.data?.message || err.message || 'Unknown error occurred';
-      alert('Error releasing equipment: ' + errorMessage);
+      if (window.showToast) {
+        window.showToast({
+          type: 'error',
+          title: 'Release Failed',
+          message: 'Error releasing equipment: ' + errorMessage,
+          duration: 6000
+        });
+      } else {
+        alert('Error releasing equipment: ' + errorMessage);
+      }
     }
   };
 
@@ -204,14 +231,32 @@ const ViewApproved = () => {
     try {
       if (!transactionData || !transactionData.id) {
         console.error('Invalid row for printing:', transactionData);
-        alert('Error: Invalid data for printing');
+        if (window.showToast) {
+          window.showToast({
+            type: 'error',
+            title: 'Print Error',
+            message: 'Error: Invalid data for printing',
+            duration: 5000
+          });
+        } else {
+          alert('Error: Invalid data for printing');
+        }
         return;
       }
 
       // Rows in ViewApproved are requests; resolve the related transaction by request_id
       const txList = await transactionService.getAll({ request_id: transactionData.id });
       if (!txList?.success || !Array.isArray(txList.data) || txList.data.length === 0) {
-        alert('No transaction found for this approved request.');
+        if (window.showToast) {
+          window.showToast({
+            type: 'error',
+            title: 'Print Error',
+            message: 'No transaction found for this approved request.',
+            duration: 5000
+          });
+        } else {
+          alert('No transaction found for this approved request.');
+        }
         return;
       }
 
@@ -252,7 +297,16 @@ const ViewApproved = () => {
       setPrintModal({ isOpen: true, transactionData: flatFallback });
     } catch (err) {
       console.error('Error fetching print data:', err);
-      alert('Error generating receipt: ' + apiUtils.handleError(err));
+      if (window.showToast) {
+        window.showToast({
+          type: 'error',
+          title: 'Print Error',
+          message: 'Error generating receipt: ' + apiUtils.handleError(err),
+          duration: 6000
+        });
+      } else {
+        alert('Error generating receipt: ' + apiUtils.handleError(err));
+      }
     }
   };
 
