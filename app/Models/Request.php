@@ -26,6 +26,10 @@ class Request extends Model
         'approved_at',
         'approval_notes',
         'rejection_reason',
+        'original_transaction_id',
+        'evidence_file',
+        'appeal_reason',
+        'appeal_date',
     ];
 
     protected $casts = [

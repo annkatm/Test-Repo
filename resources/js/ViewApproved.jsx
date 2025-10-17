@@ -4,6 +4,7 @@ import GlobalHeader from './components/GlobalHeader';
 import HomeSidebar from './HomeSidebar';
 import ConfirmModal from './components/ConfirmModal.jsx';
 import PrintReceipt from './components/PrintReceipt.jsx';
+import ViewTransactionModal from './components/ViewTransactionModal';
 import { transactionService, apiUtils } from './services/api.js';
 import api from './services/api';
 
@@ -50,6 +51,11 @@ const ViewApproved = () => {
   const [printModal, setPrintModal] = useState({
     isOpen: false,
     transactionData: null
+  });
+
+  const [viewHolderModal, setViewHolderModal] = useState({
+    isOpen: false,
+    holderData: null
   });
 
   // Track clicked items
@@ -265,6 +271,23 @@ const ViewApproved = () => {
 
   const closePrintModal = () => {
     setPrintModal({ isOpen: false, transactionData: null });
+  };
+
+  const handleViewHolder = (holderId) => {
+    const holder = currentHolders.find(h => h.id === holderId);
+    if (holder) {
+      setViewHolderModal({
+        isOpen: true,
+        holderData: holder
+      });
+    }
+  };
+
+  const handleCloseViewHolderModal = () => {
+    setViewHolderModal({
+      isOpen: false,
+      holderData: null
+    });
   };
 
   return (
@@ -489,12 +512,8 @@ const ViewApproved = () => {
                       currentHolders.map((row) => (
                         <tr 
                           key={row.id}
-                          onClick={() => handleRowClick(row.id, 'currentHolder')}
-                          className={`border-b last:border-0 cursor-pointer transition-colors duration-200 ${
-                            isItemClicked(row.id, 'currentHolder') 
-                              ? 'bg-gray-200 hover:bg-blue-50' 
-                              : 'hover:bg-blue-50'
-                          }`}
+                          onClick={() => handleViewHolder(row.id)}
+                          className="border-b last:border-0 cursor-pointer transition-colors duration-200 hover:bg-blue-50"
                         >
                           <td className="py-3 px-3">{row.full_name || 'N/A'}</td>
                           <td className="py-3 px-3">{row.position || 'N/A'}</td>
@@ -621,6 +640,13 @@ const ViewApproved = () => {
         isOpen={printModal.isOpen}
         onClose={closePrintModal}
         transactionData={printModal.transactionData}
+      />
+
+      {/* View Holder Modal */}
+      <ViewTransactionModal
+        isOpen={viewHolderModal.isOpen}
+        onClose={handleCloseViewHolderModal}
+        transactionData={viewHolderModal.holderData}
       />
     </div>
   );

@@ -82,6 +82,11 @@ const ViewRequest = () => {
     transactionData: null
   });
 
+  const [viewHolderModal, setViewHolderModal] = useState({
+    isOpen: false,
+    holderData: null
+  });
+
   const handleSelect = (next) => {
     setView(next);
     setIsMenuOpen(false);
@@ -315,6 +320,16 @@ const ViewRequest = () => {
     }
   };
 
+  const handleViewHolder = (holderId) => {
+    const holder = currentHolders.find(h => h.id === holderId);
+    if (holder) {
+      setViewHolderModal({
+        isOpen: true,
+        holderData: holder
+      });
+    }
+  };
+
   const handleCloseViewModal = () => {
     setViewModal({
       isOpen: false,
@@ -326,6 +341,13 @@ const ViewRequest = () => {
     setEditModal({
       isOpen: false,
       transactionData: null
+    });
+  };
+
+  const handleCloseViewHolderModal = () => {
+    setViewHolderModal({
+      isOpen: false,
+      holderData: null
     });
   };
 
@@ -621,6 +643,46 @@ const ViewRequest = () => {
         }
 
         .btn:hover .btn-svg { fill: #ffffff; filter: none; animation: none; }
+
+        /* New request blinking glow effect */
+        .new-request-glow {
+          animation: newRequestPulse 2s ease-in-out infinite;
+          box-shadow: 0 0 20px rgba(0, 100, 255, 0.3), 0 0 40px rgba(0, 100, 255, 0.2);
+        }
+
+        @keyframes newRequestPulse {
+          0%, 100% {
+            box-shadow: 0 0 20px rgba(0, 100, 255, 0.3), 0 0 40px rgba(0, 100, 255, 0.2);
+            border-color: rgba(0, 100, 255, 0.5);
+          }
+          50% {
+            box-shadow: 0 0 30px rgba(0, 100, 255, 0.6), 0 0 60px rgba(0, 100, 255, 0.4);
+            border-color: rgba(0, 100, 255, 0.8);
+          }
+        }
+
+        .new-request-indicator {
+          position: absolute;
+          top: -8px;
+          right: -8px;
+          width: 16px;
+          height: 16px;
+          background: linear-gradient(45deg, #ff6b6b, #ff8e8e);
+          border-radius: 50%;
+          animation: newRequestIndicator 1.5s ease-in-out infinite;
+          z-index: 10;
+        }
+
+        @keyframes newRequestIndicator {
+          0%, 100% {
+            transform: scale(1);
+            opacity: 1;
+          }
+          50% {
+            transform: scale(1.2);
+            opacity: 0.8;
+          }
+        }
       `}</style>
       <HomeSidebar />
     <div className="flex-1 flex flex-col">
@@ -735,12 +797,26 @@ const ViewRequest = () => {
         </div>
       ) : (
         <div className="space-y-3">
-          {groupedRequests.map((group, index) => (
+          {groupedRequests.map((group, index) => {
+            // Determine if this is a new request (created within last 24 hours)
+            const isNewRequest = group.requests?.[0]?.created_at && 
+              (new Date() - new Date(group.requests[0].created_at)) < 24 * 60 * 60 * 1000;
+            
+            return (
             <div
               key={group.id}
               onClick={() => handleRowClick(group.id)}
-              className="flex items-center py-4 px-4 rounded-xl cursor-pointer border-2 bg-white border-gray-300 hover:bg-blue-50 hover:border-blue-400 transition-all duration-200"
+              className={`relative flex items-center py-4 px-4 rounded-xl cursor-pointer border-2 bg-white border-gray-300 hover:bg-blue-50 hover:border-blue-400 transition-all duration-200 ${
+                isNewRequest ? 'new-request-glow' : ''
+              }`}
             >
+              {/* NEW indicator */}
+              {isNewRequest && (
+                <div className="new-request-indicator">
+                  <span className="text-xs font-bold text-white">NEW</span>
+                </div>
+              )}
+              
               {/* Name */}
               <div className="flex-1">
                 <div className="text-base font-medium text-gray-900">{group.full_name}</div>
@@ -811,7 +887,8 @@ const ViewRequest = () => {
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -880,7 +957,11 @@ const ViewRequest = () => {
                 </tr>
               ) : (
                 currentHolders.map((row) => (
-                  <tr key={row.id} className="border-b border-gray-100 last:border-0 hover:bg-blue-50">
+                  <tr 
+                    key={row.id} 
+                    onClick={() => handleViewHolder(row.id)}
+                    className="border-b border-gray-100 last:border-0 hover:bg-blue-50 cursor-pointer transition-colors duration-200"
+                  >
                     <td className="py-4 px-6 text-sm font-medium text-gray-900">
                       {row.name || 'John Doe'}
                     </td>
@@ -1121,6 +1202,13 @@ const ViewRequest = () => {
         onClose={handleCloseEditModal}
         transactionData={editModal.transactionData}
         onUpdate={handleTransactionUpdate}
+      />
+
+      {/* View Holder Modal */}
+      <ViewTransactionModal
+        isOpen={viewHolderModal.isOpen}
+        onClose={handleCloseViewHolderModal}
+        transactionData={viewHolderModal.holderData}
       />
     </div>
   );
