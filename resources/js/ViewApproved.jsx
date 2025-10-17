@@ -351,7 +351,16 @@ const ViewApproved = () => {
     } catch (err) {
       console.error('Error releasing equipment:', err);
       const errorMessage = err.response?.data?.message || err.message || 'Unknown error occurred';
-      alert('Error releasing equipment: ' + errorMessage);
+      if (window.showToast) {
+        window.showToast({
+          type: 'error',
+          title: 'Release Failed',
+          message: 'Error releasing equipment: ' + errorMessage,
+          duration: 6000
+        });
+      } else {
+        alert('Error releasing equipment: ' + errorMessage);
+      }
     }
   };
 
@@ -449,7 +458,16 @@ const ViewApproved = () => {
       
       if (!requests || requests.length === 0) {
         console.error('Invalid row for printing:', transactionData);
-        alert('Error: Invalid data for printing');
+        if (window.showToast) {
+          window.showToast({
+            type: 'error',
+            title: 'Print Error',
+            message: 'Error: Invalid data for printing',
+            duration: 5000
+          });
+        } else {
+          alert('Error: Invalid data for printing');
+        }
         return;
       }
 
@@ -538,7 +556,16 @@ const ViewApproved = () => {
       setPrintModal({ isOpen: true, transactionData: printData });
     } catch (err) {
       console.error('Error fetching print data:', err);
-      alert('Error generating receipt: ' + apiUtils.handleError(err));
+      if (window.showToast) {
+        window.showToast({
+          type: 'error',
+          title: 'Print Error',
+          message: 'Error generating receipt: ' + apiUtils.handleError(err),
+          duration: 6000
+        });
+      } else {
+        alert('Error generating receipt: ' + apiUtils.handleError(err));
+      }
     }
   };
 
