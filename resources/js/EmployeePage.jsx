@@ -211,6 +211,11 @@ const EmployeePage = () => {
         // Handle both data structures (data.data or data.data.data)
         const equipmentList = Array.isArray(data.data) ? data.data : (data.data.data || []);
         
+        // Debug: Log equipment structure to verify specs field
+        if (equipmentList.length > 0) {
+          console.log('Equipment sample:', equipmentList[0]);
+        }
+        
         // Map equipment with category information
         const equipmentWithCategories = equipmentList.map(item => ({
           ...item,
@@ -406,7 +411,7 @@ const EmployeePage = () => {
     const equipmentData = issuedEquipment.map(eq => ({
       id: eq.id,
       name: eq.name,
-      specs: eq.specs,
+      specs: eq.specs || eq.specifications || eq.description || 'N/A',
       serial_number: eq.serial_number
     }));
 
@@ -499,7 +504,7 @@ const EmployeePage = () => {
     const equipmentData = issuedEquipment.map(eq => ({
       id: eq.id,
       name: eq.name,
-      specs: eq.specs,
+      specs: eq.specs || eq.specifications || eq.description || 'N/A',
       serial_number: eq.serial_number
     }));
     
@@ -753,20 +758,39 @@ const EmployeePage = () => {
                     </div>
                     <div className="max-h-40 overflow-y-auto">
                       <div className="divide-y divide-gray-200">
-                        <div className="px-4 py-3">
-                          <div className="grid grid-cols-3 gap-4 items-center">
-                            <div className="text-blue-600 underline cursor-pointer font-medium">Laptop</div>
-                            <div className="text-gray-700 text-sm leading-tight">23.8" IPS panel, 1920x1080</div>
-                            <div className="text-gray-700 text-sm">JS23434</div>
-                          </div>
-                        </div>
-                        <div className="px-4 py-3">
-                          <div className="grid grid-cols-3 gap-4 items-center">
-                            <div className="text-blue-600 underline cursor-pointer font-medium">Mouse</div>
-                            <div className="text-gray-700 text-sm leading-tight">Logitech G Pro X Superlight 2</div>
-                            <div className="text-gray-700 text-sm">YT56456</div>
-                          </div>
-                        </div>
+                        {(() => {
+                          try {
+                            const items = viewing.issuedItem ? JSON.parse(viewing.issuedItem) : [];
+                            if (!Array.isArray(items) || items.length === 0) {
+                              return (
+                                <div className="px-4 py-3 text-center text-gray-500">
+                                  No items issued
+                                </div>
+                              );
+                            }
+                            return items.map((item, index) => (
+                              <div key={index} className="px-4 py-3">
+                                <div className="grid grid-cols-3 gap-4 items-center">
+                                  <div className="text-blue-600 underline cursor-pointer font-medium">
+                                    {item.name || 'N/A'}
+                                  </div>
+                                  <div className="text-gray-700 text-sm leading-tight">
+                                    {item.specs || 'N/A'}
+                                  </div>
+                                  <div className="text-gray-700 text-sm">
+                                    {item.serial_number || 'N/A'}
+                                  </div>
+                                </div>
+                              </div>
+                            ));
+                          } catch (e) {
+                            return (
+                              <div className="px-4 py-3 text-center text-gray-500">
+                                No items issued
+                              </div>
+                            );
+                          }
+                        })()}
                       </div>
                     </div>
                   </div>
