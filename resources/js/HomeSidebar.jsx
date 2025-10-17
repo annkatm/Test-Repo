@@ -195,6 +195,10 @@ const HomeSidebar = ({ onSelect }) => {
           src="/images/Frame_89-removebg-preview.png"
           alt="iREPLY Logo"
           className="h-16 w-auto"
+          onError={(e) => {
+            e.target.onerror = null;
+            e.target.src = '/images/placeholder-equipment.png';
+          }}
         />
       </div>
 

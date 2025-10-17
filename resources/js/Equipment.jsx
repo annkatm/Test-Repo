@@ -52,6 +52,10 @@ const Equipment = () => {
   const [editingItem, setEditingItem] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editSerialNumber, setEditSerialNumber] = useState('');
+  const [contextMenu, setContextMenu] = useState(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedItemDetails, setSelectedItemDetails] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null); // { src, alt }
 
   const toggleExpanded = (itemName) => {
     const newExpanded = new Set(expandedItems);
@@ -112,6 +116,86 @@ const Equipment = () => {
     setEditSerialNumber('');
   };
 
+  const handleContextMenu = (e, group) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    console.log('Context menu triggered for:', group.name); // Debug log
+    
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      group: group
+    });
+  };
+
+  const handleViewDetails = () => {
+    if (contextMenu?.group) {
+      const items = individualEquipment[contextMenu.group.name] || [];
+      if (items.length > 0) {
+        const firstItem = items[0];
+        // Map category details from categories list
+        const category = categories.find(c => c.id === firstItem?.category_id);
+        // Resolve images coming from backend naming
+        const resolvedItemImage = firstItem?.item_image_url || (firstItem?.item_image ? `/storage/${firstItem.item_image}` : firstItem?.image) || category?.image || null;
+        const resolvedReceiptImage = firstItem?.receipt_image_url || (firstItem?.receipt_image ? `/storage/${firstItem.receipt_image}` : firstItem?.receipt) || null;
+
+        const resolvedDescription = firstItem?.description || firstItem?.specifications || firstItem?.notes || category?.description || null;
+
+        setSelectedItemDetails({
+          ...contextMenu.group,
+          items: items,
+          image: resolvedItemImage,
+          receipt: resolvedReceiptImage,
+          brand: firstItem?.brand || null,
+          supplier: firstItem?.supplier || firstItem?.location || null,
+          description: resolvedDescription,
+          purchase_price: firstItem?.purchase_price || contextMenu.group.price,
+          category_id: firstItem?.category_id || null,
+          category_name: category?.name || null,
+          category_image: category?.image || null,
+          category_description: category?.description || null,
+          created_at: firstItem?.created_at || null,
+          serial_number: firstItem?.serial_number || null,
+          model: firstItem?.model || null,
+          specifications: firstItem?.specifications || null,
+          asset_tag: firstItem?.asset_tag || null,
+          condition: firstItem?.condition || null,
+          purchase_date: firstItem?.purchase_date || null,
+          warranty_expiry: firstItem?.warranty_expiry || null,
+          notes: firstItem?.notes || null,
+          location: firstItem?.location || null
+        });
+        setShowDetailsModal(true);
+      }
+    }
+    setContextMenu(null);
+  };
+
+  const closeDetailsModal = () => {
+    setShowDetailsModal(false);
+    setSelectedItemDetails(null);
+  };
+
+  // Close context menu when clicking outside
+  useEffect(() => {
+    const handleClick = () => setContextMenu(null);
+    const handleContextMenuGlobal = (e) => {
+      if (contextMenu) {
+        e.preventDefault();
+      }
+    };
+    
+    if (contextMenu) {
+      document.addEventListener('click', handleClick);
+      document.addEventListener('contextmenu', handleContextMenuGlobal);
+      return () => {
+        document.removeEventListener('click', handleClick);
+        document.removeEventListener('contextmenu', handleContextMenuGlobal);
+      };
+    }
+  }, [contextMenu]);
+
   const confirmDelete = async () => {
     if (!deletingItem) return;
 
@@ -138,26 +222,6 @@ const Equipment = () => {
   const cancelDelete = () => {
     setShowDeleteConfirm(false);
     setDeletingItem(null);
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'available': return 'text-green-600 bg-green-50';
-      case 'in_use': return 'text-orange-600 bg-orange-50';
-      case 'borrowed': return 'text-orange-600 bg-orange-50';
-      case 'issued': return 'text-red-600 bg-red-50';
-      default: return 'text-gray-600 bg-gray-50';
-    }
-  };
-
-  const getStatusText = (status) => {
-    switch (status) {
-      case 'available': return 'Available';
-      case 'in_use': return 'Borrowed';
-      case 'borrowed': return 'Borrowed';
-      case 'issued': return 'Issued';
-      default: return status;
-    }
   };
 
   const fetchData = async () => {
@@ -210,9 +274,22 @@ const Equipment = () => {
     const handler = () => fetchData();
     window.addEventListener('categories:updated', handler);
     window.addEventListener('equipment:updated', handler);
+    
+    // Prevent default context menu on the entire page
+    const preventDefaultContextMenu = (e) => {
+      const target = e.target;
+      // Only prevent if clicking on equipment items
+      if (target.closest('.equipment-item-row')) {
+        e.preventDefault();
+      }
+    };
+    
+    document.addEventListener('contextmenu', preventDefaultContextMenu);
+    
     return () => {
       window.removeEventListener('categories:updated', handler);
       window.removeEventListener('equipment:updated', handler);
+      document.removeEventListener('contextmenu', preventDefaultContextMenu);
     };
   }, []);
 
@@ -313,11 +390,14 @@ const Equipment = () => {
                             return (
                               <div key={`${group.name}-${index}`} className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
                                 <div 
-                                  className="p-4 cursor-pointer hover:bg-gray-50 transition-colors duration-200 grid grid-cols-3 gap-4 items-center"
+                                  className="p-4 cursor-pointer hover:bg-gray-50 transition-colors duration-200 grid grid-cols-3 gap-4 items-center equipment-item-row"
                                   onClick={() => toggleExpanded(group.name)}
+                                  onContextMenu={(e) => handleContextMenu(e, group)}
                                 >
-                                  <div className="text-left font-medium text-gray-800 flex items-center">
-                                    {group.name}
+                                  <div className="text-left font-medium text-gray-800">{group.name}</div>
+                                  <div className="text-center text-gray-700">{group.available}/{group.total}</div>
+                                  <div className="text-right text-gray-800 flex items-center justify-end">
+                                    <span>₱{Number(group.price).toFixed(2)}</span>
                                     <svg 
                                       className={`ml-2 h-4 w-4 text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
                                       fill="none" 
@@ -327,8 +407,6 @@ const Equipment = () => {
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                     </svg>
                                   </div>
-                                  <div className="text-center text-gray-700">{group.available}/{group.total}</div>
-                                  <div className="text-right text-gray-800">₱{Number(group.price).toFixed(2)}</div>
                                 </div>
                                 
                                 {isExpanded && (
@@ -351,8 +429,14 @@ const Equipment = () => {
                                               <div className="grid grid-cols-5 gap-4 items-center text-sm">
                                                 <div className="font-medium text-gray-900">{item.serial_number || 'N/A'}</div>
                                                 <div>
-                                                  <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(item.status)}`}>
-                                                    {getStatusText(item.status)}
+                                                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                                    item.status === 'available' ? 'bg-green-100 text-green-800' :
+                                                    item.status === 'in_use' ? 'bg-blue-100 text-blue-800' :
+                                                    item.status === 'borrowed' ? 'bg-orange-100 text-orange-800' :
+                                                    item.status === 'issued' ? 'bg-red-100 text-red-800' :
+                                                    'bg-gray-100 text-gray-800'
+                                                  }`}>
+                                                    {item.status ? item.status.charAt(0).toUpperCase() + item.status.slice(1).replace('_', ' ') : 'Unknown'}
                                                   </span>
                                                 </div>
                                                 <div className="text-gray-600">
@@ -432,6 +516,315 @@ const Equipment = () => {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <>
+          {/* Backdrop to catch clicks */}
+          <div 
+            className="fixed inset-0 z-40"
+            onClick={() => setContextMenu(null)}
+          />
+          <div 
+            className="fixed z-50 bg-white rounded-lg shadow-2xl border-2 border-gray-300 py-2 min-w-48 animate-fade-in"
+            style={{ 
+              left: `${Math.min(contextMenu.x, window.innerWidth - 200)}px`, 
+              top: `${Math.min(contextMenu.y, window.innerHeight - 100)}px` 
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={handleViewDetails}
+              className="w-full px-4 py-3 text-left text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 flex items-center transition-colors"
+            >
+              <svg className="w-5 h-5 mr-3 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              View Details
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Details Modal */}
+      {showDetailsModal && selectedItemDetails && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black bg-opacity-50" onClick={closeDetailsModal} />
+          <div className="relative bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center z-10">
+              <h2 className="text-2xl font-bold text-gray-900">Equipment Details - {selectedItemDetails.name}</h2>
+              <button
+                onClick={closeDetailsModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="p-6">
+              {/* Form-like Layout */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                {/* Left Column */}
+                <div className="space-y-4">
+                  {/* Category */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Category*</label>
+                    <div className="relative">
+                      <select 
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
+                        disabled
+                      >
+                        <option value="">{selectedItemDetails.category_name || selectedItemDetails.category_id || 'Select a category'}</option>
+                      </select>
+                      <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                        <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Brand */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Brand*</label>
+                    <input
+                      type="text"
+                      value={selectedItemDetails.brand || ''}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
+                      placeholder="Brand name"
+                      disabled
+                    />
+                  </div>
+
+                  {/* Description */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Description*</label>
+                    <textarea
+                      value={selectedItemDetails.description || selectedItemDetails.category_description || ''}
+                      rows={4}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50 resize-none"
+                      placeholder="Item description"
+                      disabled
+                    />
+                  </div>
+                </div>
+
+                {/* Right Column */}
+                <div className="space-y-4">
+                  {/* Serial Number */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Serial Number*</label>
+                    <input
+                      type="text"
+                      value={selectedItemDetails.serial_number || ''}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
+                      placeholder="Serial number"
+                      disabled
+                    />
+                  </div>
+
+                  {/* Supplier */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Supplier*</label>
+                    <input
+                      type="text"
+                      value={selectedItemDetails.supplier || ''}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
+                      placeholder="Supplier name"
+                      disabled
+                    />
+                  </div>
+
+                  {/* Price */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Price</label>
+                    <input
+                      type="text"
+                      value={`₱ ${Number(selectedItemDetails.purchase_price || selectedItemDetails.price || 0).toFixed(2)}`}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
+                      disabled
+                    />
+                  </div>
+
+                  {/* Additional Fields */}
+                  {selectedItemDetails.model && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Model</label>
+                      <input
+                        type="text"
+                        value={selectedItemDetails.model}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
+                        disabled
+                      />
+                    </div>
+                  )}
+
+                  {selectedItemDetails.asset_tag && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Asset Tag</label>
+                      <input
+                        type="text"
+                        value={selectedItemDetails.asset_tag}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
+                        disabled
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Image Upload Sections */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                {/* Item Image */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Item image</label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center bg-gray-50">
+                    {selectedItemDetails.image || selectedItemDetails.category_image ? (
+                      <div className="space-y-2">
+                        <img 
+                          src={(selectedItemDetails.image || selectedItemDetails.category_image)}
+                          alt={selectedItemDetails.name}
+                          className="mx-auto h-32 w-auto object-contain cursor-zoom-in"
+                          onClick={() => setImagePreview({ src: (selectedItemDetails.image || selectedItemDetails.category_image), alt: selectedItemDetails.name })}
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = '/images/placeholder-equipment.png';
+                          }}
+                        />
+                        <p className="text-sm text-gray-600">Current item image</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="mx-auto w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                          <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                          </svg>
+                        </div>
+                        <p className="text-sm text-gray-600">No image available</p>
+                        <p className="text-xs text-gray-500">JPEG, PNG, GIF, WebP up to 5MB</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Receipt Image */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Receipt image</label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center bg-gray-50">
+                    {selectedItemDetails.receipt ? (
+                      <div className="space-y-2">
+                        <img 
+                          src={selectedItemDetails.receipt}
+                          alt="Receipt"
+                          className="mx-auto h-32 w-auto object-contain cursor-zoom-in"
+                          onClick={() => setImagePreview({ src: selectedItemDetails.receipt, alt: 'Receipt' })}
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.parentElement.innerHTML = '<div class="space-y-2"><div class="mx-auto w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center"><svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg></div><p class="text-sm text-gray-600">Receipt not available</p></div>';
+                          }}
+                        />
+                        <p className="text-sm text-gray-600">Current receipt image</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="mx-auto w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                          <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                          </svg>
+                        </div>
+                        <p className="text-sm text-gray-600">No receipt available</p>
+                        <p className="text-xs text-gray-500">JPEG, PNG, GIF, WebP up to 5MB</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Inventory Summary */}
+              <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-6 rounded-lg mb-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Inventory Summary</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-white p-4 rounded-lg shadow-sm">
+                    <p className="text-xs text-gray-600 mb-1">Available</p>
+                    <p className="text-2xl font-bold text-green-600">{selectedItemDetails.available}</p>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg shadow-sm">
+                    <p className="text-xs text-gray-600 mb-1">In Use</p>
+                    <p className="text-2xl font-bold text-blue-600">{selectedItemDetails.inUse}</p>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg shadow-sm">
+                    <p className="text-xs text-gray-600 mb-1">Total</p>
+                    <p className="text-2xl font-bold text-gray-900">{selectedItemDetails.total}</p>
+                  </div>
+                  <div className="bg-white p-4 rounded-lg shadow-sm">
+                    <p className="text-xs text-gray-600 mb-1">Total Value</p>
+                    <p className="text-lg font-bold text-gray-900">
+                      ₱{(Number(selectedItemDetails.purchase_price || selectedItemDetails.price || 0) * selectedItemDetails.total).toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Individual Items List */}
+              <div>
+                <h4 className="text-lg font-semibold text-gray-800 mb-3">
+                  Individual Items ({selectedItemDetails.items.length})
+                </h4>
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {selectedItemDetails.items.map((item, idx) => (
+                    <div key={idx} className="flex justify-between items-center p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
+                      <div className="flex-1">
+                        <p className="font-semibold text-gray-900">Serial: {item.serial_number || 'N/A'}</p>
+                        <div className="flex gap-4 mt-1 text-sm text-gray-600">
+                          <span>Added: {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'N/A'}</span>
+                          <span>Updated: {item.updated_at ? new Date(item.updated_at).toLocaleDateString() : 'N/A'}</span>
+                        </div>
+                      </div>
+                      <span className={`px-3 py-1 text-xs font-semibold rounded-full whitespace-nowrap ${
+                        item.status === 'available' ? 'bg-green-100 text-green-800' :
+                        item.status === 'in_use' ? 'bg-blue-100 text-blue-800' :
+                        item.status === 'borrowed' ? 'bg-orange-100 text-orange-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {item.status ? item.status.charAt(0).toUpperCase() + item.status.slice(1).replace('_', ' ') : 'Unknown'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Lightbox */}
+      {imagePreview && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/80" onClick={() => setImagePreview(null)} />
+          <div className="relative max-w-5xl w-full max-h-[95vh] px-4">
+            <button
+              onClick={() => setImagePreview(null)}
+              className="absolute -top-10 right-6 text-white/80 hover:text-white"
+              aria-label="Close preview"
+            >
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <img
+              src={imagePreview.src}
+              alt={imagePreview.alt || 'Preview'}
+              className="mx-auto max-h-[90vh] w-auto object-contain rounded-lg shadow-2xl"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = '/images/placeholder-equipment.png';
+              }}
+            />
           </div>
         </div>
       )}
