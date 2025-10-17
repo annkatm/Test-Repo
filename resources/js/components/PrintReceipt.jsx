@@ -9,6 +9,16 @@ const PrintReceipt = ({
 }) => {
   if (!isOpen || !transactionData) return null;
 
+  // Handle both single item and multiple items (grouped)
+  const items = transactionData.items || [{
+    equipment_name: transactionData.equipment_name,
+    serial_number: transactionData.serial_number,
+    notes: transactionData.notes
+  }];
+
+  // Debug: Log items to verify serial numbers are present
+  console.log('PrintReceipt - Items to print:', items);
+
   const handlePrint = () => {
     const printWindow = window.open('', '_blank');
     const printContent = `
@@ -125,62 +135,30 @@ const PrintReceipt = ({
           <table class="equipment-table">
             <thead>
               <tr>
-                <th>Item</th>
-                <th>Description</th>
+                <th>#</th>
+                <th>Equipment Name</th>
                 <th>Serial Number</th>
                 <th>Date Released</th>
                 <th>Date Returned</th>
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td>Laptop</td>
-                <td>${transactionData.equipment_name}</td>
-                <td>${transactionData.serial_number || 'N/A'}</td>
-                <td>${new Date().toLocaleDateString()}</td>
-                <td></td>
-              </tr>
-              <tr>
-                <td>Mouse</td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-              </tr>
-              <tr>
-                <td>Keyboard</td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-              </tr>
-              <tr>
-                <td>Headset</td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-              </tr>
-              <tr>
-                <td>UPS</td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-              </tr>
-              <tr>
-                <td>Internet Broadband</td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-              </tr>
+              ${items.map((item, index) => {
+                const dateReleased = item.date_released ? new Date(item.date_released).toLocaleDateString() : new Date().toLocaleDateString();
+                const dateReturned = item.date_returned ? new Date(item.date_returned).toLocaleDateString() : '';
+                return `
+                  <tr>
+                    <td>${index + 1}</td>
+                    <td>${item.equipment_name || 'N/A'}</td>
+                    <td>${item.serial_number || 'N/A'}</td>
+                    <td>${dateReleased}</td>
+                    <td>${dateReturned}</td>
+                  </tr>
+                `;
+              }).join('')}
               <tr class="others-row">
-                <td>Others:</td>
-                <td>${transactionData.notes || ''}</td>
-                <td></td>
-                <td></td>
-                <td></td>
+                <td colspan="2">Others/Notes:</td>
+                <td colspan="3">${transactionData.notes || ''}</td>
               </tr>
             </tbody>
           </table>
@@ -281,14 +259,29 @@ const PrintReceipt = ({
               <div>
                 <h4 className="font-semibold text-gray-900 mb-2 flex items-center">
                   <Package className="h-4 w-4 mr-2" />
-                  Equipment List
+                  Equipment List ({items.length} {items.length === 1 ? 'item' : 'items'})
                 </h4>
-                <div className="bg-white rounded-lg p-4">
+                <div className="bg-white rounded-lg p-4 space-y-3">
                   <div className="text-sm text-gray-600 mb-2">Equipment to be released:</div>
-                  <div className="font-medium">{transactionData.equipment_name}</div>
-                  <div className="text-sm text-gray-500">Serial: {transactionData.serial_number || 'N/A'}</div>
+                  {items.map((item, index) => {
+                    const dateReleased = item.date_released ? new Date(item.date_released).toLocaleDateString() : new Date().toLocaleDateString();
+                    const dateReturned = item.date_returned ? new Date(item.date_returned).toLocaleDateString() : null;
+                    
+                    return (
+                      <div key={index} className="border-l-2 border-blue-500 pl-3 py-1">
+                        <div className="font-medium">{index + 1}. {item.equipment_name || 'N/A'}</div>
+                        <div className="text-sm text-gray-500">Serial: {item.serial_number || 'N/A'}</div>
+                        <div className="text-xs text-gray-400 mt-1">
+                          Released: {dateReleased}
+                          {dateReturned && ` | Returned: ${dateReturned}`}
+                        </div>
+                      </div>
+                    );
+                  })}
                   {transactionData.notes && (
-                    <div className="text-sm text-gray-500 mt-1">Notes: {transactionData.notes}</div>
+                    <div className="text-sm text-gray-500 mt-2 pt-2 border-t">
+                      <strong>Notes:</strong> {transactionData.notes}
+                    </div>
                   )}
                 </div>
               </div>
