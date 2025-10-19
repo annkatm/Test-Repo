@@ -51,7 +51,7 @@ const SuccessModal = ({
               </div>
               <div>
                 <p className="font-semibold text-gray-900">
-                  Request from {requestData?.name} has been {action} successfully!
+                  Request from {requestData?.employee_name || requestData?.full_name || requestData?.name || 'Employee'} has been {action} successfully!
                 </p>
                 <p className="text-sm text-gray-600 mt-1">
                   {isApproved 
@@ -76,7 +76,7 @@ const SuccessModal = ({
                 </div>
                 <div className="flex-1">
                   <span className="text-sm text-gray-600">Employee:</span>
-                  <span className="text-sm font-semibold text-gray-900 ml-2">{requestData?.name}</span>
+                  <span className="text-sm font-semibold text-gray-900 ml-2">{requestData?.employee_name || requestData?.full_name || requestData?.name || 'N/A'}</span>
                 </div>
               </div>
               <div className="flex items-center space-x-3">
@@ -85,7 +85,7 @@ const SuccessModal = ({
                 </div>
                 <div className="flex-1">
                   <span className="text-sm text-gray-600">Position:</span>
-                  <span className="text-sm font-semibold text-gray-900 ml-2">{requestData?.position}</span>
+                  <span className="text-sm font-semibold text-gray-900 ml-2">{requestData?.employee_type || requestData?.position || 'N/A'}</span>
                 </div>
               </div>
               <div className="flex items-center space-x-3">
@@ -94,7 +94,25 @@ const SuccessModal = ({
                 </div>
                 <div className="flex-1">
                   <span className="text-sm text-gray-600">Equipment:</span>
-                  <span className="text-sm font-semibold text-gray-900 ml-2">{requestData?.item}</span>
+                  {requestData?.items && requestData.items.length > 0 ? (
+                    requestData.items.length === 1 ? (
+                      <span className="text-sm font-semibold text-gray-900 ml-2">
+                        {requestData.items[0].equipment_name || requestData.items[0].name}
+                      </span>
+                    ) : (
+                      <div className="ml-2">
+                        {requestData.items.map((item, index) => (
+                          <div key={index} className="text-sm font-semibold text-gray-900">
+                            • {item.equipment_name || item.name}
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  ) : (
+                    <span className="text-sm font-semibold text-gray-900 ml-2">
+                      {requestData?.item || requestData?.equipment_name || 'N/A'}
+                    </span>
+                  )}
                 </div>
               </div>
               {requestData?.requestDate && (

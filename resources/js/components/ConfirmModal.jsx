@@ -100,7 +100,25 @@ const ConfirmModal = ({
                 </div>
                 <div className="flex-1">
                   <span className="text-sm text-gray-600">Equipment:</span>
-                  <span className="text-sm font-semibold text-gray-900 ml-2">{transactionData?.equipment_name}</span>
+                  {transactionData?.items && transactionData.items.length > 0 ? (
+                    transactionData.items.length === 1 ? (
+                      <span className="text-sm font-semibold text-gray-900 ml-2">
+                        {transactionData.items[0].equipment_name}
+                      </span>
+                    ) : (
+                      <div className="ml-2">
+                        {transactionData.items.map((item, index) => (
+                          <div key={index} className="text-sm font-semibold text-gray-900">
+                            • {item.equipment_name}
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  ) : (
+                    <span className="text-sm font-semibold text-gray-900 ml-2">
+                      {transactionData?.equipment_name || 'N/A'}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
