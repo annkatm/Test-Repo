@@ -289,7 +289,16 @@ const ViewRequest = () => {
       console.error('Error processing request:', err);
       
       // Show error alert
-      alert('Error processing request: ' + (err.response?.data?.message || err.message));
+      if (window.showToast) {
+        window.showToast({
+          type: 'error',
+          title: 'Request Failed',
+          message: 'Error processing request: ' + (err.response?.data?.message || err.message),
+          duration: 6000
+        });
+      } else {
+        alert('Error processing request: ' + (err.response?.data?.message || err.message));
+      }
     } finally {
       setModalLoading(false);
     }
@@ -1171,7 +1180,16 @@ const ViewRequest = () => {
               }
             } catch (err) {
               console.error('Error approving request:', err);
-              alert('Error approving request: ' + (err.response?.data?.message || err.message));
+              if (window.showToast) {
+                window.showToast({
+                  type: 'error',
+                  title: 'Approval Failed',
+                  message: 'Error approving request: ' + (err.response?.data?.message || err.message),
+                  duration: 6000
+                });
+              } else {
+                alert('Error approving request: ' + (err.response?.data?.message || err.message));
+              }
             }
           } else if (confirmModal.mode === 'delete') {
             // For delete, open the detailed reject modal to capture optional reason

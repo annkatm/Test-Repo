@@ -15,6 +15,8 @@ import UsersPage from './UsersPage.jsx';
 import ControlPanel from './ControlPanel.jsx';
 import Reports from './Reports.jsx';
 import Archive from './Archive.jsx';
+import ToastContainer from './components/ToastContainer.jsx';
+import { replaceAlert } from './utils/toastUtils.js';
 
 // Make React, ReactDOM, and components available globally for fallback mechanisms
 window.React = React;
@@ -112,6 +114,25 @@ console.log('React version:', React.version);
 // Wait for DOM to be ready
 document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM loaded, looking for containers');
+    
+    // Initialize Toast system and replace alert()
+    try {
+        // Create toast container
+        const toastContainer = document.createElement('div');
+        toastContainer.id = 'toast-container';
+        document.body.appendChild(toastContainer);
+        
+        // Render ToastContainer
+        const root = createRoot(toastContainer);
+        root.render(React.createElement(ToastContainer));
+        
+        // Replace alert() with toast notifications
+        replaceAlert();
+        
+        console.log('Toast system initialized');
+    } catch (error) {
+        console.error('Failed to initialize toast system:', error);
+    }
   // Lazy-load SuperAdmin when the superadmin page is present to code-split large admin bundle
   (function lazyLoadSuperAdmin() {
     const superAdminContainer = document.getElementById('superadmin-root');

@@ -58,7 +58,7 @@ const VerificationModal = ({
           animation: slideInFromBottom 0.3s ease-out;
         }
       `}</style>
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto modal-animation">
+      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto modal-animation" style={{ boxShadow: '0 25px 50px -12px rgba(0, 100, 255, 0.4), 0 0 0 1px rgba(0, 100, 255, 0.1)' }}>
         {/* Header */}
         <div className="px-4 py-3 relative">
           <button

@@ -16,7 +16,16 @@ const ConfirmModal = ({
   const handleConfirm = () => {
     // Validate required fields for release
     if (type === 'release' && !condition.trim()) {
-      alert('Equipment condition is required before releasing equipment.');
+      if (window.showToast) {
+        window.showToast({
+          type: 'warning',
+          title: 'Required Field',
+          message: 'Equipment condition is required before releasing equipment.',
+          duration: 5000
+        });
+      } else {
+        alert('Equipment condition is required before releasing equipment.');
+      }
       return;
     }
 
@@ -38,7 +47,7 @@ const ConfirmModal = ({
 
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 overflow-hidden border border-gray-200 transform transition-all duration-300 scale-100">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 overflow-hidden border border-gray-200 transform transition-all duration-300 scale-100" style={{ boxShadow: '0 25px 50px -12px rgba(0, 100, 255, 0.4), 0 0 0 1px rgba(0, 100, 255, 0.1)' }}>
         {/* Header */}
         <div className="px-6 py-5 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-200">
           <div className="flex items-center justify-between">
