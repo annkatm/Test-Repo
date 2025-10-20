@@ -257,6 +257,81 @@ class TransactionController extends Controller
     }
 
     /**
+     * Unified history for current user: combines requests (pending/approved/rejected) and transactions (released/returned)
+     */
+    public function unifiedHistory()
+    {
+        try {
+            $userId = auth()->id();
+
+            // Get employee record for current user
+            $employee = DB::table('employees')->where('user_id', $userId)->first();
+
+            if (!$employee) {
+                return response()->json(['success' => true, 'data' => []]);
+            }
+
+            // Fetch requests for this employee
+            $requests = DB::table('requests')
+                ->leftJoin('equipment', 'requests.equipment_id', '=', 'equipment.id')
+                ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
+                ->where('requests.employee_id', $employee->id)
+                ->select(
+                    'requests.id as id',
+                    DB::raw("'request' as type"),
+                    'requests.request_number as number',
+                    'requests.status as status',
+                    'equipment.name as item',
+                    'equipment.brand as brand',
+                    'requests.reason as reason',
+                    'requests.created_at as date',
+                    'requests.updated_at as updated_at'
+                )
+                ->get()
+                ->map(function ($r) {
+                    return (array) $r;
+                })->toArray();
+
+            // Fetch transactions for this employee
+            $transactions = DB::table('transactions')
+                ->leftJoin('equipment', 'transactions.equipment_id', '=', 'equipment.id')
+                ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
+                ->where('transactions.employee_id', $employee->id)
+                ->select(
+                    'transactions.id as id',
+                    DB::raw("'transaction' as type"),
+                    'transactions.transaction_number as number',
+                    'transactions.status as status',
+                    'equipment.name as item',
+                    'equipment.brand as brand',
+                    'transactions.request_id as request_id',
+                    'transactions.created_at as date',
+                    'transactions.updated_at as updated_at'
+                )
+                ->get()
+                ->map(function ($t) {
+                    return (array) $t;
+                })->toArray();
+
+            // Merge and sort by date descending (use updated_at or date)
+            $combined = array_merge($requests, $transactions);
+            usort($combined, function ($a, $b) {
+                $da = isset($a['updated_at']) ? strtotime($a['updated_at']) : strtotime($a['date'] ?? null);
+                $db = isset($b['updated_at']) ? strtotime($b['updated_at']) : strtotime($b['date'] ?? null);
+                return $db <=> $da;
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => $combined,
+                'count' => count($combined)
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Error fetching unified history: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Return a transaction
      */
     public function returnTransaction(Request $request, $id)

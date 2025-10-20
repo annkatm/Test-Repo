@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\ActivityLogService;
+use App\Events\RequestCreated;
+use App\Events\RequestUpdated;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\ValidationException;
@@ -198,6 +200,13 @@ class RequestController extends Controller
                 'Created a new request',
                 "Created request #{$requestNumber} for {$createdRequest->equipment_name}"
             );
+
+            // Broadcast event for real-time updates (best-effort)
+            try {
+                event(new RequestCreated((array) $createdRequest));
+            } catch (\Exception $_) {
+                // ignore broadcasting failures
+            }
 
             return response()->json([
                 'success' => true,
@@ -458,6 +467,11 @@ class RequestController extends Controller
                 )
                 ->first();
 
+            // Broadcast update event
+            try {
+                event(new RequestUpdated((array) $updatedRequest));
+            } catch (\Exception $_) {}
+
             return response()->json([
                 'success' => true,
                 'data' => $updatedRequest,
@@ -530,6 +544,11 @@ class RequestController extends Controller
                     DB::raw("COALESCE(approver.name, '') as approved_by_name")
                 )
                 ->first();
+
+            // Broadcast update event
+            try {
+                event(new RequestUpdated((array) $updatedRequest));
+            } catch (\Exception $_) {}
 
             return response()->json([
                 'success' => true,

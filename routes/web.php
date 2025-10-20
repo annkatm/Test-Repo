@@ -78,6 +78,7 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/api/requests/{id}', [RequestController::class, 'destroy'])->name('requests.destroy');
     Route::post('/api/requests/{id}/approve', [RequestController::class, 'approve'])->name('requests.approve');
     Route::post('/api/requests/{id}/reject', [RequestController::class, 'reject'])->name('requests.reject');
+    Route::get('/api/transactions/unified-history', [App\Http\Controllers\Api\TransactionController::class, 'unifiedHistory'])->name('transactions.unifiedHistory');
 
     // Archive routes (session auth with CSRF protection)
     Route::get('/archive', [App\Http\Controllers\ArchiveController::class, 'index'])->name('archive');

@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import Echo from '../echo';
 import { Laptop, X, RefreshCcw, ClipboardList, Mouse, FilePlus2 } from 'lucide-react';
 import OnProcessTransactions from './OnProcessTransactions';
 import ApprovedTransactions from './ApprovedTransactions';
@@ -36,6 +37,27 @@ const EmployeeTransaction = () => {
   const [itemsPerPage, setItemsPerPage] = useState(5);
   const [actionLoading, setActionLoading] = useState(false);
   const [activities, setActivities] = useState([]);
+  // Toasts for upper-right popup notifications
+  const [toasts, setToasts] = useState([]);
+
+  const showToast = (message, variant = 'info', ttl = 4500) => {
+    const id = Date.now() + Math.random();
+    const toast = { id, message, variant };
+    setToasts((prev) => [toast, ...prev].slice(0, 6));
+    // auto remove
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, ttl);
+  };
+  const [notificationCount, setNotificationCount] = useState(() => {
+    try {
+      const v = Number(localStorage.getItem('employee_history_unseen') || '0');
+      return Number.isNaN(v) ? 0 : v;
+    } catch (_e) {
+      return 0;
+    }
+  });
+  const prevHistoryLenRef = useRef(0);
 
   useEffect(() => {
     try {
@@ -52,6 +74,85 @@ const EmployeeTransaction = () => {
       return next;
     });
   };
+
+  // Increment the unseen history/notification counter and optionally append a local history/activity entry
+  const incrementNotification = (count = 1, entry = null) => {
+    setNotificationCount((prev) => {
+      const next = prev + count;
+      try { localStorage.setItem('employee_history_unseen', String(next)); } catch (_) {}
+      return next;
+    });
+
+    if (entry) {
+      // Prepend to activities and historyData locally so UI reflects it immediately
+      setActivities((prev) => {
+        const next = [entry, ...prev].slice(0, 50);
+        try { localStorage.setItem('employee_activities', JSON.stringify(next)); } catch (_) {}
+        return next;
+      });
+      setHistoryData((prev) => [entry, ...prev]);
+    }
+  };
+
+  // Global function for other parts of the app to notify this component about new events
+  // Usage: window.IReplyNotify('Your request was approved', 'success')
+  useEffect(() => {
+    window.IReplyNotify = (message, variant = 'info', addToHistory = true, historyEntry = null) => {
+      const entry = historyEntry || { id: Date.now(), item: message, message, variant, date: new Date().toISOString(), time: new Date().toISOString(), local: Boolean(historyEntry) };
+      if (addToHistory) {
+        incrementNotification(1, entry);
+        // dispatch a specific history event for other listeners
+        try {
+          window.dispatchEvent(new CustomEvent('ireply:history', { detail: entry }));
+        } catch (_) {}
+      } else {
+        incrementNotification(1, null);
+      }
+      // keep a log in activities
+      setActivities((prev) => {
+        const next = [entry, ...prev].slice(0, 50);
+        try { localStorage.setItem('employee_activities', JSON.stringify(next)); } catch (_) {}
+        return next;
+      });
+      // show toast popup for the notification
+      try { showToast(typeof message === 'string' ? message : (entry.message || 'Notification'), variant); } catch (_) {}
+    };
+
+    const notifyHandler = (e) => {
+      const detail = e?.detail || {};
+      const message = detail.message || detail.msg || 'New activity';
+      const variant = detail.variant || 'info';
+      const entry = { id: Date.now(), item: message, message, variant, date: new Date().toISOString(), time: new Date().toISOString() };
+      incrementNotification(1, entry);
+      showToast(message, variant);
+    };
+
+    const historyHandler = (e) => {
+      const detail = e?.detail || {};
+      if (!detail) return;
+      const entry = {
+        id: detail.id || Date.now(),
+        item: detail.item || detail.message || detail.msg || 'History item',
+        message: detail.message || detail.msg || detail.item || 'History item',
+        variant: detail.variant || 'info',
+        date: detail.date || new Date().toISOString(),
+        time: detail.time || detail.date || new Date().toISOString(),
+        local: true
+      };
+      // Append to local history and increment unseen
+      incrementNotification(1, entry);
+      showToast(entry.message || entry.item, entry.variant || 'info');
+    };
+
+    window.addEventListener('ireply:notify', notifyHandler);
+    window.addEventListener('ireply:history', historyHandler);
+
+    return () => {
+      try { delete window.IReplyNotify; } catch (_) {}
+      window.removeEventListener('ireply:notify', notifyHandler);
+      window.removeEventListener('ireply:history', historyHandler);
+    };
+  }, []);
 
   const timeAgo = (iso) => {
     const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -75,27 +176,34 @@ const EmployeeTransaction = () => {
     try {
       const res = await fetch('/api/requests?status=denied');
       const data = await res.json();
+      
+      console.log('Denied requests response:', data); // Debug log
+      
       if (data.success && Array.isArray(data.data)) {
         const mapped = data.data.map((r, idx) => ({
           id: r.id ?? idx + 1,
-          date: r.date || r.created_at || '',
-          item: r.item || r.items || r.title || 'Request',
+          date: r.created_at ? new Date(r.created_at).toLocaleDateString("en-US", {
+            month: "2-digit",
+            day: "2-digit",
+            year: "numeric",
+          }) : '',
+          item: r.equipment_name || r.item || r.items || r.title || 'Request',
           brand: r.brand || '',
           model: r.model || '',
           status: 'Denied',
-          reason: r.reason || ''
+          reason: r.denial_reason || r.reason || 'No reason provided'
         }));
-        if (mapped.length > 0) {
-          setDeniedRequests(mapped);
-          return mapped;
-        }
+        setDeniedRequests(mapped);
+        return mapped;
+      } else {
+        // Set to empty array if no data
+        setDeniedRequests([]);
+        return [];
       }
-      return null;
     } catch (e) {
-      // keep existing state on error
       console.error('Failed to fetch denied requests', e);
-      logActivity(`Failed to fetch denied requests: ${e.message}`, 'warning');
-      return null;
+      setDeniedRequests([]);
+      return [];
     }
   };
 
@@ -175,7 +283,6 @@ const EmployeeTransaction = () => {
 
   const fetchPendingTransactions = async () => {
     try {
-      setLoading(true);
       const response = await fetch('/api/requests?status=pending');
       const data = await response.json();
 
@@ -186,16 +293,12 @@ const EmployeeTransaction = () => {
       }
     } catch (error) {
       console.error('Failed to fetch pending requests:', error);
-      setError('Failed to load pending requests');
       setPendingTransactions([]);
-    } finally {
-      setLoading(false);
     }
   };
 
   const fetchApprovedTransactions = async () => {
     try {
-      setLoading(true);
       const response = await fetch('/api/transactions/approved');
       const data = await response.json();
 
@@ -206,42 +309,86 @@ const EmployeeTransaction = () => {
       }
     } catch (error) {
       console.error('Failed to fetch approved transactions:', error);
-      setError('Failed to load approved transactions');
       setTransactions([]);
-    } finally {
-      setLoading(false);
     }
   };
 
   const fetchTransactionHistory = async () => {
     try {
-      setLoading(true);
       const response = await fetch('/api/transactions/history');
       const data = await response.json();
 
       if (data.success && Array.isArray(data.data)) {
-        setHistoryData(data.data);
+        // Merge server history with any local-only entries we have in historyData
+        setHistoryData((prevLocal) => {
+          const server = data.data || [];
+          // Keep local entries that are marked as local or have ids not found in server
+          const localOnly = (prevLocal || []).filter((h) => {
+            if (!h) return false;
+            // if item has a flag local === true keep it
+            if (h.local) return true;
+            // if id is missing or not present in server, keep it
+            if (!h.id) return true;
+            return !server.some((s) => String(s.id) === String(h.id));
+          });
+
+          const merged = [...localOnly, ...server];
+          try { prevHistoryLenRef.current = Array.isArray(merged) ? merged.length : 0; } catch (_) {}
+          return merged;
+        });
         return data.data;
       } else {
-        setHistoryData([]);
+        // keep local entries if server returns no data
+        setHistoryData((prev) => prev || []);
         return [];
       }
     } catch (error) {
       console.error('Failed to fetch transaction history:', error);
-      setError('Failed to load transaction history');
-      setHistoryData([]);
+      // keep local entries on error
+      setHistoryData((prev) => prev || []);
       return [];
-    } finally {
-      setLoading(false);
     }
   };
+
+  // Poll history endpoint periodically to detect new history entries
+  useEffect(() => {
+    let stopped = false;
+    const check = async () => {
+      try {
+        const data = await fetchTransactionHistory();
+        if (stopped) return;
+        const prevLen = prevHistoryLenRef.current || 0;
+        const newLen = Array.isArray(data) ? data.length : 0;
+        // If more items than previous length, increment notification by difference
+        if (newLen > prevLen) {
+          const diff = newLen - prevLen;
+          incrementNotification(diff, null);
+        }
+        prevHistoryLenRef.current = newLen;
+      } catch (e) {
+        // ignore polling errors
+      }
+    };
+
+    // initial check
+    check();
+    const iv = setInterval(check, 30000); // every 30s
+
+    return () => {
+      stopped = true;
+      clearInterval(iv);
+    };
+  }, []);
 
   useEffect(() => {
     const loadTransactionData = async () => {
       await fetchTransactionStats();
       await fetchPendingTransactions();
       await fetchApprovedTransactions();
-      await fetchTransactionHistory();
+      const initialHistory = await fetchTransactionHistory();
+      // Set the previous history length so the polling doesn't treat existing items as new
+      prevHistoryLenRef.current = Array.isArray(initialHistory) ? initialHistory.length : 0;
+      await fetchDeniedRequests(); // Fetch denied requests on load
 
       try {
         const res = await fetch('/api/employees/current-holders');
@@ -257,6 +404,80 @@ const EmployeeTransaction = () => {
     };
 
     loadTransactionData();
+
+    // Setup Echo subscription for real-time events when available
+    let subscribedChannel = null;
+    (async () => {
+      try {
+        // determine the employee id for current user
+        const res = await fetch('/check-auth', { credentials: 'same-origin' });
+        const userData = await res.json();
+        let employeeId = null;
+        if (userData && userData.user) {
+          // try to get linked_employee_id or fall back to lookup
+          employeeId = userData.user.linked_employee_id || null;
+        }
+
+        if (!employeeId) {
+          try {
+            const eRes = await fetch('/api/employees');
+            const eData = await eRes.json();
+            const list = eData.success ? eData.data : eData;
+            if (Array.isArray(list) && userData && userData.user && userData.user.email) {
+              const found = list.find(emp => emp.email && emp.email.toLowerCase() === userData.user.email.toLowerCase());
+              if (found) employeeId = found.id;
+            }
+          } catch (_) {}
+        }
+
+        if (employeeId && Echo) {
+          try {
+            subscribedChannel = Echo.private(`user.history.${employeeId}`);
+            subscribedChannel.listen('RequestCreated', (e) => {
+              const payload = e || {};
+              const entry = {
+                id: payload.id || payload.data?.id || Date.now(),
+                item: payload.equipment_name || payload.item || payload.data?.equipment_name || payload.message || 'Request',
+                message: payload.message || `Request ${payload.request_number || ''}`,
+                variant: 'info',
+                date: payload.created_at || payload.date || new Date().toISOString(),
+                time: payload.created_at || payload.date || new Date().toISOString()
+              };
+              // Append to history and increment badge
+              incrementNotification(1, entry);
+            }).listen('RequestUpdated', (e) => {
+              const payload = e || {};
+              const entry = {
+                id: payload.id || payload.data?.id || Date.now(),
+                item: payload.equipment_name || payload.item || payload.data?.equipment_name || payload.message || 'Request',
+                message: payload.message || `Request updated ${payload.request_number || ''}`,
+                variant: 'info',
+                date: payload.updated_at || payload.date || new Date().toISOString(),
+                time: payload.updated_at || payload.date || new Date().toISOString()
+              };
+              incrementNotification(1, entry);
+            });
+          } catch (e) {
+            // ignore Echo errors
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    })();
+
+    // Set up polling to refresh denied requests every 30 seconds
+    const deniedRequestsInterval = setInterval(() => {
+      fetchDeniedRequests();
+    }, 30000); // 30 seconds
+
+    // Cleanup interval on unmount
+    return () => {
+      clearInterval(deniedRequestsInterval);
+      try {
+        if (subscribedChannel && Echo) subscribedChannel.stopListening();
+      } catch (_) {}
+    };
   }, []);
 
   const handleRowClick = (request) => {
@@ -309,9 +530,12 @@ const EmployeeTransaction = () => {
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-blue-600">History</h1>
+          <h1 className="text-3xl font-bold text-[#2262C6]">History</h1>
           <button
-            onClick={() => setShowHistory(false)}
+            onClick={() => {
+              logActivity('Closed History', 'info');
+              setShowHistory(false);
+            }}
             className="flex items-center gap-2 bg-white text-blue-600 font-medium px-4 py-2 rounded-lg shadow hover:shadow-md hover:bg-blue-50 transition-all"
           >
             <span className="text-xl">←</span>
@@ -325,7 +549,10 @@ const EmployeeTransaction = () => {
             type="text"
             placeholder="Search by item name..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              logActivity(`History search: ${e.target.value}`, 'info');
+            }}
             className="px-4 py-2 w-64 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
           />
         </div>
@@ -348,7 +575,13 @@ const EmployeeTransaction = () => {
           <div className="flex items-center justify-center gap-2">
             {/* Previous Button */}
             <button
-              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+              onClick={() => {
+                setCurrentPage((prev) => {
+                  const next = Math.max(prev - 1, 1);
+                  if (next !== prev) logActivity(`History page changed to ${next}`, 'info');
+                  return next;
+                });
+              }}
               disabled={currentPage === 1}
               className="w-10 h-10 flex items-center justify-center border border-gray-300 rounded-lg bg-white text-gray-700 text-sm hover:bg-blue-50 hover:border-blue-400 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -372,8 +605,7 @@ const EmployeeTransaction = () => {
               if (startPage > 1) {
                 pages.push(
                   <button
-                    key={1}
-                    onClick={() => setCurrentPage(1)}
+                    onClick={() => { setCurrentPage(1); logActivity('History page changed to 1', 'info'); }}
                     className="w-10 h-10 flex items-center justify-center border border-gray-300 rounded-lg bg-white text-gray-700 text-sm hover:bg-blue-50 hover:border-blue-400"
                   >
                     1
@@ -393,7 +625,7 @@ const EmployeeTransaction = () => {
                 pages.push(
                   <button
                     key={i}
-                    onClick={() => setCurrentPage(i)}
+                    onClick={() => { setCurrentPage(i); logActivity(`History page changed to ${i}`, 'info'); }}
                     className={`w-10 h-10 flex items-center justify-center border rounded-lg text-sm font-medium transition-all ${currentPage === i
                       ? "bg-blue-600 text-white border-blue-600 shadow-md"
                       : "bg-white text-gray-700 border-gray-300 hover:bg-blue-50 hover:border-blue-400"
@@ -416,7 +648,7 @@ const EmployeeTransaction = () => {
                 pages.push(
                   <button
                     key={totalPages}
-                    onClick={() => setCurrentPage(totalPages)}
+                    onClick={() => { setCurrentPage(totalPages); logActivity(`History page changed to ${totalPages}`, 'info'); }}
                     className="w-10 h-10 flex items-center justify-center border border-gray-300 rounded-lg bg-white text-gray-700 text-sm hover:bg-blue-50 hover:border-blue-400"
                   >
                     {totalPages}
@@ -429,7 +661,13 @@ const EmployeeTransaction = () => {
 
             {/* Next Button */}
             <button
-              onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+              onClick={() => {
+                setCurrentPage((prev) => {
+                  const next = Math.min(prev + 1, totalPages);
+                  if (next !== prev) logActivity(`History page changed to ${next}`, 'info');
+                  return next;
+                });
+              }}
               disabled={currentPage === totalPages}
               className="w-10 h-10 flex items-center justify-center border border-gray-300 rounded-lg bg-white text-gray-700 text-sm hover:bg-blue-50 hover:border-blue-400 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -445,6 +683,7 @@ const EmployeeTransaction = () => {
               onChange={(e) => {
                 setItemsPerPage(Number(e.target.value));
                 setCurrentPage(1);
+                logActivity(`History items per page set to ${Number(e.target.value)}`, 'info');
               }}
               className="border border-gray-300 rounded-lg px-2 py-1 text-sm text-gray-700 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
             >
@@ -489,7 +728,6 @@ const EmployeeTransaction = () => {
         onBack={() => setCurrentView('transactions')}
         transactionStats={transactionStats}
         approvedTransactions={approvedData}
-        borrowedDetails={borrowedDetails}
       />
     );
   }
@@ -525,13 +763,6 @@ const EmployeeTransaction = () => {
       />
     );
   }
-
-
-
-
-
-
-
 
 
   // Main transaction view
@@ -574,7 +805,11 @@ const EmployeeTransaction = () => {
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-[#2262C6]">On Process</h2>
               <button
-                onClick={() => setShowPendings(true)}
+                onClick={async () => {
+                  await fetchDeniedRequests(); // Refresh denied requests immediately
+                  logActivity('Opened On Process view', 'info');
+                  setShowPendings(true);
+                }}
                 className="text-right text-blue-600 text-sm font-medium hover:text-blue-700">
                 View all
               </button>
@@ -582,18 +817,21 @@ const EmployeeTransaction = () => {
           </div>
 
           <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-            <div className="grid grid-cols-12 gap-4 text-sm font-medium text-gray-700">
+            <div className="grid grid-cols-15 gap-5 text-sm font-medium text-gray-700">
               <div className="col-span-2">Item</div>
               <div className="col-span-2">Start Date</div>
               <div className="col-span-2">Return Date</div>
-              <div className="col-span-2">Date</div>
               <div className="col-span-2">details</div>
             </div>
           </div>
 
           <div className="divide-y divide-gray-100">
             {pendingTransactions.length > 0 ? pendingTransactions.slice(0, 3).map((transaction, index) => (
-              <div key={transaction.id || index} className="px-6 py-4 hover:bg-gray-50 transition-colors">
+              <div
+                key={transaction.id || index}
+                className="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer"
+                onClick={() => logActivity(`Clicked pending row: ${transaction.equipment_name || transaction.item || 'Item'} (${transaction.id || index})`, 'info')}
+              >
                 <div className="grid grid-cols-12 gap-4 items-center">
                   <div className="col-span-2">
                     <span className="text-sm text-gray-900">
@@ -652,7 +890,11 @@ const EmployeeTransaction = () => {
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-[#2262C6]">Approved</h2>
               <button
-                onClick={() => { setSelectedRow(null); setCurrentView('approved'); }}
+                onClick={() => {
+                  setSelectedRow(null);
+                  setCurrentView('approved');
+                  logActivity('Opened Approved view', 'info');
+                }}
                 className="text-right text-blue-600 text-sm font-medium hover:text-blue-700">
                 View all
               </button>
@@ -673,7 +915,8 @@ const EmployeeTransaction = () => {
             {transactions.length > 0 ? transactions.map((transaction, index) => (
               <div
                 key={transaction.id}
-                className="px-6 py-4 hover:bg-gray-50 transition-colors"
+                className="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer"
+                onClick={() => logActivity(`Clicked approved row: ${transaction.equipment_name || 'Item'} (${transaction.id || index})`, 'info')}
               >
                 <div className="grid grid-cols-12 gap-4 items-center">
                   <div className="col-span-3">
@@ -735,14 +978,22 @@ const EmployeeTransaction = () => {
       <div className="col-span-4 space-y-6">
         <div className="flex justify-end">
           <button
-            onClick={() => setShowHistory(true)}
+            onClick={() => {
+              logActivity('Opened History', 'info');
+              // Reset unseen counter when user opens history
+              try { localStorage.setItem('employee_history_unseen', '0'); } catch (_) {}
+              setNotificationCount(0);
+              // Force refetch history to show latest
+              fetchTransactionHistory();
+              setShowHistory(true);
+            }}
             className="relative flex items-center justify-center bg-white border border-gray-300 rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 shadow-md shadow-gray-400/60 hover:shadow-lg hover:shadow-gray-500/70 hover:-translate-y-1 transition-all duration-300 active:translate-y-0 active:shadow-sm w-full sm:w-auto"
           >
             History
 
             {/* Notification Badge */}
             <div className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center shadow-md shadow-red-700/70">
-              <span className="text-white text-xs font-bold">1</span>
+              <span className="text-white text-xs font-bold">{notificationCount > 99 ? '99+' : notificationCount}</span>
             </div>
           </button>
         </div>
@@ -758,29 +1009,25 @@ const EmployeeTransaction = () => {
 
             {/* Activity List */}
             <div className="p-6 space-y-5">
-              {/* Borrowed */}
               <div className="p-4 text-gray-700">
                 <ul className="space-y-3">
-                  <li className="flex items-center space-x-3">
-                    <div className="bg-blue-100 p-2 rounded-lg">
-                      <Laptop className="h-5 w-5 text-blue-600" />
-                    </div>
-                    <span className="text-sm">Checked out 2 laptops for repair</span>
-                  </li>
-
-                  <li className="flex items-center space-x-3">
-                    <div className="bg-yellow-100 p-2 rounded-lg">
-                      <Mouse className="h-5 w-5 text-yellow-600" />
-                    </div>
-                    <span className="text-sm">Returned 1 mouse from IT storage</span>
-                  </li>
-
-                  <li className="flex items-center space-x-3">
-                    <div className="bg-green-100 p-2 rounded-lg">
-                      <FilePlus2 className="h-5 w-5 text-green-600" />
-                    </div>
-                    <span className="text-sm">Added new transaction record</span>
-                  </li>
+                  {getRecentActivities(10).map((a) => {
+                    const { Icon, bg, text } = iconFor(a.variant);
+                    return (
+                      <li key={a.id} className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`${bg} p-2 rounded-lg flex-shrink-0`}>
+                            <Icon className={`h-5 w-5 ${text}`} />
+                          </div>
+                          <span className="text-sm text-gray-800 truncate">{a.message}</span>
+                        </div>
+                        <span className="text-xs text-gray-500 flex-shrink-0 ml-3">{timeAgo(a.time)}</span>
+                      </li>
+                    );
+                  })}
+                  {getRecentActivities(10).length === 0 && (
+                    <li className="text-sm text-gray-500">No recent activity</li>
+                  )}
                 </ul>
               </div>
             </div>
@@ -790,5 +1037,23 @@ const EmployeeTransaction = () => {
     </div>
   );
 };
+
+// Toast styles could be improved or replaced by a component library
+const Toast = ({ t }) => {
+  const bg = t.variant === 'success' ? 'bg-green-50' : t.variant === 'warning' ? 'bg-yellow-50' : t.variant === 'error' ? 'bg-red-50' : 'bg-white';
+  const text = t.variant === 'success' ? 'text-green-700' : t.variant === 'warning' ? 'text-yellow-700' : t.variant === 'error' ? 'text-red-700' : 'text-gray-800';
+  return (
+    <div className={`max-w-sm w-full ${bg} border border-gray-200 rounded-lg shadow-md p-3 mb-3`}> 
+      <div className="flex items-start gap-3">
+        <div className={`flex-shrink-0 rounded-full p-1 ${bg}`}>
+          <div className={`h-3 w-3 ${text} rounded-full`} />
+        </div>
+        <div className="flex-1 text-sm text-gray-800">{t.message}</div>
+      </div>
+    </div>
+  );
+};
+
+export default EmployeeTransaction;
 
 export default EmployeeTransaction;
