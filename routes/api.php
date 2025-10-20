@@ -36,12 +36,21 @@ Route::get('/requests/statistics', [RequestController::class, 'statistics']);
 
 // Transaction routes
 Route::get('/transactions/dashboard', [TransactionController::class, 'dashboard']);
+Route::get('/transactions/stats', [TransactionController::class, 'stats']);
+Route::get('/transactions/borrowed', [TransactionController::class, 'borrowed']);
+Route::get('/transactions/overdue', [TransactionController::class, 'overdue']);
+Route::get('/transactions/approved', [TransactionController::class, 'approved']);
+Route::get('/transactions/history', [TransactionController::class, 'history']);
 Route::get('/transactions', [TransactionController::class, 'index']);
 Route::post('/transactions', [TransactionController::class, 'store']);
 Route::get('/transactions/{id}', [TransactionController::class, 'show']);
 Route::put('/transactions/{id}', [TransactionController::class, 'update']);
 Route::delete('/transactions/{id}', [TransactionController::class, 'destroy']);
 Route::post('/transactions/{id}/release', [TransactionController::class, 'release']);
+Route::post('/transactions/{id}/return', [TransactionController::class, 'returnTransaction']);
+Route::post('/transactions/{id}/exchange', [TransactionController::class, 'exchange']);
+Route::post('/transactions/{id}/cancel', [TransactionController::class, 'cancel']);
+Route::post('/transactions/{id}/appeal', [TransactionController::class, 'appeal']);
 Route::get('/transactions/{id}/print', [TransactionController::class, 'print']);
 
 // Equipment API routes

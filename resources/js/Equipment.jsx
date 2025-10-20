@@ -9,7 +9,7 @@ const Card = ({ selected, name, qty, image, onClick }) => {
       onClick={onClick} 
       className={`relative h-56 w-64 rounded-xl overflow-hidden shadow-sm border ${
         selected ? 'border-blue-500' : 'border-gray-200'
-      } bg-white text-left focus:outline-none`}
+      } bg-white text-left focus:outline-none transition-all duration-200 hover:shadow-md`}
     > 
       <div className="absolute inset-0 overflow-hidden">
         {image ? (
@@ -23,7 +23,11 @@ const Card = ({ selected, name, qty, image, onClick }) => {
             }}
           />
         ) : (
-          <div className="h-full w-full bg-gray-200" />
+          <div className="h-full w-full bg-gray-200 flex items-center justify-center">
+            <svg className="w-16 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            </svg>
+          </div>
         )}
       </div>
       <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-b from-transparent to-[#2262C6]" />
@@ -40,45 +44,165 @@ const Equipment = () => {
   const [categories, setCategories] = useState([]);
   const [equipment, setEquipment] = useState([]);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('Equipment has been processed successfully.');
+  const [expandedItems, setExpandedItems] = useState(new Set());
+  const [individualEquipment, setIndividualEquipment] = useState({});
+  const [deletingItem, setDeletingItem] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editSerialNumber, setEditSerialNumber] = useState('');
+
+  const toggleExpanded = (itemName) => {
+    const newExpanded = new Set(expandedItems);
+    if (newExpanded.has(itemName)) {
+      newExpanded.delete(itemName);
+    } else {
+      newExpanded.add(itemName);
+    }
+    setExpandedItems(newExpanded);
+  };
+
+  const handleDeleteClick = (e, item) => {
+    e.stopPropagation();
+    setDeletingItem(item);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleEditClick = (e, item) => {
+    e.stopPropagation();
+    setEditingItem(item);
+    setEditSerialNumber(item.serial_number || '');
+    setShowEditModal(true);
+  };
+
+  const confirmEdit = async () => {
+    if (!editingItem) return;
+
+    if (!editSerialNumber.trim()) {
+      alert('Serial number cannot be empty');
+      return;
+    }
+
+    try {
+      const response = await api.put(`/equipment/${editingItem.id}`, {
+        serial_number: editSerialNumber.trim()
+      });
+      
+      if (response.data.success) {
+        await fetchData();
+        setSuccessMessage('Serial number updated successfully.');
+        setShowSuccess(true);
+        setTimeout(() => setShowSuccess(false), 3000);
+        setShowEditModal(false);
+        setEditingItem(null);
+        setEditSerialNumber('');
+      } else {
+        alert(response.data.message || 'Failed to update serial number');
+      }
+    } catch (error) {
+      console.error('Edit error:', error);
+      alert(error.response?.data?.message || 'Failed to update serial number');
+    }
+  };
+
+  const cancelEdit = () => {
+    setShowEditModal(false);
+    setEditingItem(null);
+    setEditSerialNumber('');
+  };
+
+  const confirmDelete = async () => {
+    if (!deletingItem) return;
+
+    try {
+      const response = await api.delete(`/equipment/${deletingItem.id}`);
+      
+      if (response.data.success) {
+        await fetchData();
+        setSuccessMessage('Equipment has been archived successfully.');
+        setShowSuccess(true);
+        setTimeout(() => setShowSuccess(false), 3000);
+      } else {
+        alert(response.data.message || 'Failed to delete equipment');
+      }
+    } catch (error) {
+      console.error('Delete error:', error);
+      alert(error.response?.data?.message || 'Failed to delete equipment');
+    } finally {
+      setShowDeleteConfirm(false);
+      setDeletingItem(null);
+    }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteConfirm(false);
+    setDeletingItem(null);
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'available': return 'text-green-600 bg-green-50';
+      case 'in_use': return 'text-orange-600 bg-orange-50';
+      case 'borrowed': return 'text-orange-600 bg-orange-50';
+      case 'issued': return 'text-red-600 bg-red-50';
+      default: return 'text-gray-600 bg-gray-50';
+    }
+  };
+
+  const getStatusText = (status) => {
+    switch (status) {
+      case 'available': return 'Available';
+      case 'in_use': return 'Borrowed';
+      case 'borrowed': return 'Borrowed';
+      case 'issued': return 'Issued';
+      default: return status;
+    }
+  };
 
   const fetchData = async () => {
-      try {
-        // Fetch categories first
-        const catRes = await api.get('/categories');
-        if (catRes?.data?.success && Array.isArray(catRes.data.data)) {
-          const categoriesData = catRes.data.data;
-          setCategories(categoriesData);
+    try {
+      const catRes = await api.get('/categories');
+      if (catRes?.data?.success && Array.isArray(catRes.data.data)) {
+        const categoriesData = catRes.data.data;
+        setCategories(categoriesData);
+        
+        const eqRes = await api.get('/equipment');
+        if (eqRes?.data?.success && eqRes.data.data && Array.isArray(eqRes.data.data.data)) {
+          const equipmentData = eqRes.data.data.data;
           
-          // Then fetch equipment
-          const eqRes = await api.get('/equipment');
-          if (eqRes?.data?.success && eqRes.data.data && Array.isArray(eqRes.data.data.data)) {
-            const equipmentData = eqRes.data.data.data;
-            
-            // Separate assigned and unassigned equipment
-            const assignedEquipment = equipmentData.filter(eq => eq.category_id);
-            const unassignedEquipment = equipmentData.filter(eq => !eq.category_id);
-            
-            // Update categories with dynamic available/total counts
-            const categoriesWithCount = categoriesData.map(cat => {
-              const categoryEquipment = assignedEquipment.filter(eq => eq.category_id === cat.id);
-              const available = categoryEquipment.filter(eq => eq.status === 'available').length;
-              const inUse = categoryEquipment.filter(eq => eq.status === 'in_use').length;
-              const total = available + inUse; // Only count available and in_use equipment
-              return {
-                ...cat,
-                qty: `${available}/${total}`,
-                availableCount: available,
-                inUseCount: inUse,
-                totalCount: total
-              };
-            });
-            setCategories(categoriesWithCount);
-            setEquipment(assignedEquipment);
-          }
+          const assignedEquipment = equipmentData.filter(eq => eq.category_id);
+          
+          const categoriesWithCount = categoriesData.map(cat => {
+            const categoryEquipment = assignedEquipment.filter(eq => eq.category_id === cat.id);
+            const available = categoryEquipment.filter(eq => eq.status === 'available').length;
+            const inUse = categoryEquipment.filter(eq => eq.status === 'in_use').length;
+            const total = available + inUse;
+            return {
+              ...cat,
+              qty: `${available}/${total}`,
+              availableCount: available,
+              inUseCount: inUse,
+              totalCount: total
+            };
+          });
+          setCategories(categoriesWithCount);
+          setEquipment(assignedEquipment);
+          
+          const individualData = {};
+          assignedEquipment.forEach(eq => {
+            const key = eq.name || eq.brand || 'Unknown';
+            if (!individualData[key]) {
+              individualData[key] = [];
+            }
+            individualData[key].push(eq);
+          });
+          setIndividualEquipment(individualData);
         }
-      } catch (e) {
-        console.error('Failed to fetch categories/equipment:', e);
       }
+    } catch (e) {
+      console.error('Failed to fetch categories/equipment:', e);
+    }
   };
 
   useEffect(() => {
@@ -146,23 +270,20 @@ const Equipment = () => {
                     <div key={cat.id} className="w-full">
                       <div className="mb-6 text-2xl font-semibold text-gray-800">Inventory / {selected}</div>
                       
-                      {/* Column Headers */}
                       <div className="grid grid-cols-3 gap-4 mb-4 text-gray-700 font-semibold text-sm">
                         <div className="text-left">Items</div>
                         <div className="text-center">Available/Total</div>
                         <div className="text-right">Total Price(₱)</div>
                       </div>
                       
-                      {/* Equipment List */}
                       <div className="space-y-3">
                         {(() => {
-                          const categoryEquipment = equipment.filter(eq => eq.category_id === cat.id && !(eq.name === 'Lenovo' && eq.serial_number === '87123qwe'));
+                          const categoryEquipment = equipment.filter(eq => eq.category_id === cat.id);
                           
                           if (categoryEquipment.length === 0) {
                             return <div className="text-gray-400 text-sm">No equipment found for this category.</div>;
                           }
 
-                          // Group equipment by name/brand to show aggregated counts
                           const groupedEquipment = categoryEquipment.reduce((acc, eq) => {
                             const key = eq.name || eq.brand || 'Unknown';
                             if (!acc[key]) {
@@ -174,7 +295,6 @@ const Equipment = () => {
                                 price: eq.purchase_price || 0
                               };
                             }
-                            // Only count available and in_use equipment
                             if (eq.status === 'available' || eq.status === 'in_use') {
                               acc[key].total += 1;
                               if (eq.status === 'available') {
@@ -186,15 +306,92 @@ const Equipment = () => {
                             return acc;
                           }, {});
 
-                          return Object.values(groupedEquipment).map((group, index) => (
-                            <div key={`${group.name}-${index}`} className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
-                              <div className="grid grid-cols-3 gap-4 items-center">
-                                <div className="text-left font-medium text-gray-800">{group.name}</div>
-                                <div className="text-center text-gray-700">{group.available}/{group.total}</div>
-                                <div className="text-right text-gray-800">₱{Number(group.price).toFixed(2)}</div>
+                          return Object.values(groupedEquipment).map((group, index) => {
+                            const isExpanded = expandedItems.has(group.name);
+                            const individualItems = individualEquipment[group.name] || [];
+                            
+                            return (
+                              <div key={`${group.name}-${index}`} className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+                                <div 
+                                  className="p-4 cursor-pointer hover:bg-gray-50 transition-colors duration-200 grid grid-cols-3 gap-4 items-center"
+                                  onClick={() => toggleExpanded(group.name)}
+                                >
+                                  <div className="text-left font-medium text-gray-800 flex items-center">
+                                    {group.name}
+                                    <svg 
+                                      className={`ml-2 h-4 w-4 text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                                      fill="none" 
+                                      stroke="currentColor" 
+                                      viewBox="0 0 24 24"
+                                    >
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                  </div>
+                                  <div className="text-center text-gray-700">{group.available}/{group.total}</div>
+                                  <div className="text-right text-gray-800">₱{Number(group.price).toFixed(2)}</div>
+                                </div>
+                                
+                                {isExpanded && (
+                                  <div className="border-t border-gray-100 bg-gray-50">
+                                    <div className="p-4">
+                                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                                        <div className="bg-gray-100 px-4 py-3 border-b border-gray-200">
+                                          <div className="grid grid-cols-5 gap-4 text-sm font-semibold text-gray-700">
+                                            <div>Serial Number</div>
+                                            <div>Status</div>
+                                            <div>Date Added</div>
+                                            <div>Last Updated</div>
+                                            <div className="text-center">Actions</div>
+                                          </div>
+                                        </div>
+                                        
+                                        <div className="divide-y divide-gray-200">
+                                          {individualItems.map((item, itemIndex) => (
+                                            <div key={`${item.id}-${itemIndex}`} className={`px-4 py-3 ${itemIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                                              <div className="grid grid-cols-5 gap-4 items-center text-sm">
+                                                <div className="font-medium text-gray-900">{item.serial_number || 'N/A'}</div>
+                                                <div>
+                                                  <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(item.status)}`}>
+                                                    {getStatusText(item.status)}
+                                                  </span>
+                                                </div>
+                                                <div className="text-gray-600">
+                                                  {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'N/A'}
+                                                </div>
+                                                <div className="text-gray-600">
+                                                  {item.updated_at ? new Date(item.updated_at).toLocaleDateString() : 'N/A'}
+                                                </div>
+                                                <div className="flex justify-center space-x-2">
+                                                  <button 
+                                                    onClick={(e) => handleEditClick(e, item)}
+                                                    className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors duration-200"
+                                                    title="Edit"
+                                                  >
+                                                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                    </svg>
+                                                  </button>
+                                                  <button 
+                                                    onClick={(e) => handleDeleteClick(e, item)}
+                                                    className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors duration-200"
+                                                    title="Delete"
+                                                  >
+                                                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                    </svg>
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
-                            </div>
-                          ));
+                            );
+                          });
                         })()}
                       </div>
                     </div>
@@ -209,8 +406,8 @@ const Equipment = () => {
       {/* Success Popup */}
       {showSuccess && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0" onClick={() => setShowSuccess(false)} />
-          <div className="relative bg-white rounded-lg shadow-md p-4 flex items-center max-w-sm w-full mx-4">
+          <div className="absolute inset-0 bg-black bg-opacity-10" onClick={() => setShowSuccess(false)} />
+          <div className="relative bg-white rounded-lg shadow-lg p-4 flex items-center max-w-sm w-full mx-4 animate-fade-in">
             <div className="flex items-start w-full">
               <div className="flex-shrink-0 mt-0.5">
                 <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
@@ -221,7 +418,7 @@ const Equipment = () => {
               </div>
               <div className="ml-3 w-0 flex-1">
                 <h3 className="text-base font-semibold text-gray-900">Success!</h3>
-                <p className="mt-1 text-sm text-gray-500">Equipment has been added successfully.</p>
+                <p className="mt-1 text-sm text-gray-500">{successMessage}</p>
               </div>
               <div className="ml-4 flex-shrink-0 flex">
                 <button
@@ -232,6 +429,122 @@ const Equipment = () => {
                   <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                   </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && deletingItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black bg-opacity-50" onClick={cancelDelete} />
+          <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              <div className="flex items-center mb-4">
+                <div className="flex-shrink-0">
+                  <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                    <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                  </div>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-lg font-semibold text-gray-900">Archive Equipment</h3>
+                </div>
+              </div>
+              
+              <div className="mb-6">
+                <p className="text-sm text-gray-600 mb-3">
+                  Are you sure you want to archive this equipment item? This action will move the item to the archive where it can be restored later if needed.
+                </p>
+                <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                  <p className="text-sm font-medium text-gray-900">
+                    {deletingItem.name || deletingItem.brand || 'Unknown Item'}
+                  </p>
+                  <p className="text-xs text-gray-600 mt-1">
+                    Serial: {deletingItem.serial_number || 'N/A'}
+                  </p>
+                  <p className="text-xs text-gray-600">
+                    Status: {deletingItem.status ? deletingItem.status.charAt(0).toUpperCase() + deletingItem.status.slice(1).replace('_', ' ') : 'Unknown'}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={cancelDelete}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDelete}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+                >
+                  Archive
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Serial Number Modal */}
+      {showEditModal && editingItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black bg-opacity-50" onClick={cancelEdit} />
+          <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              <div className="flex items-center mb-4">
+                <div className="flex-shrink-0">
+                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                    <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </div>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-lg font-semibold text-gray-900">Edit Serial Number</h3>
+                </div>
+              </div>
+              
+              <div className="mb-6">
+                <div className="bg-gray-50 rounded-lg p-3 border border-gray-200 mb-4">
+                  <p className="text-sm font-medium text-gray-900">
+                    {editingItem.name || editingItem.brand || 'Unknown Item'}
+                  </p>
+                  <p className="text-xs text-gray-600 mt-1">
+                    Current Serial: {editingItem.serial_number || 'N/A'}
+                  </p>
+                </div>
+                
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  New Serial Number
+                </label>
+                <input
+                  type="text"
+                  value={editSerialNumber}
+                  onChange={(e) => setEditSerialNumber(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter new serial number"
+                  autoFocus
+                />
+              </div>
+              
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={cancelEdit}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmEdit}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                >
+                  Save Changes
                 </button>
               </div>
             </div>

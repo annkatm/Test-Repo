@@ -96,13 +96,13 @@ const EmployeeDashboard = ({
   const renderContent = () => {
     switch (activeMenu) {
       case 'Home':
-        return <EmployeeHome />;
-      case 'Transaction':
         return <EmployeeTransaction />;
+      case 'Transaction':
+        return <EmployeeHome />;
       case 'Returned Items':
         return <EmployeeReturnItems />;
       default:
-        return <EmployeeHome />;
+        return <EmployeeTransaction />;
     }
   };
 
