@@ -729,18 +729,11 @@ const ViewApproved = () => {
                           <td className="py-3 px-3">{group.full_name}</td>
                           <td className="py-3 px-3">{group.position}</td>
                           <td className="py-3 px-3">
-                            <div className="flex items-center space-x-2">
-                              <span>
-                                {group.items.length === 1 
-                                  ? group.items[0].equipment_name 
-                                  : `${group.items.length} items`}
-                              </span>
-                              {group.items.length > 1 && (
-                                <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-blue-600 rounded-full">
-                                  {group.items.length}
-                                </span>
-                              )}
-                            </div>
+                            <span>
+                              {group.items.length === 1 
+                                ? group.items[0].equipment_name 
+                                : `${group.items.length} items`}
+                            </span>
                           </td>
                           <td className="py-3 px-3"><span className="px-2.5 py-0.5 rounded-full text-xs bg-green-100 text-green-700">{group.status}</span></td>
                           <td className="py-3 px-3">{group.approved_by_name}</td>
@@ -844,18 +837,11 @@ const ViewApproved = () => {
                           <td className="py-3 px-3">{group.full_name}</td>
                           <td className="py-3 px-3">{group.position}</td>
                           <td className="py-3 px-3">
-                            <div className="flex items-center space-x-2">
-                              <span>
-                                {group.items.length === 1 
-                                  ? group.items[0].equipment_name 
-                                  : `${group.items.length} items`}
-                              </span>
-                              {group.items.length > 1 && (
-                                <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-blue-600 rounded-full">
-                                  {group.items.length}
-                                </span>
-                              )}
-                            </div>
+                            <span>
+                              {group.items.length === 1 
+                                ? group.items[0].equipment_name 
+                                : `${group.items.length} items`}
+                            </span>
                           </td>
                           <td className="py-3 px-3">{formatRequestMode(group.request_mode)}</td>
                           <td className="py-3 px-3 text-red-600">{group.expected_return_date || 'N/A'}</td>
@@ -945,18 +931,11 @@ const ViewApproved = () => {
                           <td className="py-3 px-3">{group.full_name}</td>
                           <td className="py-3 px-3">{group.position}</td>
                           <td className="py-3 px-3">
-                            <div className="flex items-center space-x-2">
-                              <span>
-                                {group.items.length === 1 
-                                  ? group.items[0].equipment_name 
-                                  : `${group.items.length} items`}
-                              </span>
-                              {group.items.length > 1 && (
-                                <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-blue-600 rounded-full">
-                                  {group.items.length}
-                                </span>
-                              )}
-                            </div>
+                            <span>
+                              {group.items.length === 1 
+                                ? group.items[0].equipment_name 
+                                : `${group.items.length} items`}
+                            </span>
                           </td>
                           <td className="py-3 px-3 text-red-600">{group.return_date || 'N/A'}</td>
                           <td className="py-3 px-3">
