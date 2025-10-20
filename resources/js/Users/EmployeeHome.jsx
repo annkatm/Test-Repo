@@ -464,7 +464,7 @@ const EmployeeHome = () => {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-4xl font-bold text-[#2262C6] transition-all duration-300">Homepage</h1>
+        <h1 className="text-4xl font-bold text-[#2262C6] transition-all duration-300">Transaction</h1>
       </div>
 
       <div className="pl-5 grid grid-cols-12 gap-8 items-start bg-gray-50 ">
