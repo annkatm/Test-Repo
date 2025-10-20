@@ -33,7 +33,37 @@ const EmployeeTransaction = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [itemsPerPage, setItemsPerPage] = useState(5);
   const [actionLoading, setActionLoading] = useState(false);
+  const [activities, setActivities] = useState([]);
 
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('employee_activities') || '[]');
+      if (Array.isArray(saved)) setActivities(saved);
+    } catch (_) {}
+  }, []);
+
+  const logActivity = (message, variant = 'info') => {
+    const entry = { id: Date.now(), message, variant, time: new Date().toISOString() };
+    setActivities((prev) => {
+      const next = [entry, ...prev].slice(0, 50);
+      try { localStorage.setItem('employee_activities', JSON.stringify(next)); } catch (_) {}
+      return next;
+    });
+  };
+
+  const timeAgo = (iso) => {
+    const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+    if (diff < 60) return `${diff}s ago`;
+    const m = Math.floor(diff / 60); if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`;
+    const d = Math.floor(h / 24); return `${d}d ago`;
+  };
+
+  // Helper to fetch recent activity entries
+  const getRecentActivities = (limit = 10, filterVariant = null) => {
+    const list = filterVariant ? activities.filter((a) => a.variant === filterVariant) : activities;
+    return list.slice(0, Math.max(0, limit));
+  };
 
   // Sample data for return items
   const historyData = [
@@ -114,8 +144,17 @@ const EmployeeTransaction = () => {
     } catch (e) {
       // keep existing state on error
       console.error('Failed to fetch denied requests', e);
+      logActivity(`Failed to fetch denied requests: ${e.message}`, 'warning');
       return null;
     }
+  };
+
+  const iconFor = (variant) => {
+    if (variant === 'return') return { Icon: RefreshCcw, bg: 'bg-blue-50', text: 'text-blue-700' };
+    if (variant === 'exchange') return { Icon: RefreshCcw, bg: 'bg-purple-50', text: 'text-purple-700' };
+    if (variant === 'success') return { Icon: FilePlus2, bg: 'bg-green-50', text: 'text-green-700' };
+    if (variant === 'warning') return { Icon: Mouse, bg: 'bg-yellow-50', text: 'text-yellow-700' };
+    return { Icon: ClipboardList, bg: 'bg-gray-50', text: 'text-gray-700' };
   };
 
   // 🔍 Filter by search term
@@ -1643,7 +1682,7 @@ const EmployeeTransaction = () => {
     <div className="grid grid-cols-12 gap-6 h-full">
       <div className="col-span-8 space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-4xl font-bold text-[#2262C6] transition-all duration-300">Transaction</h1>
+          <h1 className="text-4xl font-bold text-[#2262C6] transition-all duration-300">Home</h1>
         </div>
 
         <div className="grid grid-cols-2 gap-5">
