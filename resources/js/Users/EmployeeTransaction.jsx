@@ -942,33 +942,6 @@ const EmployeeTransaction = () => {
               </div>
             )) : (
               <>
-                <div className="px-6 py-4 hover:bg-gray-50 transition-colors">
-                  <div className="grid grid-cols-12 gap-4 items-center">
-                    <div className="col-span-3">
-                      <span className="text-sm text-gray-900">09/23/2025</span>
-                    </div>
-                    <div className="col-span-6">
-                      <span className="text-sm text-gray-900">Laptop, Projector, etc</span>
-                    </div>
-                    <div className="col-span-3">
-                      <span className="text-sm text-gray-900">Pending</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="px-6 py-4 hover:bg-gray-50 transition-colors">
-                  <div className="grid grid-cols-12 gap-4 items-center">
-                    <div className="col-span-3">
-                      <span className="text-sm text-gray-900">09/22/2025</span>
-                    </div>
-                    <div className="col-span-6">
-                      <span className="text-sm text-gray-900">Laptop, Projector, etc</span>
-                    </div>
-                    <div className="col-span-3">
-                      <span className="text-sm text-gray-900">Pending</span>
-                    </div>
-                  </div>
-                </div>
               </>
             )}
           </div>
@@ -1037,23 +1010,5 @@ const EmployeeTransaction = () => {
     </div>
   );
 };
-
-// Toast styles could be improved or replaced by a component library
-const Toast = ({ t }) => {
-  const bg = t.variant === 'success' ? 'bg-green-50' : t.variant === 'warning' ? 'bg-yellow-50' : t.variant === 'error' ? 'bg-red-50' : 'bg-white';
-  const text = t.variant === 'success' ? 'text-green-700' : t.variant === 'warning' ? 'text-yellow-700' : t.variant === 'error' ? 'text-red-700' : 'text-gray-800';
-  return (
-    <div className={`max-w-sm w-full ${bg} border border-gray-200 rounded-lg shadow-md p-3 mb-3`}> 
-      <div className="flex items-start gap-3">
-        <div className={`flex-shrink-0 rounded-full p-1 ${bg}`}>
-          <div className={`h-3 w-3 ${text} rounded-full`} />
-        </div>
-        <div className="flex-1 text-sm text-gray-800">{t.message}</div>
-      </div>
-    </div>
-  );
-};
-
-export default EmployeeTransaction;
 
 export default EmployeeTransaction;
