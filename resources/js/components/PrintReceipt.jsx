@@ -1,5 +1,5 @@
-import React from 'react';
-import { Printer, X, Package, User, Briefcase, Calendar, Hash } from 'lucide-react';
+import React, { useState } from 'react';
+import { Printer, X, Package, User, Briefcase, Calendar, Hash, Edit2, Save } from 'lucide-react';
 
 const PrintReceipt = ({ 
   isOpen, 
@@ -7,7 +7,57 @@ const PrintReceipt = ({
   transactionData,
   onPrint
 }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editableData, setEditableData] = useState({
+    full_name: '',
+    position: '',
+    department: 'IT Department',
+    equipment_name: '',
+    serial_number: '',
+    notes: '',
+    it_admin: 'Arvin D. Salas',
+    hr_lead: 'MAUMondres/PMagdadaro',
+    it_admin_title: 'IT Administrator',
+    hr_lead_title: 'Senior IT Consultant/HR Lead'
+  });
+
+  // Initialize editable data when transactionData changes
+  React.useEffect(() => {
+    if (transactionData) {
+      setEditableData(prev => ({
+        ...prev,
+        full_name: transactionData.full_name || '',
+        position: transactionData.position || '',
+        department: transactionData.department || 'IT Department',
+        equipment_name: transactionData.equipment_name || '',
+        serial_number: transactionData.serial_number || '',
+        notes: transactionData.notes || ''
+      }));
+    }
+  }, [transactionData]);
+
   if (!isOpen || !transactionData) return null;
+
+  const handleInputChange = (field, value) => {
+    setEditableData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleSave = () => {
+    setIsEditing(false);
+  };
+
+  // Handle both single item and multiple items (grouped)
+  const items = transactionData.items || [{
+    equipment_name: transactionData.equipment_name,
+    serial_number: transactionData.serial_number,
+    notes: transactionData.notes
+  }];
+
+  // Debug: Log items to verify serial numbers are present
+  console.log('PrintReceipt - Items to print:', items);
 
   const handlePrint = () => {
     const printWindow = window.open('', '_blank');
@@ -23,15 +73,14 @@ const PrintReceipt = ({
               line-height: 1.4;
             }
             .header { 
-              display: flex; 
-              justify-content: space-between; 
-              align-items: flex-start; 
+              text-align: center; 
               margin-bottom: 30px; 
             }
             .logo { 
-              font-size: 24px; 
-              font-weight: bold; 
-              color: #2563eb; 
+              width: 120px; 
+              height: auto; 
+              margin: 0 auto 20px auto; 
+              display: block; 
             }
             .title { 
               text-align: center; 
@@ -95,18 +144,15 @@ const PrintReceipt = ({
         </head>
         <body>
           <div class="header">
-            <div class="logo">iREPLY</div>
-            <div style="text-align: right;">
-              <div style="font-size: 12px; color: #666;">done</div>
-            </div>
+            <img src="/images/Frame_89-removebg-preview.png" alt="iREPLY Logo" class="logo" />
           </div>
 
           <div class="title">ACCOUNTABILITY FORM AGREEMENT</div>
 
           <div class="employee-info">
-            <div><strong>Employee Name:</strong> ${transactionData.full_name}</div>
-            <div><strong>Position:</strong> ${transactionData.position}</div>
-            <div><strong>Department:</strong> ${transactionData.department || 'IT Department'}</div>
+            <div><strong>Employee Name:</strong> ${editableData.full_name}</div>
+            <div><strong>Position:</strong> ${editableData.position}</div>
+            <div><strong>Department:</strong> ${editableData.department}</div>
           </div>
 
           <div class="agreement-text">
@@ -125,62 +171,30 @@ const PrintReceipt = ({
           <table class="equipment-table">
             <thead>
               <tr>
-                <th>Item</th>
-                <th>Description</th>
+                <th>#</th>
+                <th>Equipment Name</th>
                 <th>Serial Number</th>
                 <th>Date Released</th>
                 <th>Date Returned</th>
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td>Laptop</td>
-                <td>${transactionData.equipment_name}</td>
-                <td>${transactionData.serial_number || 'N/A'}</td>
-                <td>${new Date().toLocaleDateString()}</td>
-                <td></td>
-              </tr>
-              <tr>
-                <td>Mouse</td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-              </tr>
-              <tr>
-                <td>Keyboard</td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-              </tr>
-              <tr>
-                <td>Headset</td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-              </tr>
-              <tr>
-                <td>UPS</td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-              </tr>
-              <tr>
-                <td>Internet Broadband</td>
-                <td></td>
-                <td></td>
-                <td></td>
-                <td></td>
-              </tr>
+              ${items.map((item, index) => {
+                const dateReleased = item.date_released ? new Date(item.date_released).toLocaleDateString() : new Date().toLocaleDateString();
+                const dateReturned = item.date_returned ? new Date(item.date_returned).toLocaleDateString() : '';
+                return `
+                  <tr>
+                    <td>${index + 1}</td>
+                    <td>${item.equipment_name || 'N/A'}</td>
+                    <td>${item.serial_number || 'N/A'}</td>
+                    <td>${dateReleased}</td>
+                    <td>${dateReturned}</td>
+                  </tr>
+                `;
+              }).join('')}
               <tr class="others-row">
-                <td>Others:</td>
-                <td>${transactionData.notes || ''}</td>
-                <td></td>
-                <td></td>
-                <td></td>
+                <td colspan="2">Others/Notes:</td>
+                <td colspan="3">${transactionData.notes || ''}</td>
               </tr>
             </tbody>
           </table>
@@ -188,18 +202,18 @@ const PrintReceipt = ({
           <div class="signature-section">
             <div class="signature-box">
               <div class="signature-line"></div>
-              <div class="signature-label">${transactionData.full_name}</div>
+              <div class="signature-label">${editableData.full_name}</div>
               <div class="signature-label">Employee's Signature over Printed Name</div>
             </div>
             <div class="signature-box">
               <div class="signature-line"></div>
-              <div class="signature-label">Arvin D. Salas</div>
-              <div class="signature-label">IT Administrator</div>
+              <div class="signature-label">${editableData.it_admin}</div>
+              <div class="signature-label">${editableData.it_admin_title}</div>
             </div>
             <div class="signature-box">
               <div class="signature-line"></div>
-              <div class="signature-label">MAUMondres/PMagdadaro</div>
-              <div class="signature-label">Senior IT Consultant/HR Lead</div>
+              <div class="signature-label">${editableData.hr_lead}</div>
+              <div class="signature-label">${editableData.hr_lead_title}</div>
             </div>
           </div>
         </body>
@@ -232,16 +246,35 @@ const PrintReceipt = ({
                   Print Accountability Form
                 </h3>
                 <p className="text-sm text-gray-600 mt-1">
-                  Review the accountability form details before printing
+                  {isEditing ? 'Edit the form details before printing' : 'Review the accountability form details before printing'}
                 </p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-            >
-              <X className="h-5 w-5 text-gray-500" />
-            </button>
+            <div className="flex items-center space-x-2">
+              {isEditing ? (
+                <button
+                  onClick={handleSave}
+                  className="p-2 hover:bg-green-100 rounded-full transition-colors text-green-600"
+                  title="Save changes"
+                >
+                  <Save className="h-5 w-5" />
+                </button>
+              ) : (
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="p-2 hover:bg-blue-100 rounded-full transition-colors text-blue-600"
+                  title="Edit form"
+                >
+                  <Edit2 className="h-5 w-5" />
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <X className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -250,7 +283,11 @@ const PrintReceipt = ({
           {/* Form Preview */}
           <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
             <div className="text-center mb-6">
-              <div className="text-2xl font-bold text-blue-600 mb-2">iREPLY</div>
+              <img 
+                src="/images/Frame_89-removebg-preview.png" 
+                alt="iREPLY Logo" 
+                className="w-24 h-auto mx-auto mb-4"
+              />
               <div className="text-lg font-semibold text-gray-900">ACCOUNTABILITY FORM AGREEMENT</div>
             </div>
 
@@ -262,17 +299,44 @@ const PrintReceipt = ({
                   Employee Information
                 </h4>
                 <div className="bg-white rounded-lg p-4 space-y-2">
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
                     <span className="text-gray-600">Employee Name:</span>
-                    <span className="font-medium">{transactionData.full_name}</span>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={editableData.full_name}
+                        onChange={(e) => handleInputChange('full_name', e.target.value)}
+                        className="px-2 py-1 border border-gray-300 rounded text-sm font-medium w-48"
+                      />
+                    ) : (
+                      <span className="font-medium">{editableData.full_name}</span>
+                    )}
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
                     <span className="text-gray-600">Position:</span>
-                    <span className="font-medium">{transactionData.position}</span>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={editableData.position}
+                        onChange={(e) => handleInputChange('position', e.target.value)}
+                        className="px-2 py-1 border border-gray-300 rounded text-sm font-medium w-48"
+                      />
+                    ) : (
+                      <span className="font-medium">{editableData.position}</span>
+                    )}
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
                     <span className="text-gray-600">Department:</span>
-                    <span className="font-medium">{transactionData.department || 'IT Department'}</span>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={editableData.department}
+                        onChange={(e) => handleInputChange('department', e.target.value)}
+                        className="px-2 py-1 border border-gray-300 rounded text-sm font-medium w-48"
+                      />
+                    ) : (
+                      <span className="font-medium">{editableData.department}</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -281,33 +345,104 @@ const PrintReceipt = ({
               <div>
                 <h4 className="font-semibold text-gray-900 mb-2 flex items-center">
                   <Package className="h-4 w-4 mr-2" />
-                  Equipment List
+                  Equipment List ({items.length} {items.length === 1 ? 'item' : 'items'})
                 </h4>
-                <div className="bg-white rounded-lg p-4">
+
+                <div className="bg-white rounded-lg p-4 space-y-3">
                   <div className="text-sm text-gray-600 mb-2">Equipment to be released:</div>
-                  <div className="font-medium">{transactionData.equipment_name}</div>
-                  <div className="text-sm text-gray-500">Serial: {transactionData.serial_number || 'N/A'}</div>
+                  {items.map((item, index) => {
+                    const dateReleased = item.date_released ? new Date(item.date_released).toLocaleDateString() : new Date().toLocaleDateString();
+                    const dateReturned = item.date_returned ? new Date(item.date_returned).toLocaleDateString() : null;
+                    
+                    return (
+                      <div key={index} className="border-l-2 border-blue-500 pl-3 py-1">
+                        <div className="font-medium">{index + 1}. {item.equipment_name || 'N/A'}</div>
+                        <div className="text-sm text-gray-500">Serial: {item.serial_number || 'N/A'}</div>
+                        <div className="text-xs text-gray-400 mt-1">
+                          Released: {dateReleased}
+                          {dateReturned && ` | Returned: ${dateReturned}`}
+                        </div>
+                      </div>
+                    );
+                  })}
                   {transactionData.notes && (
-                    <div className="text-sm text-gray-500 mt-1">Notes: {transactionData.notes}</div>
+                    <div className="text-sm text-gray-500 mt-2 pt-2 border-t">
+                      <strong>Notes:</strong> {transactionData.notes}
+                    </div>
                   )}
                 </div>
               </div>
 
-              {/* Agreement Preview */}
+              {/* Signature Section */}
               <div>
                 <h4 className="font-semibold text-gray-900 mb-2 flex items-center">
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Agreement Terms
+                  <Hash className="h-4 w-4 mr-2" />
+                  Signatures
                 </h4>
-                <div className="bg-white rounded-lg p-4 text-sm text-gray-600">
-                  <p className="mb-2">
-                    Employee acknowledges receipt of company-issued equipment and agrees to maintain it in good condition. 
-                    Employee is responsible for proper care and return of equipment upon termination or request.
-                  </p>
-                  <p>
-                    Failure to return equipment in good condition may result in appropriate action including withholding 
-                    of final pay and clearance, and may be subject to formal legal action.
-                  </p>
+                <div className="bg-white rounded-lg p-4 space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="text-center">
+                      <div className="text-sm text-gray-600 mb-1">Employee</div>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={editableData.full_name}
+                          onChange={(e) => handleInputChange('full_name', e.target.value)}
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-center"
+                        />
+                      ) : (
+                        <div className="text-sm font-medium">{editableData.full_name}</div>
+                      )}
+                    </div>
+                    <div className="text-center">
+                      <div className="text-sm text-gray-600 mb-1">IT Admin</div>
+                      {isEditing ? (
+                        <div className="space-y-1">
+                          <input
+                            type="text"
+                            value={editableData.it_admin}
+                            onChange={(e) => handleInputChange('it_admin', e.target.value)}
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-center"
+                          />
+                          <input
+                            type="text"
+                            value={editableData.it_admin_title}
+                            onChange={(e) => handleInputChange('it_admin_title', e.target.value)}
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-xs text-center"
+                          />
+                        </div>
+                      ) : (
+                        <div className="text-sm font-medium">
+                          <div>{editableData.it_admin}</div>
+                          <div className="text-xs text-gray-500">{editableData.it_admin_title}</div>
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-center">
+                      <div className="text-sm text-gray-600 mb-1">HR Lead</div>
+                      {isEditing ? (
+                        <div className="space-y-1">
+                          <input
+                            type="text"
+                            value={editableData.hr_lead}
+                            onChange={(e) => handleInputChange('hr_lead', e.target.value)}
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-center"
+                          />
+                          <input
+                            type="text"
+                            value={editableData.hr_lead_title}
+                            onChange={(e) => handleInputChange('hr_lead_title', e.target.value)}
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-xs text-center"
+                          />
+                        </div>
+                      ) : (
+                        <div className="text-sm font-medium">
+                          <div>{editableData.hr_lead}</div>
+                          <div className="text-xs text-gray-500">{editableData.hr_lead_title}</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

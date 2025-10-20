@@ -14,6 +14,443 @@ use App\Models\User;
 class TransactionController extends Controller
 {
     /**
+     * Get transaction statistics for employee dashboard
+     */
+    public function stats()
+    {
+        try {
+            $userId = auth()->id();
+            
+            // Get employee record for current user
+            $employee = DB::table('employees')->where('user_id', $userId)->first();
+            
+            if (!$employee) {
+                return response()->json([
+                    'success' => true,
+                    'data' => [
+                        'borrowed' => 0,
+                        'available' => 0,
+                        'overdue' => 0
+                    ]
+                ]);
+            }
+
+            // Count currently borrowed items (released status)
+            $borrowed = DB::table('transactions')
+                ->where('employee_id', $employee->id)
+                ->where('status', 'released')
+                ->count();
+
+            // Count overdue items (released past expected_return_date)
+            $overdue = DB::table('transactions')
+                ->where('employee_id', $employee->id)
+                ->where('status', 'released')
+                ->where('expected_return_date', '<', now())
+                ->count();
+
+            // Count available equipment
+            $available = DB::table('equipment')
+                ->where('status', 'available')
+                ->count();
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'borrowed' => $borrowed,
+                    'available' => $available,
+                    'overdue' => $overdue
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error fetching stats: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get currently borrowed items for current user (for modal view)
+     */
+    public function borrowed()
+    {
+        try {
+            $userId = auth()->id();
+            
+            // Get employee record for current user
+            $employee = DB::table('employees')->where('user_id', $userId)->first();
+            
+            if (!$employee) {
+                return response()->json([
+                    'success' => true,
+                    'data' => []
+                ]);
+            }
+
+            $transactions = DB::table('transactions')
+                ->leftJoin('equipment', 'transactions.equipment_id', '=', 'equipment.id')
+                ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
+                ->where('transactions.employee_id', $employee->id)
+                ->where('transactions.status', 'released')
+                ->select(
+                    'transactions.*',
+                    'equipment.name as equipment_name',
+                    'equipment.brand',
+                    'equipment.model',
+                    'equipment.serial_number',
+                    'categories.name as category_name',
+                    DB::raw('CASE WHEN transactions.expected_return_date < NOW() THEN 1 ELSE 0 END as is_overdue'),
+                    DB::raw('DATEDIFF(NOW(), transactions.expected_return_date) as days_overdue')
+                )
+                ->orderBy('transactions.expected_return_date', 'asc')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $transactions,
+                'count' => $transactions->count()
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error fetching borrowed items: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get overdue items for current user (for modal view)
+     */
+    public function overdue()
+    {
+        try {
+            $userId = auth()->id();
+            
+            // Get employee record for current user
+            $employee = DB::table('employees')->where('user_id', $userId)->first();
+            
+            if (!$employee) {
+                return response()->json([
+                    'success' => true,
+                    'data' => []
+                ]);
+            }
+
+            $transactions = DB::table('transactions')
+                ->leftJoin('equipment', 'transactions.equipment_id', '=', 'equipment.id')
+                ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
+                ->where('transactions.employee_id', $employee->id)
+                ->where('transactions.status', 'released')
+                ->where('transactions.expected_return_date', '<', now())
+                ->select(
+                    'transactions.*',
+                    'equipment.name as equipment_name',
+                    'equipment.brand',
+                    'equipment.model',
+                    'equipment.serial_number',
+                    'categories.name as category_name',
+                    DB::raw('DATEDIFF(NOW(), transactions.expected_return_date) as days_overdue')
+                )
+                ->orderBy('transactions.expected_return_date', 'asc')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $transactions,
+                'count' => $transactions->count()
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error fetching overdue items: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get approved transactions for current user
+     */
+    public function approved()
+    {
+        try {
+            $userId = auth()->id();
+            
+            // Get employee record for current user
+            $employee = DB::table('employees')->where('user_id', $userId)->first();
+            
+            if (!$employee) {
+                return response()->json([
+                    'success' => true,
+                    'data' => []
+                ]);
+            }
+
+            $transactions = DB::table('transactions')
+                ->leftJoin('equipment', 'transactions.equipment_id', '=', 'equipment.id')
+                ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
+                ->where('transactions.employee_id', $employee->id)
+                ->where('transactions.status', 'released')
+                ->select(
+                    'transactions.*',
+                    'equipment.name as equipment_name',
+                    'equipment.brand',
+                    'equipment.model',
+                    'equipment.serial_number',
+                    'categories.name as category_name'
+                )
+                ->orderBy('transactions.created_at', 'desc')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $transactions
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error fetching approved transactions: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get transaction history for current user
+     */
+    public function history()
+    {
+        try {
+            $userId = auth()->id();
+            
+            // Get employee record for current user
+            $employee = DB::table('employees')->where('user_id', $userId)->first();
+            
+            if (!$employee) {
+                return response()->json([
+                    'success' => true,
+                    'data' => []
+                ]);
+            }
+
+            $transactions = DB::table('transactions')
+                ->leftJoin('equipment', 'transactions.equipment_id', '=', 'equipment.id')
+                ->where('transactions.employee_id', $employee->id)
+                ->where('transactions.status', 'returned')
+                ->select(
+                    'transactions.*',
+                    'equipment.name as equipment_name',
+                    'equipment.brand',
+                    'equipment.model'
+                )
+                ->orderBy('transactions.return_date', 'desc')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $transactions
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error fetching history: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Return a transaction
+     */
+    public function returnTransaction(Request $request, $id)
+    {
+        try {
+            $transaction = DB::table('transactions')->where('id', $id)->first();
+            
+            if (!$transaction) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Transaction not found'
+                ], 404);
+            }
+
+            if ($transaction->status !== 'released') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Transaction is not currently released'
+                ], 400);
+            }
+
+            $validatedData = $request->validate([
+                'return_condition' => 'required|in:good_condition,damaged,lost',
+                'return_notes' => 'nullable|string|max:500'
+            ]);
+
+            $updateData = [
+                'status' => 'returned',
+                'return_date' => now(),
+                'return_condition' => $validatedData['return_condition'],
+                'return_notes' => $validatedData['return_notes'] ?? null,
+                'received_by' => auth()->id(),
+                'updated_at' => now()
+            ];
+
+            DB::table('transactions')->where('id', $id)->update($updateData);
+
+            // Update equipment status back to available
+            if ($transaction->equipment_id) {
+                DB::table('equipment')
+                    ->where('id', $transaction->equipment_id)
+                    ->update(['status' => 'available']);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Transaction returned successfully'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error returning transaction: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Request equipment exchange
+     */
+    public function exchange(Request $request, $id)
+    {
+        try {
+            $transaction = DB::table('transactions')->where('id', $id)->first();
+            
+            if (!$transaction) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Transaction not found'
+                ], 404);
+            }
+
+            $validatedData = $request->validate([
+                'new_equipment_id' => 'required|exists:equipment,id',
+                'reason' => 'required|string|max:1000',
+                'evidence_file' => 'nullable|string|max:500'
+            ]);
+
+            // Create an exchange request (stored as a new request)
+            $exchangeRequestId = DB::table('requests')->insertGetId([
+                'employee_id' => $transaction->employee_id,
+                'equipment_id' => $validatedData['new_equipment_id'],
+                'request_type' => 'exchange',
+                'status' => 'pending',
+                'reason' => $validatedData['reason'],
+                'evidence_file' => $validatedData['evidence_file'] ?? null,
+                'original_transaction_id' => $id,
+                'created_at' => now(),
+                'updated_at' => now()
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Exchange request submitted successfully',
+                'data' => ['request_id' => $exchangeRequestId]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error creating exchange request: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Cancel a pending request
+     */
+    public function cancel($id)
+    {
+        try {
+            // Check if it's a request or transaction
+            $request = DB::table('requests')->where('id', $id)->first();
+            
+            if ($request) {
+                if ($request->status !== 'pending') {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Only pending requests can be cancelled'
+                    ], 400);
+                }
+
+                DB::table('requests')
+                    ->where('id', $id)
+                    ->update([
+                        'status' => 'cancelled',
+                        'updated_at' => now()
+                    ]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Request cancelled successfully'
+                ]);
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Request not found'
+            ], 404);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error cancelling request: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Appeal a denied request
+     */
+    public function appeal(Request $request, $id)
+    {
+        try {
+            $deniedRequest = DB::table('requests')->where('id', $id)->first();
+            
+            if (!$deniedRequest) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Request not found'
+                ], 404);
+            }
+
+            if ($deniedRequest->status !== 'denied') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Only denied requests can be appealed'
+                ], 400);
+            }
+
+            $validatedData = $request->validate([
+                'appeal_reason' => 'required|string|max:1000'
+            ]);
+
+            // Update request status to appealed
+            DB::table('requests')
+                ->where('id', $id)
+                ->update([
+                    'status' => 'appealed',
+                    'appeal_reason' => $validatedData['appeal_reason'],
+                    'appeal_date' => now(),
+                    'updated_at' => now()
+                ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Appeal submitted successfully'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error submitting appeal: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Generate a receipt for the transaction
      */
     public function print($id)
@@ -355,8 +792,8 @@ class TransactionController extends Controller
                 'status' => 'sometimes|in:pending,released,returned,lost,damaged',
                 'expected_return_date' => 'sometimes|date',
                 'return_date' => 'sometimes|date',
-                'return_condition' => 'sometimes|string',
-                'notes' => 'sometimes|string',
+                'return_condition' => 'sometimes|in:good_condition,damaged,lost',
+                'return_notes' => 'sometimes|string|max:500',
             ]);
 
             $validatedData['updated_at'] = now();

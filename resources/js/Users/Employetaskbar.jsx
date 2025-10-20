@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Search, Bell } from "lucide-react";
+import { Search } from "lucide-react";
+import { useApp } from "../contexts/AppContext";
 
 const EmployeeTaskbar = ({ 
   onSearch, 
@@ -11,19 +12,133 @@ const EmployeeTaskbar = ({
   onArchiveClick,
   onHomeScreenClick
 }) => {
+  const { user, isAuthenticated } = useApp ? useApp() : { user: null, isAuthenticated: false };
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [employeeName, setEmployeeName] = useState(initialEmployeeName);
   const [searchQuery, setSearchQuery] = useState("");
   const [formData, setFormData] = useState({
-    firstName: "Balmond",
-    lastName: "Gwapo",
-    email: "employee@hris.com",
+    firstName: "",
+    lastName: "",
+    email: "",
     phoneNumber: "",
-    location: "IT Department",
-    accountType: "employee"
+    location: "",
+    accountType: "",
+    position: ""
   });
+  const [originalProfile, setOriginalProfile] = useState(null);
+
+  useEffect(() => {
+    if (!isAuthenticated || !user || isEditing) return;
+
+    const derivedName = (() => {
+      const first = user.first_name || user.firstName || null;
+      const last = user.last_name || user.lastName || null;
+      if (first || last) return `${first || ""} ${last || ""}`.trim();
+      return user.name || initialEmployeeName;
+    })();
+
+    setEmployeeName(derivedName);
+
+    const parts = derivedName.split(/\s+/).filter(Boolean);
+    const first = user.first_name || user.firstName || parts[0] || "";
+    const last = user.last_name || user.lastName || (parts.length > 1 ? parts.slice(-1)[0] : "");
+
+    const updated = {
+      firstName: first,
+      lastName: last,
+      email: user.email || "",
+      accountType: user.role?.name || "employee",
+      location: user.department || user.location || "",
+      position: user.position || "",
+      phoneNumber: formData.phoneNumber || "",
+    };
+    setFormData(prev => ({ ...prev, ...updated }));
+    setOriginalProfile(prev => prev || updated);
+  }, [isAuthenticated, user, isEditing, initialEmployeeName]);
+
+  // Load detailed employee profile from backend to reflect accurate info
+  useEffect(() => {
+    let cancelled = false;
+    const loadEmployee = async () => {
+      try {
+        if (isEditing) return; // don't override while editing
+        const authRes = await fetch('/check-auth', {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+          credentials: 'same-origin'
+        });
+        const authData = await authRes.json();
+        if (!authData?.authenticated || !authData.user) return;
+
+        let employee = null;
+        // 1) Linked employee id
+        if (authData.user.linked_employee_id) {
+          try {
+            const empRes = await fetch(`/api/employees/${authData.user.linked_employee_id}`);
+            const empData = await empRes.json();
+            if (empData?.success && empData.data) employee = empData.data;
+          } catch (_) {}
+        }
+        // 2) Fallback: search list and match by id/email/name
+        if (!employee) {
+          try {
+            const listRes = await fetch('/api/employees');
+            const listJson = await listRes.json();
+            const list = listJson?.success ? listJson.data : listJson;
+            if (Array.isArray(list)) {
+              if (authData.user.linked_employee_id) {
+                employee = list.find(e => e.id === authData.user.linked_employee_id) || employee;
+              }
+              if (!employee && authData.user.employee_id) {
+                employee = list.find(e => e.employee_id === authData.user.employee_id) || employee;
+              }
+              if (!employee && authData.user.email) {
+                employee = list.find(e => (e.email || '').toLowerCase() === authData.user.email.toLowerCase()) || employee;
+              }
+              if (!employee && authData.user.name) {
+                const parts = String(authData.user.name).trim().split(/\s+/);
+                const f = parts[0] || '';
+                const l = parts.length > 1 ? parts.slice(-1)[0] : '';
+                employee = list.find(e => (e.first_name || '').toLowerCase() === f.toLowerCase() && (e.last_name || '').toLowerCase() === l.toLowerCase()) || employee;
+              }
+            }
+          } catch (_) {}
+        }
+
+        if (cancelled) return;
+        if (employee) {
+          const first = employee.first_name || user?.first_name || user?.firstName || '';
+          const last = employee.last_name || user?.last_name || user?.lastName || '';
+          const full = `${first} ${last}`.trim() || employee.name || user?.name || initialEmployeeName;
+          setEmployeeName(full);
+          const profile = {
+            firstName: first || '',
+            lastName: last || '',
+            email: employee.email || user?.email || '',
+            phoneNumber: employee.phone || employee.contact || '',
+            location: employee.department || employee.location || '',
+            position: employee.position || employee.job_title || user?.position || '',
+            accountType: user?.role?.name || 'employee',
+          };
+          setFormData(prev => ({ ...prev, ...profile }));
+          setOriginalProfile(profile);
+        }
+      } catch (_) {
+        // ignore and keep existing UI defaults
+      }
+    };
+    loadEmployee();
+    return () => { cancelled = true; };
+  }, [isAuthenticated, user, isEditing, initialEmployeeName]);
+
+  // When opening the modal, ensure form has the latest loaded profile
+  useEffect(() => {
+    if (showProfileModal && originalProfile) {
+      setFormData(prev => ({ ...prev, ...originalProfile }));
+    }
+  }, [showProfileModal, originalProfile]);
 
   const handleProfileClick = () => {
     setShowProfileMenu(!showProfileMenu);
@@ -38,6 +153,14 @@ const EmployeeTaskbar = ({
         onPersonalDetailsClick?.();
         break;
       case 'profile':
+        // Backward-compat: treat as open modal in edit mode
+        setShowProfileModal(true);
+        setIsEditing(true);
+        onProfileClick?.();
+        break;
+      case 'profile_edit':
+        setShowProfileModal(true);
+        setIsEditing(true);
         onProfileClick?.();
         break;
       case 'logout':
@@ -55,19 +178,17 @@ const EmployeeTaskbar = ({
   };
 
   const handleEdit = () => {
+    // Snapshot current values for cancel
+    setOriginalProfile({ ...formData });
     setIsEditing(true);
   };
 
   const handleCancel = () => {
     setIsEditing(false);
-    setFormData({
-      firstName: "Balmond",
-      lastName: "Gwapo",
-      email: "employee@hris.com",
-      phoneNumber: "",
-      location: "IT Department",
-      accountType: "employee"
-    });
+    if (originalProfile) {
+      setFormData(prev => ({ ...prev, ...originalProfile }));
+      setEmployeeName(`${originalProfile.firstName} ${originalProfile.lastName}`.trim() || employeeName);
+    }
   };
 
   const handleSave = () => {
@@ -75,6 +196,8 @@ const EmployeeTaskbar = ({
     // Update the displayed name in the header
     setEmployeeName(`${formData.firstName} ${formData.lastName}`);
     console.log("Saved data:", formData);
+    // After save, update snapshot so future cancel doesn't jump back further
+    setOriginalProfile({ ...formData });
   };
 
   const handleChange = (field, value) => {
@@ -125,17 +248,7 @@ const EmployeeTaskbar = ({
 
         {/* Right Section */}
         <div className="flex items-center space-x-4">
-          {/* Notifications */}
-          <div className="relative">
-            <button className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors">
-              <Bell className="h-5 w-5" />
-              {notifications > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                  {notifications > 9 ? '9+' : notifications}
-                </span>
-              )}
-            </button>
-          </div>
+          
 
           {/* Profile Menu */}
           <div className="relative">
@@ -143,12 +256,12 @@ const EmployeeTaskbar = ({
               onClick={handleProfileClick}
               className="flex items-center space-x-2 p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
             >
-              <div className="w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center text-white text-sm font-semibold">
-                {getInitials(employeeName)}
-              </div>
               <span className="hidden md:block text-sm font-medium text-gray-700">
                 {employeeName}
               </span>
+              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-semibold">
+                {getInitials(employeeName)}
+              </div>
             </button>
 
             {/* Dropdown Menu */}
@@ -162,7 +275,7 @@ const EmployeeTaskbar = ({
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-base font-semibold text-gray-900 truncate">{employeeName}</div>
-                      <div className="text-sm text-gray-500 mt-0.5">Employee</div>
+                      <div className="text-sm text-gray-500 mt-0.5">{formData.accountType ? (formData.accountType.charAt(0).toUpperCase()+formData.accountType.slice(1)) : 'Employee'}</div>
                       <button 
                         onClick={() => handleMenuItemClick('personalDetails')}
                         className="text-sm text-blue-600 hover:text-blue-700 flex items-center mt-2 font-medium"
@@ -179,7 +292,7 @@ const EmployeeTaskbar = ({
                 {/* Menu Items */}
                 <div className="py-2">
                   <button
-                    onClick={() => handleMenuItemClick('profile')}
+                    onClick={() => handleMenuItemClick('profile_edit')}
                     className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                   >
                     <svg className="w-5 h-5 mr-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -352,16 +465,7 @@ const EmployeeTaskbar = ({
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
-                    {isEditing ? (
-                      <input
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => handleChange('email', e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    ) : (
-                      <p className="text-base text-gray-900 font-medium">{formData.email}</p>
-                    )}
+                    <p className="text-base text-gray-900 font-medium">{formData.email}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
@@ -379,8 +483,8 @@ const EmployeeTaskbar = ({
                   </div>
                 </div>
 
-                {/* Location and Account Type */}
-                <div className="grid grid-cols-2 gap-4">
+                {/* Location (Account Type removed) */}
+                <div className="grid grid-cols-1 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
                     {isEditing ? (
@@ -394,22 +498,17 @@ const EmployeeTaskbar = ({
                       <p className="text-base text-gray-900 font-medium">{formData.location}</p>
                     )}
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Account Type</label>
-                    {isEditing ? (
-                      <select
-                        value={formData.accountType}
-                        onChange={(e) => handleChange('accountType', e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="employee">Employee</option>
-                        <option value="admin">Admin</option>
-                      </select>
-                    ) : (
-                      <p className="text-base text-gray-900 font-medium">{formData.accountType}</p>
-                    )}
-                  </div>
                 </div>
+
+                {/* Position (view mode only) */}
+                {!isEditing && formData.position && (
+                  <div className="grid grid-cols-1 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Position</label>
+                      <p className="text-base text-gray-900 font-medium">{formData.position}</p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Save Button */}
                 {isEditing && (

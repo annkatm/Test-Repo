@@ -52,6 +52,11 @@ const ViewApproved = () => {
     isOpen: false,
     transactionData: null
   });
+  const [printConfirmModal, setPrintConfirmModal] = useState({
+    isOpen: false,
+    itemCount: 0,
+    transactionData: null
+  });
 
   const [viewHolderModal, setViewHolderModal] = useState({
     isOpen: false,
@@ -145,70 +150,203 @@ const ViewApproved = () => {
     setIsMenuOpen(false);
   };
 
+  // Group approved requests by employee
+  const groupApprovedByEmployee = (requests) => {
+    const grouped = {};
+    requests.forEach(req => {
+      const employeeName = req.full_name || req.employee_name || req.name || 'Unknown';
+      if (!grouped[employeeName]) {
+        grouped[employeeName] = {
+          id: req.id, // Use first request ID as group ID
+          full_name: employeeName,
+          position: req.position || 'N/A',
+          status: req.status || 'approved',
+          approved_by_name: req.approved_by_name || 'N/A',
+          employee_id: req.employee_id,
+          requests: [],
+          items: []
+        };
+      }
+      grouped[employeeName].requests.push(req);
+      grouped[employeeName].items.push({
+        id: req.equipment_id,
+        requestId: req.id,
+        equipment_name: req.equipment_name || 'Unknown Item',
+        equipment_id: req.equipment_id
+      });
+    });
+    return Object.values(grouped);
+  };
+
+  const groupedApproved = groupApprovedByEmployee(approved);
+
+  // Group current holders by employee
+  const groupCurrentHoldersByEmployee = (holders) => {
+    const grouped = {};
+    holders.forEach(holder => {
+      const employeeName = holder.full_name || holder.employee_name || holder.name || 'Unknown';
+      if (!grouped[employeeName]) {
+        grouped[employeeName] = {
+          id: holder.id,
+          full_name: employeeName,
+          position: holder.position || 'N/A',
+          request_mode: holder.request_mode,
+          expected_return_date: holder.expected_return_date,
+          holders: [],
+          items: []
+        };
+      }
+      grouped[employeeName].holders.push(holder);
+      grouped[employeeName].items.push({
+        id: holder.equipment_id || holder.id,
+        equipment_name: holder.equipment_name || 'Unknown Item'
+      });
+    });
+    return Object.values(grouped);
+  };
+
+  const groupedCurrentHolders = groupCurrentHoldersByEmployee(currentHolders);
+
+  // Group verify returns by employee
+  const groupVerifyReturnsByEmployee = (returns) => {
+    const grouped = {};
+    returns.forEach(returnItem => {
+      const employeeName = returnItem.full_name || returnItem.employee_name || returnItem.name || 'Unknown';
+      if (!grouped[employeeName]) {
+        grouped[employeeName] = {
+          id: returnItem.id,
+          full_name: employeeName,
+          position: returnItem.position || 'N/A',
+          return_date: returnItem.return_date || returnItem.expected_return_date,
+          returns: [],
+          items: []
+        };
+      }
+      grouped[employeeName].returns.push(returnItem);
+      grouped[employeeName].items.push({
+        id: returnItem.equipment_id || returnItem.id,
+        equipment_name: returnItem.equipment_name || 'Unknown Item'
+      });
+    });
+    return Object.values(grouped);
+  };
+
+  const groupedVerifyReturns = groupVerifyReturnsByEmployee(verifyReturns);
+
   // Handle release action
   const handleRelease = async (data) => {
     try {
-      // Resolve the actual transaction id from the approved request row
-      let txId = null;
+      // Handle grouped requests
+      const requests = data.requests || [data];
+      const releasedTransactions = [];
+      const processedRequestIds = [];
 
-      // Primary: by request_id
-      const byRequest = await transactionService.getAll({ request_id: data.id });
-      if (byRequest?.success && Array.isArray(byRequest.data) && byRequest.data.length > 0) {
-        txId = byRequest.data[0].id;
-      }
+      for (const request of requests) {
+        // Resolve the actual transaction id from the approved request row
+        let txId = null;
+        let existingTransaction = null;
 
-      // Fallback: by employee and equipment for older rows not linked
-      if (!txId && (data.employee_id && data.equipment_id)) {
-        const byRefs = await transactionService.getAll({ employee_id: data.employee_id, equipment_id: data.equipment_id, status: 'pending' });
-        if (byRefs?.success && Array.isArray(byRefs.data) && byRefs.data.length > 0) {
-          txId = byRefs.data[0].id;
+        // Primary: by request_id
+        const byRequest = await transactionService.getAll({ request_id: request.id });
+        if (byRequest?.success && Array.isArray(byRequest.data) && byRequest.data.length > 0) {
+          txId = byRequest.data[0].id;
+          existingTransaction = byRequest.data[0];
         }
-      }
 
-      if (!txId) {
-        if (window.showToast) {
-          window.showToast({
-            type: 'error',
-            title: 'Release Failed',
-            message: 'No transaction found for this approved request to release.',
-            duration: 6000
+        // Fallback: by employee and equipment for older rows not linked
+        if (!txId && (request.employee_id && request.equipment_id)) {
+          const byRefs = await transactionService.getAll({ employee_id: request.employee_id, equipment_id: request.equipment_id, status: 'pending' });
+          if (byRefs?.success && Array.isArray(byRefs.data) && byRefs.data.length > 0) {
+            txId = byRefs.data[0].id;
+            existingTransaction = byRefs.data[0];
+          }
+        }
+
+        if (!txId) {
+          console.warn(`No transaction found for request ${request.id}`);
+          continue;
+        }
+
+        // Check if already released
+        if (existingTransaction?.status === 'released') {
+          console.log(`Transaction ${txId} is already released, moving to current holders...`);
+          releasedTransactions.push(existingTransaction);
+          processedRequestIds.push(request.id);
+          continue;
+        }
+
+        try {
+          const response = await transactionService.release(txId, {
+            notes: data.notes || request.notes,
+            condition_on_issue: data.condition_on_issue || request.condition_on_issue
           });
-        } else {
-          alert('No transaction found for this approved request to release.');
+          
+          if (response.success) {
+            releasedTransactions.push(response.data);
+            processedRequestIds.push(request.id);
+          }
+        } catch (releaseError) {
+          // If error indicates already released, fetch the transaction and add to current holders
+          const errorMsg = releaseError.response?.data?.message || releaseError.message || '';
+          if (errorMsg.toLowerCase().includes('already released')) {
+            console.log(`Transaction ${txId} is already released, fetching and moving to current holders...`);
+            
+            // Fetch the released transaction with status 'released'
+            const releasedTx = await transactionService.getAll({ id: txId, status: 'released' });
+            if (releasedTx?.success && Array.isArray(releasedTx.data) && releasedTx.data.length > 0) {
+              releasedTransactions.push(releasedTx.data[0]);
+              processedRequestIds.push(request.id);
+            } else if (existingTransaction) {
+              // Use the existing transaction data if we can't fetch it
+              releasedTransactions.push(existingTransaction);
+              processedRequestIds.push(request.id);
+            }
+          } else {
+            // Re-throw if it's a different error
+            throw releaseError;
+          }
         }
-        return;
       }
 
-      const response = await transactionService.release(txId, {
-        notes: data.notes,
-        condition_on_issue: data.condition_on_issue
-      });
-      
-      if (response.success) {
-        // Update the local state
-        setApproved(prev => prev.filter(item => item.id !== data.id));
-        setCurrentHolders(prev => [...prev, response.data]);
+      if (releasedTransactions.length > 0) {
+        // Update the local state - remove all processed requests from approved
+        setApproved(prev => prev.filter(item => !processedRequestIds.includes(item.id)));
+        
+        // Add released transactions to current holders
+        setCurrentHolders(prev => [...prev, ...releasedTransactions]);
         
         // Update dashboard stats
         setDashboardStats(prev => ({
           ...prev,
-          current_holders: prev.current_holders + 1
+          new_requests: Math.max(0, prev.new_requests - releasedTransactions.length),
+          current_holders: prev.current_holders + releasedTransactions.length
         }));
         
         // Close modal
         setConfirmModal({ isOpen: false, type: null, transactionData: null });
         
         // Show success message
-        if (window.showToast) {
-          window.showToast({
-            type: 'success',
-            title: 'Equipment Released',
-            message: 'Equipment released successfully!',
-            duration: 4000
-          });
+        const itemText = releasedTransactions.length === 1 ? 'item' : 'items';
+        const alreadyReleasedCount = releasedTransactions.filter(tx => tx.status === 'released').length;
+        const newlyReleasedCount = releasedTransactions.length - alreadyReleasedCount;
+        
+        let message = '';
+        if (alreadyReleasedCount > 0 && newlyReleasedCount > 0) {
+          message = `${newlyReleasedCount} ${itemText} released successfully! ${alreadyReleasedCount} ${alreadyReleasedCount === 1 ? 'was' : 'were'} already released. Moving to Current Holder view...`;
+        } else if (alreadyReleasedCount > 0) {
+          message = `${alreadyReleasedCount} ${itemText} ${alreadyReleasedCount === 1 ? 'was' : 'were'} already released. Moving to Current Holder view...`;
         } else {
-          alert('Equipment released successfully!');
+          message = `${releasedTransactions.length} ${itemText} released successfully! Switching to Current Holder view...`;
         }
+        
+        alert(message);
+        
+        // Automatically switch to Current Holder view to show the released items
+        setTimeout(() => {
+          setView('currentHolder');
+        }, 1000);
+      } else {
+        alert('No transactions found to release.');
       }
     } catch (err) {
       console.error('Error releasing equipment:', err);
@@ -226,10 +364,99 @@ const ViewApproved = () => {
     }
   };
 
+  // Handle confirmed print after modal validation
+  const handleConfirmPrint = async () => {
+    const transactionData = printConfirmModal.transactionData;
+    setPrintConfirmModal({ isOpen: false, itemCount: 0, transactionData: null });
+    
+    try {
+      const requests = transactionData.requests || [transactionData];
+      
+      // Collect all equipment items with their details
+      const allItems = [];
+      for (const request of requests) {
+        const txList = await transactionService.getAll({ request_id: request.id });
+        if (txList?.success && Array.isArray(txList.data) && txList.data.length > 0) {
+          const tx = txList.data[0];
+          
+          // Try to get serial number from multiple sources
+          let serialNumber = tx?.serial_number 
+            || tx?.equipment_serial_number 
+            || tx?.equipment?.serial_number
+            || request?.serial_number
+            || request?.equipment_serial_number;
+          
+          // If still no serial number, try fetching equipment details
+          if (!serialNumber && request.equipment_id) {
+            try {
+              const equipmentResponse = await api.get(`/equipment/${request.equipment_id}`);
+              if (equipmentResponse?.data?.success) {
+                serialNumber = equipmentResponse.data.data?.serial_number;
+              }
+            } catch (e) {
+              console.warn('Could not fetch equipment details:', e);
+            }
+          }
+          
+          allItems.push({
+            equipment_name: request.equipment_name || tx?.equipment_name || tx?.equipment?.name || 'N/A',
+            serial_number: serialNumber || 'N/A',
+            date_released: tx?.release_date || tx?.released_at || tx?.created_at || new Date().toISOString(),
+            date_returned: tx?.return_date || tx?.returned_at || null
+          });
+        } else {
+          // If no transaction found, try to fetch equipment serial number directly
+          let serialNumber = request?.serial_number || request?.equipment_serial_number;
+          
+          if (!serialNumber && request.equipment_id) {
+            try {
+              const equipmentResponse = await api.get(`/equipment/${request.equipment_id}`);
+              if (equipmentResponse?.data?.success) {
+                serialNumber = equipmentResponse.data.data?.serial_number;
+              }
+            } catch (e) {
+              console.warn('Could not fetch equipment details:', e);
+            }
+          }
+          
+          allItems.push({
+            equipment_name: request.equipment_name || 'N/A',
+            serial_number: serialNumber || 'N/A',
+            date_released: request?.release_date || request?.created_at || new Date().toISOString(),
+            date_returned: request?.return_date || request?.returned_at || null
+          });
+        }
+      }
+
+      // Use first request for employee info
+      const firstRequest = requests[0];
+
+      // Prepare print data with all items
+      const printData = {
+        full_name: transactionData.full_name || firstRequest.full_name || 'N/A',
+        position: transactionData.position || firstRequest.position || 'N/A',
+        department: firstRequest.department || transactionData.department || 'IT Department',
+        items: allItems,
+        notes: transactionData.notes || firstRequest.notes || ''
+      };
+
+      console.log('ViewApproved - Print data prepared:', printData);
+      console.log('ViewApproved - All items with serial numbers:', allItems);
+
+      setPrintModal({ isOpen: true, transactionData: printData });
+    } catch (err) {
+      console.error('Error fetching print data:', err);
+      alert('Error generating receipt: ' + apiUtils.handleError(err));
+    }
+  };
+
   // Handle print action
   const handlePrint = async (transactionData) => {
     try {
-      if (!transactionData || !transactionData.id) {
+      // Handle grouped requests - get all items for printing
+      const requests = transactionData.requests || [transactionData];
+      
+      if (!requests || requests.length === 0) {
         console.error('Invalid row for printing:', transactionData);
         if (window.showToast) {
           window.showToast({
@@ -244,57 +471,89 @@ const ViewApproved = () => {
         return;
       }
 
-      // Rows in ViewApproved are requests; resolve the related transaction by request_id
-      const txList = await transactionService.getAll({ request_id: transactionData.id });
-      if (!txList?.success || !Array.isArray(txList.data) || txList.data.length === 0) {
-        if (window.showToast) {
-          window.showToast({
-            type: 'error',
-            title: 'Print Error',
-            message: 'No transaction found for this approved request.',
-            duration: 5000
-          });
-        } else {
-          alert('No transaction found for this approved request.');
-        }
+      // Inform user about multiple items
+      if (requests.length > 1) {
+        const itemCount = requests.length;
+        setPrintConfirmModal({ 
+          isOpen: true, 
+          itemCount: itemCount, 
+          transactionData: transactionData 
+        });
         return;
       }
 
-      const tx = txList.data[0];
-
-      // Try backend print endpoint first
-      try {
-        const response = await transactionService.print(tx.id);
-        if (response?.success) {
-          const r = response.data;
-          const flat = {
-            full_name: r?.employee?.full_name || `${r?.employee?.first_name || ''} ${r?.employee?.last_name || ''}`.trim(),
-            position: r?.employee?.position || '',
-            department: r?.employee?.department || '',
-            equipment_name: r?.equipment?.name || tx?.equipment_name || '',
-            serial_number: r?.equipment?.serial_number || '',
-            notes: r?.release_info?.notes || tx?.notes || '',
-          };
-
-          setPrintModal({ isOpen: true, transactionData: flat });
-          return;
+      // Collect all equipment items with their details
+      const allItems = [];
+      for (const request of requests) {
+        const txList = await transactionService.getAll({ request_id: request.id });
+        if (txList?.success && Array.isArray(txList.data) && txList.data.length > 0) {
+          const tx = txList.data[0];
+          
+          // Try to get serial number from multiple sources
+          let serialNumber = tx?.serial_number 
+            || tx?.equipment_serial_number 
+            || tx?.equipment?.serial_number
+            || request?.serial_number
+            || request?.equipment_serial_number;
+          
+          // If still no serial number, try fetching equipment details
+          if (!serialNumber && request.equipment_id) {
+            try {
+              const equipmentResponse = await api.get(`/equipment/${request.equipment_id}`);
+              if (equipmentResponse?.data?.success) {
+                serialNumber = equipmentResponse.data.data?.serial_number;
+              }
+            } catch (e) {
+              console.warn('Could not fetch equipment details:', e);
+            }
+          }
+          
+          allItems.push({
+            equipment_name: request.equipment_name || tx?.equipment_name || tx?.equipment?.name || 'N/A',
+            serial_number: serialNumber || 'N/A',
+            date_released: tx?.release_date || tx?.released_at || tx?.created_at || new Date().toISOString(),
+            date_returned: tx?.return_date || tx?.returned_at || null
+          });
+        } else {
+          // If no transaction found, try to fetch equipment serial number directly
+          let serialNumber = request?.serial_number || request?.equipment_serial_number;
+          
+          if (!serialNumber && request.equipment_id) {
+            try {
+              const equipmentResponse = await api.get(`/equipment/${request.equipment_id}`);
+              if (equipmentResponse?.data?.success) {
+                serialNumber = equipmentResponse.data.data?.serial_number;
+              }
+            } catch (e) {
+              console.warn('Could not fetch equipment details:', e);
+            }
+          }
+          
+          allItems.push({
+            equipment_name: request.equipment_name || 'N/A',
+            serial_number: serialNumber || 'N/A',
+            date_released: request?.release_date || request?.created_at || new Date().toISOString(),
+            date_returned: request?.return_date || request?.returned_at || null
+          });
         }
-      } catch (e) {
-        // Fall through to local fallback below
-        console.warn('Backend print failed, falling back to local data flattening.', e);
       }
 
-      // Fallback: assemble minimal receipt data from available request/transaction fields
-      const flatFallback = {
-        full_name: transactionData.full_name || tx?.full_name || `${tx?.first_name || ''} ${tx?.last_name || ''}`.trim(),
-        position: transactionData.position || tx?.position || '',
-        department: transactionData.department || tx?.department || '',
-        equipment_name: transactionData.equipment_name || tx?.equipment_name || '',
-        serial_number: tx?.serial_number || tx?.equipment_serial_number || '',
-        notes: tx?.notes || transactionData?.notes || '',
+      // Use first request for employee info
+      const firstRequest = requests[0];
+
+      // Prepare print data with all items
+      const printData = {
+        full_name: transactionData.full_name || firstRequest.full_name || 'N/A',
+        position: transactionData.position || firstRequest.position || 'N/A',
+        department: firstRequest.department || transactionData.department || 'IT Department',
+        items: allItems,
+        notes: transactionData.notes || firstRequest.notes || ''
       };
 
-      setPrintModal({ isOpen: true, transactionData: flatFallback });
+      console.log('ViewApproved - Print data prepared:', printData);
+      console.log('ViewApproved - All items with serial numbers:', allItems);
+
+      setPrintModal({ isOpen: true, transactionData: printData });
     } catch (err) {
       console.error('Error fetching print data:', err);
       if (window.showToast) {
@@ -450,34 +709,47 @@ const ViewApproved = () => {
                           Error: {error}
                         </td>
                       </tr>
-                    ) : approved.length === 0 ? (
+                    ) : groupedApproved.length === 0 ? (
                       <tr>
                         <td colSpan="6" className="py-8 text-center text-gray-500">
                           No approved transactions found
                         </td>
                       </tr>
                     ) : (
-                      approved.map((row) => (
+                      groupedApproved.map((group) => (
                         <tr 
-                          key={row.id} 
-                          onClick={() => handleRowClick(row.id, 'viewApproved')}
+                          key={group.id} 
+                          onClick={() => handleRowClick(group.id, 'viewApproved')}
                           className={`border-b last:border-0 cursor-pointer transition-colors duration-200 ${
-                            isItemClicked(row.id, 'viewApproved') 
+                            isItemClicked(group.id, 'viewApproved') 
                               ? 'bg-gray-200 hover:bg-blue-50' 
                               : 'hover:bg-blue-50'
                           }`}
                         >
-                          <td className="py-3 px-3">{row.full_name || 'N/A'}</td>
-                          <td className="py-3 px-3">{row.position || 'N/A'}</td>
-                          <td className="py-3 px-3">{row.equipment_name || 'N/A'}</td>
-                          <td className="py-3 px-3"><span className="px-2.5 py-0.5 rounded-full text-xs bg-green-100 text-green-700">{row.status || 'approved'}</span></td>
-                          <td className="py-3 px-3">{row.approved_by_name || 'N/A'}</td>
+                          <td className="py-3 px-3">{group.full_name}</td>
+                          <td className="py-3 px-3">{group.position}</td>
+                          <td className="py-3 px-3">
+                            <div className="flex items-center space-x-2">
+                              <span>
+                                {group.items.length === 1 
+                                  ? group.items[0].equipment_name 
+                                  : `${group.items.length} items`}
+                              </span>
+                              {group.items.length > 1 && (
+                                <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-blue-600 rounded-full">
+                                  {group.items.length}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3"><span className="px-2.5 py-0.5 rounded-full text-xs bg-green-100 text-green-700">{group.status}</span></td>
+                          <td className="py-3 px-3">{group.approved_by_name}</td>
                           <td className="py-3 px-3">
                             <div className="flex items-center justify-end space-x-3">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handlePrint(row);
+                                  handlePrint(group);
                                 }}
                                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                                 title="Print Receipt"
@@ -487,7 +759,7 @@ const ViewApproved = () => {
                               <button 
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  openConfirmModal('release', row);
+                                  openConfirmModal('release', group);
                                 }}
                                 className="px-3 py-1 bg-green-600 text-white rounded-full text-xs hover:bg-green-700 transition-colors"
                               >
@@ -556,24 +828,37 @@ const ViewApproved = () => {
                           Error: {error}
                         </td>
                       </tr>
-                    ) : currentHolders.length === 0 ? (
+                    ) : groupedCurrentHolders.length === 0 ? (
                       <tr>
                         <td colSpan="6" className="py-8 text-center text-gray-500">
                           No current holders found
                         </td>
                       </tr>
                     ) : (
-                      currentHolders.map((row) => (
+                      groupedCurrentHolders.map((group) => (
                         <tr 
-                          key={row.id}
-                          onClick={() => handleViewHolder(row.id)}
+                          key={group.id}
+                          onClick={() => handleViewHolder(group.holders[0]?.id || group.id)}
                           className="border-b last:border-0 cursor-pointer transition-colors duration-200 hover:bg-blue-50"
                         >
-                          <td className="py-3 px-3">{row.full_name || 'N/A'}</td>
-                          <td className="py-3 px-3">{row.position || 'N/A'}</td>
-                          <td className="py-3 px-3">{row.equipment_name || 'N/A'}</td>
-                          <td className="py-3 px-3">{formatRequestMode(row.request_mode)}</td>
-                          <td className="py-3 px-3 text-red-600">{row.expected_return_date || 'N/A'}</td>
+                          <td className="py-3 px-3">{group.full_name}</td>
+                          <td className="py-3 px-3">{group.position}</td>
+                          <td className="py-3 px-3">
+                            <div className="flex items-center space-x-2">
+                              <span>
+                                {group.items.length === 1 
+                                  ? group.items[0].equipment_name 
+                                  : `${group.items.length} items`}
+                              </span>
+                              {group.items.length > 1 && (
+                                <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-blue-600 rounded-full">
+                                  {group.items.length}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3">{formatRequestMode(group.request_mode)}</td>
+                          <td className="py-3 px-3 text-red-600">{group.expected_return_date || 'N/A'}</td>
                           <td className="py-3 px-3">
                             <div className="flex items-center justify-end space-x-4 text-gray-700">
                               <span className="px-3 py-1 rounded-full text-xs bg-blue-100 text-blue-700">Active</span>
@@ -640,27 +925,40 @@ const ViewApproved = () => {
                           Error: {error}
                         </td>
                       </tr>
-                    ) : verifyReturns.length === 0 ? (
+                    ) : groupedVerifyReturns.length === 0 ? (
                       <tr>
                         <td colSpan="5" className="py-8 text-center text-gray-500">
                           No returns to verify found
                         </td>
                       </tr>
                     ) : (
-                      verifyReturns.map((row) => (
+                      groupedVerifyReturns.map((group) => (
                         <tr 
-                          key={row.id}
-                          onClick={() => handleRowClick(row.id, 'verifyReturn')}
+                          key={group.id}
+                          onClick={() => handleRowClick(group.id, 'verifyReturn')}
                           className={`border-b last:border-0 cursor-pointer transition-colors duration-200 ${
-                            isItemClicked(row.id, 'verifyReturn') 
+                            isItemClicked(group.id, 'verifyReturn') 
                               ? 'bg-gray-200 hover:bg-blue-50' 
                               : 'hover:bg-blue-50'
                           }`}
                         >
-                          <td className="py-3 px-3">{row.full_name || 'N/A'}</td>
-                          <td className="py-3 px-3">{row.position || 'N/A'}</td>
-                          <td className="py-3 px-3">{row.equipment_name || 'N/A'}</td>
-                          <td className="py-3 px-3 text-red-600">{row.return_date || row.expected_return_date || 'N/A'}</td>
+                          <td className="py-3 px-3">{group.full_name}</td>
+                          <td className="py-3 px-3">{group.position}</td>
+                          <td className="py-3 px-3">
+                            <div className="flex items-center space-x-2">
+                              <span>
+                                {group.items.length === 1 
+                                  ? group.items[0].equipment_name 
+                                  : `${group.items.length} items`}
+                              </span>
+                              {group.items.length > 1 && (
+                                <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-blue-600 rounded-full">
+                                  {group.items.length}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3 text-red-600">{group.return_date || 'N/A'}</td>
                           <td className="py-3 px-3">
                             <div className="flex items-center justify-end space-x-3">
                               <span className="px-3 py-1 rounded-full text-xs bg-yellow-100 text-yellow-700">Pending</span>
@@ -702,6 +1000,41 @@ const ViewApproved = () => {
         onClose={handleCloseViewHolderModal}
         transactionData={viewHolderModal.holderData}
       />
+
+      {/* Print Confirmation Modal */}
+      {printConfirmModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black bg-opacity-50"
+            onClick={() => setPrintConfirmModal({ isOpen: false, itemCount: 0, transactionData: null })}
+          ></div>
+          
+          {/* Modal */}
+          <div className="relative bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
+            <div className="text-white mb-6">
+              <p className="text-base">
+                This employee has {printConfirmModal.itemCount} items. Print accountability form with all items?
+              </p>
+            </div>
+            
+            <div className="flex justify-end space-x-3 mt-4">
+              <button
+                onClick={handleConfirmPrint}
+                className="px-8 py-2.5 bg-blue-400 bg-opacity-30 text-white rounded-full hover:bg-opacity-40 transition-colors font-medium border border-blue-300"
+              >
+                OK
+              </button>
+              <button
+                onClick={() => setPrintConfirmModal({ isOpen: false, itemCount: 0, transactionData: null })}
+                className="px-6 py-2.5 bg-blue-700 text-white rounded-full hover:bg-blue-800 transition-colors font-medium"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
