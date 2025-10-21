@@ -417,6 +417,21 @@ const EmployeeHome = () => {
           console.log('Response status:', response.status, 'Response data:', data);
           const ok = response.ok && (data?.success === true || data?.status === 'success');
           results.push({ success: ok, status: response.status, data });
+
+          // Always dispatch a local history event so user sees the attempt in their history
+          try {
+            const historyEntry = {
+              id: data?.data?.id || `local-${Date.now()}-${unit.id}`,
+              item: group.name || group.brand || 'Equipment',
+              message: `Requested ${group.name || group.brand} (unit ${unit.id})`,
+              variant: ok ? 'success' : 'warning',
+              date: new Date().toISOString(),
+              time: new Date().toISOString(),
+              local: true
+            };
+            if (window.IReplyNotify) window.IReplyNotify(historyEntry.message, historyEntry.variant, true, historyEntry);
+            else window.dispatchEvent(new CustomEvent('ireply:history', { detail: historyEntry }));
+          } catch (_e) {}
         }
       }
 
@@ -428,6 +443,13 @@ const EmployeeHome = () => {
         if (failedCount === 0) {
           alert(`✓ All ${successCount} request(s) submitted successfully!\n\nYour requests have been sent to the Super Admin for approval.`);
           setCartItems([]); // Clear cart
+          // Notify the EmployeeTransaction component (if present) so history/notifications update
+          try {
+            const msg = `${successCount} request(s) submitted`;
+            if (window.IReplyNotify) window.IReplyNotify(msg, 'success', true);
+            // Also dispatch a global event for other listeners
+            window.dispatchEvent(new CustomEvent('ireply:notify', { detail: { message: `You submitted ${successCount} request(s)`, variant: 'success' } }));
+          } catch (_) {}
           // Refresh the page to show updated pending requests
           window.location.reload();
         } else {
@@ -435,6 +457,11 @@ const EmployeeHome = () => {
           // Remove successful items from cart
           // Keep groups that had failures; for simplicity, clear on success and keep cart as-is on failure
           // You can enhance this to remove only successful units if needed
+          try {
+            const msg = `${successCount} request(s) submitted (some failed)`;
+            if (window.IReplyNotify) window.IReplyNotify(msg, 'warning', true);
+            window.dispatchEvent(new CustomEvent('ireply:notify', { detail: { message: msg, variant: 'warning' } }));
+          } catch (_) {}
           setCartItems(cartItems);
         }
       } else {

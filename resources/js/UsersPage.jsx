@@ -1034,10 +1034,10 @@ const UsersPage = () => {
       {/* View User Modal */}
       {showViewModal && (
         <div className="fixed inset-0 bg-gray-900/30 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="relative bg-white backdrop-blur-md rounded-lg shadow-xl w-full max-w-md mx-4 border border-white/20">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-bold text-blue-600">User Details</h3>
+          <div className="relative bg-white backdrop-blur-md rounded-lg shadow-xl w-full max-w-2xl mx-4 border border-white/20">
+            <div className="p-8">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-bold text-blue-600">User Details</h3>
                 <button
                   onClick={() => {
                     setShowViewModal(false);
@@ -1049,11 +1049,23 @@ const UsersPage = () => {
                   <X className="h-5 w-5" />
                 </button>
               </div>
-              <div className="space-y-3 text-sm">
-                <div><span className="text-gray-500">Name:</span> <span className="text-gray-900">{selectedUser?.name}</span></div>
-                <div><span className="text-gray-500">Email:</span> <span className="text-gray-900">{selectedUser?.email}</span></div>
-                <div><span className="text-gray-500">Position:</span> <span className="text-gray-900">{selectedUser?.position || 'N/A'}</span></div>
-                <div><span className="text-gray-500">Account type:</span> <span className="text-gray-900">{selectedUser?.accountType}</span></div>
+              <div className="space-y-4">
+                <div className="flex flex-col">
+                  <span className="text-gray-500 text-base mb-1">Name:</span>
+                  <span className="text-gray-900 text-lg font-medium">{selectedUser?.name}</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-gray-500 text-base mb-1">Email:</span>
+                  <span className="text-gray-900 text-lg font-medium">{selectedUser?.email}</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-gray-500 text-base mb-1">Position:</span>
+                  <span className="text-gray-900 text-lg font-medium">{selectedUser?.position || 'N/A'}</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-gray-500 text-base mb-1">Account type:</span>
+                  <span className="text-gray-900 text-lg font-medium">{selectedUser?.accountType}</span>
+                </div>
               </div>
               <div className="mt-6 text-right">
                 <button

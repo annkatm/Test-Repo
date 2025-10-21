@@ -121,6 +121,60 @@ const ViewRequest = () => {
 
   const groupedRequests = groupRequestsByEmployee(pendingRequests);
 
+  // Group current holders by employee
+  const groupCurrentHoldersByEmployee = (holders) => {
+    const grouped = {};
+    holders.forEach(holder => {
+      const employeeName = holder.full_name || holder.employee_name || holder.name || 'Unknown';
+      if (!grouped[employeeName]) {
+        grouped[employeeName] = {
+          id: holder.id,
+          full_name: employeeName,
+          position: holder.position || 'N/A',
+          request_mode: holder.request_mode,
+          expected_return_date: holder.expected_return_date,
+          holders: [],
+          items: []
+        };
+      }
+      grouped[employeeName].holders.push(holder);
+      grouped[employeeName].items.push({
+        id: holder.equipment_id || holder.id,
+        equipment_name: holder.equipment_name || 'Unknown Item'
+      });
+    });
+    return Object.values(grouped);
+  };
+
+  const groupedCurrentHolders = groupCurrentHoldersByEmployee(currentHolders);
+
+  // Group verify returns by employee
+  const groupVerifyReturnsByEmployee = (returns) => {
+    const grouped = {};
+    returns.forEach(returnItem => {
+      const employeeName = returnItem.full_name || returnItem.employee_name || returnItem.name || 'Unknown';
+      if (!grouped[employeeName]) {
+        grouped[employeeName] = {
+          id: returnItem.id,
+          full_name: employeeName,
+          position: returnItem.position || 'N/A',
+          request_mode: returnItem.request_mode,
+          return_date: returnItem.return_date || returnItem.expected_return_date,
+          returns: [],
+          items: []
+        };
+      }
+      grouped[employeeName].returns.push(returnItem);
+      grouped[employeeName].items.push({
+        id: returnItem.equipment_id || returnItem.id,
+        equipment_name: returnItem.equipment_name || 'Unknown Item'
+      });
+    });
+    return Object.values(grouped);
+  };
+
+  const groupedVerifyReturns = groupVerifyReturnsByEmployee(verifyReturns);
+
   // Handler functions for approve and reject actions
   const handleCheckApprove = (groupId) => {
     const group = groupedRequests.find(g => g.id === groupId);
@@ -289,7 +343,16 @@ const ViewRequest = () => {
       console.error('Error processing request:', err);
       
       // Show error alert
-      alert('Error processing request: ' + (err.response?.data?.message || err.message));
+      if (window.showToast) {
+        window.showToast({
+          type: 'error',
+          title: 'Request Failed',
+          message: 'Error processing request: ' + (err.response?.data?.message || err.message),
+          duration: 6000
+        });
+      } else {
+        alert('Error processing request: ' + (err.response?.data?.message || err.message));
+      }
     } finally {
       setModalLoading(false);
     }
@@ -732,14 +795,14 @@ const ViewRequest = () => {
               <div className="bg-gray-100 rounded-2xl p-3 shadow flex flex-col h-26">
                 <h4 className="text-xs font-semibold text-gray-600">Current Holder</h4>
                 <div className="mt-2 flex items-center justify-between">
-                  <p className="text-2xl font-bold text-gray-900">{approvedRequests.length}</p>
+                  <p className="text-2xl font-bold text-gray-900">{groupedCurrentHolders.length}</p>
                   <User className="w-8 h-8 text-gray-500" />
                 </div>
               </div>
               <div className="bg-gray-100 rounded-2xl p-3 shadow flex flex-col h-26">
                 <h4 className="text-xs font-semibold text-gray-600">Verify Return</h4>
                 <div className="mt-2 flex items-center justify-between">
-                  <p className="text-2xl font-bold text-gray-900">{verifyReturns.length}</p>
+                  <p className="text-2xl font-bold text-gray-900">{groupedVerifyReturns.length}</p>
                   <CheckCircle className="w-8 h-8 text-gray-500" />
                 </div>
               </div>
@@ -949,33 +1012,44 @@ const ViewRequest = () => {
                     Error: {error}
                   </td>
                 </tr>
-              ) : currentHolders.length === 0 ? (
+              ) : groupedCurrentHolders.length === 0 ? (
                 <tr>
                   <td colSpan="6" className="py-8 text-center text-gray-500">
                     No current holders found
                   </td>
                 </tr>
               ) : (
-                currentHolders.map((row) => (
+                groupedCurrentHolders.map((group) => (
                   <tr 
-                    key={row.id} 
-                    onClick={() => handleViewHolder(row.id)}
+                    key={group.id} 
+                    onClick={() => handleViewHolder(group.holders[0]?.id || group.id)}
                     className="border-b border-gray-100 last:border-0 hover:bg-blue-50 cursor-pointer transition-colors duration-200"
                   >
                     <td className="py-4 px-6 text-sm font-medium text-gray-900">
-                      {row.name || 'John Doe'}
+                      {group.full_name}
                     </td>
                     <td className="py-4 px-6 text-sm text-gray-700">
-                      {row.position || 'Manager'}
+                      {group.position}
                     </td>
                     <td className="py-4 px-6 text-sm text-gray-700">
-                      {row.item || 'Laptop'}
+                      <div className="flex items-center space-x-2">
+                        <span>
+                          {group.items.length === 1 
+                            ? group.items[0].equipment_name 
+                            : `${group.items.length} items`}
+                        </span>
+                        {group.items.length > 1 && (
+                          <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-blue-600 rounded-full">
+                            {group.items.length}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-4 px-6 text-sm text-gray-700">
-                      {formatRequestMode(row.requestMode)}
+                      {formatRequestMode(group.request_mode)}
                     </td>
                     <td className="py-4 px-6 text-sm text-red-600 font-medium">
-                      {row.expectedReturnDate ? new Date(row.expectedReturnDate).toLocaleDateString() : '2025-10-23'}
+                      {group.expected_return_date || 'N/A'}
                     </td>
                     <td className="py-4 px-6">
                       <div className="flex items-center justify-end space-x-2">
@@ -1052,29 +1126,40 @@ const ViewRequest = () => {
                     Error: {error}
                   </td>
                 </tr>
-              ) : verifyReturns.length === 0 ? (
+              ) : groupedVerifyReturns.length === 0 ? (
                 <tr>
                   <td colSpan="6" className="py-8 text-center text-gray-500">
                     No returns to verify found
                   </td>
                 </tr>
               ) : (
-                verifyReturns.map((row) => (
-                  <tr key={row.id} className="border-b border-gray-100 last:border-0 hover:bg-blue-50">
+                groupedVerifyReturns.map((group) => (
+                  <tr key={group.id} className="border-b border-gray-100 last:border-0 hover:bg-blue-50 cursor-pointer transition-colors duration-200">
                     <td className="py-4 px-6 text-sm font-medium text-gray-900">
-                      {row.full_name || 'John Doe'}
+                      {group.full_name}
                     </td>
                     <td className="py-4 px-6 text-sm text-gray-700">
-                      {row.position || 'Manager'}
+                      {group.position}
                     </td>
                     <td className="py-4 px-6 text-sm text-gray-700">
-                      {row.equipment_name || 'Laptop'}
+                      <div className="flex items-center space-x-2">
+                        <span>
+                          {group.items.length === 1 
+                            ? group.items[0].equipment_name 
+                            : `${group.items.length} items`}
+                        </span>
+                        {group.items.length > 1 && (
+                          <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-blue-600 rounded-full">
+                            {group.items.length}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-4 px-6 text-sm text-gray-700">
-                      {formatRequestMode(row.request_mode)}
+                      {formatRequestMode(group.request_mode)}
                     </td>
                     <td className="py-4 px-6 text-sm text-red-600 font-medium">
-                      {row.return_date || row.expected_return_date || '2025-10-23'}
+                      {group.return_date || 'N/A'}
                     </td>
                     <td className="py-4 px-6">
                       <div className="flex items-center justify-end space-x-2">
@@ -1164,7 +1249,16 @@ const ViewRequest = () => {
               }
             } catch (err) {
               console.error('Error approving request:', err);
-              alert('Error approving request: ' + (err.response?.data?.message || err.message));
+              if (window.showToast) {
+                window.showToast({
+                  type: 'error',
+                  title: 'Approval Failed',
+                  message: 'Error approving request: ' + (err.response?.data?.message || err.message),
+                  duration: 6000
+                });
+              } else {
+                alert('Error approving request: ' + (err.response?.data?.message || err.message));
+              }
             }
           } else if (confirmModal.mode === 'delete') {
             // For delete, open the detailed reject modal to capture optional reason
