@@ -535,7 +535,7 @@ const ViewApproved = () => {
                 <div className="bg-gradient-to-b from-[#0064FF] to-[#003C99] text-white rounded-2xl p-3 shadow flex flex-col h-26">
                   <h4 className="text-sm uppercase tracking-wider opacity-80">New Approved</h4>
                   <div className="mt-2 flex items-center justify-between">
-                    <p className="text-5xl font-bold">{loading ? '...' : dashboardStats.new_requests}</p>
+                    <p className="text-5xl font-bold">{loading ? '...' : groupedApproved.length}</p>
                     <Clock className="w-8 h-8 text-white/70" />
                   </div>
                 </div>

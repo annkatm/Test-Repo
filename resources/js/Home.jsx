@@ -381,65 +381,6 @@ const HomePage = () => {
             </div>
             </div>
             
-            {/* Current Holders Table - Dynamic */}
-            <div className="mt-6">
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-md p-4 md:p-5 transition-all duration-300">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-800">Current Holders</h3>
-                  <span className="text-sm text-gray-500">{dashboardData.currentHolder} {dashboardData.currentHolder === 1 ? 'Employee' : 'Employees'}</span>
-                </div>
-                <div className="overflow-hidden rounded-xl border border-gray-200">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 text-gray-600">
-                      <tr className="text-left">
-                        <th className="py-2.5 px-4 font-semibold">Employee Name</th>
-                        <th className="py-2.5 px-4 font-semibold">Position</th>
-                        <th className="py-2.5 px-4 font-semibold">Equipment Held</th>
-                        <th className="py-2.5 px-4 font-semibold text-center">Count</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {loading ? (
-                        <tr>
-                          <td colSpan="4" className="py-4 px-4 text-center text-gray-500">Loading...</td>
-                        </tr>
-                      ) : dashboardData.holderDetails.length === 0 ? (
-                        <tr>
-                          <td colSpan="4" className="py-4 px-4 text-center text-gray-500">No current holders</td>
-                        </tr>
-                      ) : (
-                        dashboardData.holderDetails.map((holder, index) => (
-                          <tr key={`${holder.employee_id}-${index}`} className="hover:bg-blue-50/40">
-                            <td className="py-2.5 px-4 font-medium text-gray-900">{holder.employee_name}</td>
-                            <td className="py-2.5 px-4 text-gray-600">{holder.position}</td>
-                            <td className="py-2.5 px-4">
-                              <div className="flex flex-wrap gap-1">
-                                {holder.equipment.slice(0, 3).map((eq, idx) => (
-                                  <span key={eq.id} className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded">
-                                    {eq.name}
-                                  </span>
-                                ))}
-                                {holder.equipment.length > 3 && (
-                                  <span className="text-xs text-gray-500 px-2 py-0.5">
-                                    +{holder.equipment.length - 3} more
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="py-2.5 px-4 text-center">
-                              <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-                                {holder.equipment.length}
-                              </span>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-            
             {/* Additional Boxes */}
             <div className="mt-6 mb-6">
               {/* Report Overview */}
