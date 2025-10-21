@@ -633,7 +633,14 @@ const EmployeePage = () => {
                         <div className={`w-8 h-8 ${e.color} rounded-full text-white text-sm flex items-center justify-center font-medium`}>
                           {e.badge}
                         </div>
-                        <span className="text-gray-900 font-medium">{e.name}</span>
+                        <div className="flex flex-col">
+                          <span className="text-gray-900 font-medium">{e.name}</span>
+                          {e.user && (
+                            <span className="text-xs text-green-600 font-medium">
+                              ✓ Connected to {e.user.name}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <div className="col-span-2 text-gray-600">{e.client}</div>
                       <div className="col-span-2 text-gray-600">{e.position}</div>
@@ -697,6 +704,19 @@ const EmployeePage = () => {
                   </div>
                 </div>
 
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-2">User Account</label>
+                  <div className="bg-gray-100 rounded-lg p-3 text-gray-900 w-full">
+                    {viewing.user ? (
+                      <div className="flex items-center space-x-2">
+                        <span className="text-green-600 font-medium">✓ Connected</span>
+                        <span className="text-gray-600">({viewing.user.name} - {viewing.user.role?.name || 'No role'})</span>
+                      </div>
+                    ) : (
+                      <span className="text-gray-500">No user account connected</span>
+                    )}
+                  </div>
+                </div>
 
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-2">Contact Number</label>

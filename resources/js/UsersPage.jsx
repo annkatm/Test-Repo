@@ -148,14 +148,17 @@ const UsersPage = () => {
         const res = await fetch('/api/employees');
         const json = await res.json();
         if (json.success && json.data) {
-          const employeesData = json.data.map(emp => ({
-            id: emp.id,
-            name: `${emp.first_name} ${emp.last_name}`.trim(),
-            email: emp.email,
-            employeeType: emp.employee_type || 'Regular',
-            position: emp.position,
-            department: emp.department
-          }));
+          // Filter out employees who already have user accounts connected
+          const employeesData = json.data
+            .filter(emp => !emp.user_id) // Only show employees without user connections
+            .map(emp => ({
+              id: emp.id,
+              name: `${emp.first_name} ${emp.last_name}`.trim(),
+              email: emp.email,
+              employeeType: emp.employee_type || 'Regular',
+              position: emp.position,
+              department: emp.department
+            }));
           setEmployeesList(employeesData);
         }
       } catch (err) {
@@ -215,6 +218,36 @@ const UsersPage = () => {
       const result = await response.json();
       
       if (result.success) {
+        // If an employee was selected, automatically connect the employee to the user
+        if (selectedEmployee) {
+          try {
+            const connectResponse = await fetch(`/api/employees/${selectedEmployee.id}/connect-user`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+              },
+              body: JSON.stringify({
+                user_id: result.data.id
+              }),
+            });
+
+            const connectResult = await connectResponse.json();
+            
+            if (!connectResult.success) {
+              console.warn('User created but failed to connect to employee:', connectResult.message);
+              // Still reload the page since user was created successfully
+            } else {
+              // Show success message for automatic connection
+              console.log(`User account created and automatically connected to employee: ${selectedEmployee.name}`);
+            }
+          } catch (connectError) {
+            console.error('Error connecting employee to user:', connectError);
+            // Still reload the page since user was created successfully
+          }
+        }
+        
         window.location.reload();
       } else {
         alert(result.message || 'Failed to create user');
@@ -254,6 +287,36 @@ const UsersPage = () => {
         const result = await response.json();
         
         if (result.success) {
+          // If an employee was selected, automatically connect the employee to the user
+          if (selectedEmployee) {
+            try {
+              const connectResponse = await fetch(`/api/employees/${selectedEmployee.id}/connect-user`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json',
+                  'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                },
+                body: JSON.stringify({
+                  user_id: selectedUser.id
+                }),
+              });
+
+              const connectResult = await connectResponse.json();
+              
+              if (!connectResult.success) {
+                console.warn('User updated but failed to connect to employee:', connectResult.message);
+                // Still reload the page since user was updated successfully
+              } else {
+                // Show success message for automatic connection
+                console.log(`User account updated and automatically connected to employee: ${selectedEmployee.name}`);
+              }
+            } catch (connectError) {
+              console.error('Error connecting employee to user:', connectError);
+              // Still reload the page since user was updated successfully
+            }
+          }
+          
           window.location.reload();
         } else {
           alert(result.message || 'Failed to update user');
