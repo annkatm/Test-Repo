@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Package, CheckCircle, User } from 'lucide-react';
 import HomeSidebar from "./HomeSidebar";
 import GlobalHeader from "./components/GlobalHeader";
-import api from './services/api';
+import api, { transactionService } from './services/api';
 
 const HomePage = () => {
   const [activeView, setActiveView] = useState("Dashboard");
@@ -10,6 +10,7 @@ const HomePage = () => {
     totalEquipment: 0,
     availableStock: 0,
     currentHolder: 0,
+    holderDetails: [],
     categories: [],
     newArrivals: [],
     equipmentStats: {
@@ -25,24 +26,50 @@ const HomePage = () => {
   const scrollContainerRef = useRef(null);
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
+    const fetchDashboardData = async (showLoading = true) => {
       try {
-        setLoading(true);
+        if (showLoading) {
+          setLoading(true);
+        }
         
-        // Fetch categories and equipment data
-        const [categoriesRes, equipmentRes] = await Promise.all([
+        // Fetch categories, equipment data, and current holders (transactions)
+        const [categoriesRes, equipmentRes, holdersRes] = await Promise.all([
           api.get('/categories'),
-          api.get('/equipment')
+          api.get('/equipment'),
+          transactionService.getAll({ status: 'released' })
         ]);
 
         if (categoriesRes?.data?.success && equipmentRes?.data?.success) {
           const categories = categoriesRes.data.data || [];
           const equipment = equipmentRes.data.data?.data || [];
+          const currentHoldersData = holdersRes?.success ? holdersRes.data : [];
 
           // Calculate statistics
           const totalEquipment = equipment.length;
           const availableStock = equipment.filter(eq => eq.status === 'available').length;
-          const currentHolder = equipment.filter(eq => eq.status === 'in_use').length;
+          
+          // Count unique employees who are holding equipment (dynamic) - using transaction data
+          const holdersMap = new Map();
+          currentHoldersData.forEach(holder => {
+            const employeeName = holder.full_name || holder.employee_name || holder.name || 'Unknown';
+            const employeeId = holder.employee_id || employeeName;
+            
+            if (!holdersMap.has(employeeId)) {
+              holdersMap.set(employeeId, {
+                employee_id: employeeId,
+                employee_name: employeeName,
+                position: holder.position || 'N/A',
+                equipment: []
+              });
+            }
+            holdersMap.get(employeeId).equipment.push({
+              id: holder.equipment_id || holder.id,
+              name: holder.equipment_name || 'Unknown Equipment',
+              category: holder.category?.name || 'Uncategorized'
+            });
+          });
+          const currentHolder = holdersMap.size;
+          const holderDetails = Array.from(holdersMap.values());
 
           // Calculate equipment type stats with prices
           const equipmentStats = {
@@ -161,6 +188,7 @@ const HomePage = () => {
             totalEquipment,
             availableStock,
             currentHolder,
+            holderDetails,
             categories: categoriesWithStats,
             newArrivals,
             equipmentStats,
@@ -170,11 +198,22 @@ const HomePage = () => {
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error);
       } finally {
-        setLoading(false);
+        if (showLoading) {
+          setLoading(false);
+        }
       }
     };
 
+    // Initial fetch
     fetchDashboardData();
+
+    // Set up periodic refresh every 30 seconds for dynamic updates
+    const refreshInterval = setInterval(() => {
+      fetchDashboardData(false); // Don't show loading spinner on background refresh
+    }, 30000); // 30 seconds
+
+    // Cleanup interval on component unmount
+    return () => clearInterval(refreshInterval);
   }, []);
 
   // Handle scroll events for fade-out effect
@@ -340,6 +379,65 @@ const HomePage = () => {
                 </table>
               </div>
             </div>
+            </div>
+            
+            {/* Current Holders Table - Dynamic */}
+            <div className="mt-6">
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-md p-4 md:p-5 transition-all duration-300">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-800">Current Holders</h3>
+                  <span className="text-sm text-gray-500">{dashboardData.currentHolder} {dashboardData.currentHolder === 1 ? 'Employee' : 'Employees'}</span>
+                </div>
+                <div className="overflow-hidden rounded-xl border border-gray-200">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 text-gray-600">
+                      <tr className="text-left">
+                        <th className="py-2.5 px-4 font-semibold">Employee Name</th>
+                        <th className="py-2.5 px-4 font-semibold">Position</th>
+                        <th className="py-2.5 px-4 font-semibold">Equipment Held</th>
+                        <th className="py-2.5 px-4 font-semibold text-center">Count</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {loading ? (
+                        <tr>
+                          <td colSpan="4" className="py-4 px-4 text-center text-gray-500">Loading...</td>
+                        </tr>
+                      ) : dashboardData.holderDetails.length === 0 ? (
+                        <tr>
+                          <td colSpan="4" className="py-4 px-4 text-center text-gray-500">No current holders</td>
+                        </tr>
+                      ) : (
+                        dashboardData.holderDetails.map((holder, index) => (
+                          <tr key={`${holder.employee_id}-${index}`} className="hover:bg-blue-50/40">
+                            <td className="py-2.5 px-4 font-medium text-gray-900">{holder.employee_name}</td>
+                            <td className="py-2.5 px-4 text-gray-600">{holder.position}</td>
+                            <td className="py-2.5 px-4">
+                              <div className="flex flex-wrap gap-1">
+                                {holder.equipment.slice(0, 3).map((eq, idx) => (
+                                  <span key={eq.id} className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded">
+                                    {eq.name}
+                                  </span>
+                                ))}
+                                {holder.equipment.length > 3 && (
+                                  <span className="text-xs text-gray-500 px-2 py-0.5">
+                                    +{holder.equipment.length - 3} more
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-4 text-center">
+                              <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                                {holder.equipment.length}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
             
             {/* Additional Boxes */}
