@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  Eye,
+  Home,
   ArrowLeftRight,
   Folder,
   User,
@@ -199,7 +199,7 @@ const HomeSidebar = ({ onSelect }) => {
         <nav className="flex-1 min-h-0 px-3 py-4 mt-4 space-y-2 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           {can('dashboard') && (
             <div className={linkClass("/dashboard")} onClick={() => handleMainMenuClick("/dashboard")}>
-              <Eye className="h-5 w-5" />
+              <Home className="h-5 w-5" />
               <span>Home</span>
             </div>
           )}
