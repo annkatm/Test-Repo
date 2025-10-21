@@ -468,7 +468,8 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
         // Group equipment by name/brand to show only item types, not individual units
         const equipmentItems = data.data.data || [];
         const groupedItems = equipmentItems.reduce((acc, item) => {
-          const key = `${item.name || item.brand}`;
+          // Create unique key based on name and brand for grouping
+          const key = `${item.name || 'Unknown'}_${item.brand || 'Unknown'}`;
           if (!acc[key]) {
             acc[key] = {
               id: item.id, // Use the first item's ID as the group ID
@@ -477,11 +478,14 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
               specifications: item.specifications,
               item_image: item.item_image,
               category_id: item.category_id,
-              // Count how many units exist
-              existing_count: 1
+              // Count how many units exist (dynamic count)
+              existing_count: 1,
+              items: [item] // Keep track of all items
             };
           } else {
+            // Increment count for each additional item with same name/brand
             acc[key].existing_count += 1;
+            acc[key].items.push(item);
           }
           return acc;
         }, {});
@@ -499,6 +503,7 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
 
   const handleCategorySelect = (category) => {
     setSelectedCategory(category);
+    fetchProducts(category.id); // Fetch products when category is selected
     setCurrentMode('product');
     setErrors({});
   };
@@ -574,8 +579,16 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
         throw new Error(data.message || 'Error adding stocks');
       }
 
+      // Trigger equipment update event for dynamic refresh
+      window.dispatchEvent(new Event('equipment:updated'));
+      
       if (onSuccess) onSuccess();
       onClose();
+      
+      // Refresh the products list to show updated counts
+      if (selectedCategory) {
+        await fetchProducts(selectedCategory.id);
+      }
     } catch (error) {
       setErrors({ submit: error.message });
     } finally {
