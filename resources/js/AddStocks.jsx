@@ -465,7 +465,28 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
       const data = await response.json();
       
       if (data.success) {
-        setProducts(data.data.data || []);
+        // Group equipment by name/brand to show only item types, not individual units
+        const equipmentItems = data.data.data || [];
+        const groupedItems = equipmentItems.reduce((acc, item) => {
+          const key = `${item.name || item.brand}`;
+          if (!acc[key]) {
+            acc[key] = {
+              id: item.id, // Use the first item's ID as the group ID
+              name: item.name,
+              brand: item.brand,
+              specifications: item.specifications,
+              item_image: item.item_image,
+              category_id: item.category_id,
+              // Count how many units exist
+              existing_count: 1
+            };
+          } else {
+            acc[key].existing_count += 1;
+          }
+          return acc;
+        }, {});
+        
+        setProducts(Object.values(groupedItems));
       } else {
         setErrors({ products: 'Failed to fetch products' });
       }
@@ -574,7 +595,8 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
 
   const filteredProducts = products.filter(product =>
     product.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    product.brand?.toLowerCase().includes(searchTerm.toLowerCase())
+    product.brand?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    product.specifications?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -663,6 +685,9 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
                   >
                     <div className="font-medium text-gray-900">{product.brand}</div>
                     <div className="text-sm text-gray-500">{product.specifications}</div>
+                    <div className="text-xs text-gray-400 mt-1">
+                      Existing units: {product.existing_count || 0}
+                    </div>
                   </div>
                 ))
               )}

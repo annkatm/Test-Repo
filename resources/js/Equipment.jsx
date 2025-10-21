@@ -551,14 +551,13 @@ const Equipment = () => {
 
       {/* Details Modal */}
       {showDetailsModal && selectedItemDetails && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black bg-opacity-50" onClick={closeDetailsModal} />
-          <div className="relative bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center z-10">
-              <h2 className="text-2xl font-bold text-gray-900">Equipment Details - {selectedItemDetails.name}</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 lg:p-6">
+          <div className="relative bg-white rounded-lg shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-y-auto mx-4 sm:mx-6 lg:mx-8" style={{ boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)' }}>
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-4 sm:px-6 py-4 flex justify-between items-center z-10">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 truncate pr-4">Equipment Details - {selectedItemDetails.name}</h2>
               <button
                 onClick={closeDetailsModal}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+                className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -566,9 +565,9 @@ const Equipment = () => {
               </button>
             </div>
             
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               {/* Form-like Layout */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-6">
                 {/* Left Column */}
                 <div className="space-y-4">
                   {/* Category */}
@@ -679,17 +678,17 @@ const Equipment = () => {
               </div>
 
               {/* Image Upload Sections */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-6">
                 {/* Item Image */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Item image</label>
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center bg-gray-50">
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 sm:p-6 text-center bg-gray-50">
                     {selectedItemDetails.image || selectedItemDetails.category_image ? (
                       <div className="space-y-2">
                         <img 
                           src={(selectedItemDetails.image || selectedItemDetails.category_image)}
                           alt={selectedItemDetails.name}
-                          className="mx-auto h-32 w-auto object-contain cursor-zoom-in"
+                          className="mx-auto h-24 sm:h-32 w-auto object-contain cursor-zoom-in"
                           onClick={() => setImagePreview({ src: (selectedItemDetails.image || selectedItemDetails.category_image), alt: selectedItemDetails.name })}
                           onError={(e) => {
                             e.target.onerror = null;
@@ -715,13 +714,13 @@ const Equipment = () => {
                 {/* Receipt Image */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Receipt image</label>
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center bg-gray-50">
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 sm:p-6 text-center bg-gray-50">
                     {selectedItemDetails.receipt ? (
                       <div className="space-y-2">
                         <img 
                           src={selectedItemDetails.receipt}
                           alt="Receipt"
-                          className="mx-auto h-32 w-auto object-contain cursor-zoom-in"
+                          className="mx-auto h-24 sm:h-32 w-auto object-contain cursor-zoom-in"
                           onClick={() => setImagePreview({ src: selectedItemDetails.receipt, alt: 'Receipt' })}
                           onError={(e) => {
                             e.target.onerror = null;
@@ -746,24 +745,24 @@ const Equipment = () => {
               </div>
 
               {/* Inventory Summary */}
-              <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-6 rounded-lg mb-6">
+              <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 sm:p-6 rounded-lg mb-6">
                 <h3 className="text-lg font-semibold text-gray-800 mb-4">Inventory Summary</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="bg-white p-4 rounded-lg shadow-sm">
+                  <div className="bg-white p-3 sm:p-4 rounded-lg shadow-sm">
                     <p className="text-xs text-gray-600 mb-1">Available</p>
-                    <p className="text-2xl font-bold text-green-600">{selectedItemDetails.available}</p>
+                    <p className="text-xl sm:text-2xl font-bold text-green-600">{selectedItemDetails.available}</p>
                   </div>
-                  <div className="bg-white p-4 rounded-lg shadow-sm">
+                  <div className="bg-white p-3 sm:p-4 rounded-lg shadow-sm">
                     <p className="text-xs text-gray-600 mb-1">In Use</p>
-                    <p className="text-2xl font-bold text-blue-600">{selectedItemDetails.inUse}</p>
+                    <p className="text-xl sm:text-2xl font-bold text-blue-600">{selectedItemDetails.inUse}</p>
                   </div>
-                  <div className="bg-white p-4 rounded-lg shadow-sm">
+                  <div className="bg-white p-3 sm:p-4 rounded-lg shadow-sm">
                     <p className="text-xs text-gray-600 mb-1">Total</p>
-                    <p className="text-2xl font-bold text-gray-900">{selectedItemDetails.total}</p>
+                    <p className="text-xl sm:text-2xl font-bold text-gray-900">{selectedItemDetails.total}</p>
                   </div>
-                  <div className="bg-white p-4 rounded-lg shadow-sm">
+                  <div className="bg-white p-3 sm:p-4 rounded-lg shadow-sm">
                     <p className="text-xs text-gray-600 mb-1">Total Value</p>
-                    <p className="text-lg font-bold text-gray-900">
+                    <p className="text-lg sm:text-xl font-bold text-gray-900">
                       ₱{(Number(selectedItemDetails.purchase_price || selectedItemDetails.price || 0) * selectedItemDetails.total).toFixed(2)}
                     </p>
                   </div>
@@ -777,10 +776,10 @@ const Equipment = () => {
                 </h4>
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {selectedItemDetails.items.map((item, idx) => (
-                    <div key={idx} className="flex justify-between items-center p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
+                    <div key={idx} className="flex justify-between items-center p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
                       <div className="flex-1">
                         <p className="font-semibold text-gray-900">Serial: {item.serial_number || 'N/A'}</p>
-                        <div className="flex gap-4 mt-1 text-sm text-gray-600">
+                        <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mt-1 text-sm text-gray-600">
                           <span>Added: {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'N/A'}</span>
                           <span>Updated: {item.updated_at ? new Date(item.updated_at).toLocaleDateString() : 'N/A'}</span>
                         </div>
