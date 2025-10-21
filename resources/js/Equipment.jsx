@@ -231,7 +231,8 @@ const Equipment = () => {
         const categoriesData = catRes.data.data;
         setCategories(categoriesData);
         
-        const eqRes = await api.get('/equipment');
+        // Fetch all equipment by setting a large per_page value
+        const eqRes = await api.get('/equipment?per_page=10000');
         if (eqRes?.data?.success && eqRes.data.data && Array.isArray(eqRes.data.data.data)) {
           const equipmentData = eqRes.data.data.data;
           
