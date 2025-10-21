@@ -212,6 +212,54 @@ const EmployeeTaskbar = ({
     return `${formData.firstName.charAt(0)}${formData.lastName.charAt(0)}`.toUpperCase();
   };
 
+  const performGlobalSearch = async (q) => {
+    const query = String(q || '').trim();
+    if (!query) {
+      window.dispatchEvent(new CustomEvent('employee-search-results', { detail: { query, equipment: [], requests: [], transactions: [], history: [] } }));
+      return;
+    }
+
+    const safeJson = async (res) => {
+      try { return await res.json(); } catch (_) { return null; }
+    };
+    const includesQ = (s) => (String(s || '').toLowerCase().includes(query.toLowerCase()));
+    const matchAny = (obj, keys) => keys.some(k => includesQ(obj?.[k]));
+
+    try {
+      const [reqPendingRes, reqDeniedRes, trxApprovedRes, trxHistoryRes] = await Promise.all([
+        fetch('/api/requests?status=pending'),
+        fetch('/api/requests?status=denied'),
+        fetch('/api/transactions/approved'),
+        fetch('/api/transactions/history')
+      ]);
+
+      const [reqPendingJson, reqDeniedJson, trxApprovedJson, trxHistoryJson] = await Promise.all([
+        safeJson(reqPendingRes),
+        safeJson(reqDeniedRes),
+        safeJson(trxApprovedRes),
+        safeJson(trxHistoryRes)
+      ]);
+
+      const reqPending = Array.isArray(reqPendingJson?.data) ? reqPendingJson.data : (Array.isArray(reqPendingJson) ? reqPendingJson : []);
+      const reqDenied = Array.isArray(reqDeniedJson?.data) ? reqDeniedJson.data : (Array.isArray(reqDeniedJson) ? reqDeniedJson : []);
+      const trxApproved = Array.isArray(trxApprovedJson?.data) ? trxApprovedJson.data : (Array.isArray(trxApprovedJson) ? trxApprovedJson : []);
+      const trxHistory = Array.isArray(trxHistoryJson?.data) ? trxHistoryJson.data : (Array.isArray(trxHistoryJson) ? trxHistoryJson : []);
+
+      const requestsAll = [...reqPending, ...reqDenied].filter(r =>
+        matchAny(r, ['equipment_name', 'item', 'items', 'brand', 'model', 'description', 'request_number', 'status'])
+      );
+      const requests = requestsAll.filter(r => matchAny(r, ['equipment_name', 'item', 'items', 'brand', 'model', 'description', 'request_number', 'status']));
+
+      const transactions = trxApproved.filter(t => matchAny(t, ['equipment_name', 'description', 'status', 'request_number']));
+      const history = trxHistory.filter(h => matchAny(h, ['item', 'message', 'status', 'equipment_name', 'request_number']));
+
+      const detail = { query, equipment: [], requests, transactions, history };
+      window.dispatchEvent(new CustomEvent('employee-search-results', { detail }));
+    } catch (e) {
+      window.dispatchEvent(new CustomEvent('employee-search-error', { detail: { query, error: String(e && e.message ? e.message : e) } }));
+    }
+  };
+
   return (
     <>
       <header className="flex items-center justify-between px-10 py-6">
@@ -235,6 +283,7 @@ const EmployeeTaskbar = ({
                   onSearch?.(val);
                   window.dispatchEvent(new CustomEvent('employee-search', { detail: val }));
                   window.dispatchEvent(new CustomEvent('employee-search-submit', { detail: val }));
+                  performGlobalSearch(val);
                   const target = document.querySelector('[data-employee-search-target]') || document.getElementById('items-section');
                   if (target && typeof target.scrollIntoView === 'function') {
                     target.scrollIntoView({ behavior: 'smooth', block: 'start' });

@@ -12,6 +12,15 @@ const EmployeeHome = () => {
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [returnDate, setReturnDate] = useState(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
 
+  const logActivity = (message, variant = 'info') => {
+    try {
+      const prev = JSON.parse(localStorage.getItem('employee_activities') || '[]');
+      const entry = { id: Date.now(), message, variant, time: new Date().toISOString() };
+      const next = [entry, ...(Array.isArray(prev) ? prev : [])].slice(0, 50);
+      localStorage.setItem('employee_activities', JSON.stringify(next));
+    } catch (_) {}
+  };
+
   // Keep a per-user local list of reserved equipment IDs so they stay hidden after request submission
   const getReservedIds = () => {
     try {
@@ -250,6 +259,8 @@ const EmployeeHome = () => {
     // This reflects that this specific unit is now taken/reserved in the cart
     setEquipment(prev => prev.filter(eq => eq.id !== item.id));
 
+    logActivity(`Added to cart: ${(item.name || item.brand || 'Item')} (${item.id})`, 'success');
+
     const itemsSection = document.getElementById('items-section');
     if (itemsSection) {
       itemsSection.scrollIntoView({ 
@@ -269,6 +280,7 @@ const EmployeeHome = () => {
         const toAdd = group.units.filter(u => !existingIds.has(u.id));
         return [...toAdd, ...prev];
       });
+      logActivity(`Removed from cart: ${group.name} (x${group.quantity})`, 'warning');
     }
     setCartItems(cartItems.filter(ci => ci.groupKey !== groupKey));
   };
@@ -292,6 +304,7 @@ const EmployeeHome = () => {
       setCartItems(cartItems.map(ci => 
         ci.groupKey === groupKey ? { ...ci, quantity: newQuantity, units: ci.units.slice(0, -1) } : ci
       ));
+      logActivity(`Decreased quantity: ${group.name} to x${newQuantity}`, 'info');
     } else if (newQuantity > group.quantity) {
       // Increment: try to take one matching available unit from equipment
       const matchIndex = equipment.findIndex(eq => (
@@ -303,6 +316,7 @@ const EmployeeHome = () => {
       setCartItems(cartItems.map(ci => 
         ci.groupKey === groupKey ? { ...ci, quantity: newQuantity, units: [...ci.units, unit] } : ci
       ));
+      logActivity(`Increased quantity: ${group.name} to x${newQuantity}`, 'info');
     }
   };
 
@@ -316,6 +330,7 @@ const EmployeeHome = () => {
       });
     }
     setCartItems([]);
+    logActivity('Canceled cart and reset selection', 'warning');
     // Reset selection and reload default available equipment
     setSelectedCategory(null);
     (async () => {
@@ -351,6 +366,7 @@ const EmployeeHome = () => {
 
     try {
       setLoading(true);
+      logActivity(`Submitting request for ${cartItems.reduce((s, i) => s + i.quantity, 0)} item(s)`, 'info');
       
       // Get the current user/employee ID from check-auth endpoint
       const userResponse = await fetch('/check-auth', {
@@ -450,6 +466,7 @@ const EmployeeHome = () => {
         for (const unit of group.units) {
           if (unit.status && unit.status !== 'available') {
             results.push({ success: false, data: { message: 'Item unavailable' } });
+            logActivity(`Request skipped (unavailable): ${group.name} (${unit.id})`, 'warning');
             continue;
           }
           if (seen.has(unit.id)) continue; // avoid duplicate requests for same equipment
@@ -493,20 +510,12 @@ const EmployeeHome = () => {
           const ok = response.ok && (data?.success === true || data?.status === 'success');
           results.push({ success: ok, status: response.status, data, unitId: unit.id, unit, groupKey: group.groupKey });
 
-          // Always dispatch a local history event so user sees the attempt in their history
-          try {
-            const historyEntry = {
-              id: data?.data?.id || `local-${Date.now()}-${unit.id}`,
-              item: group.name || group.brand || 'Equipment',
-              message: `Requested ${group.name || group.brand} (unit ${unit.id})`,
-              variant: ok ? 'success' : 'warning',
-              date: new Date().toISOString(),
-              time: new Date().toISOString(),
-              local: true
-            };
-            if (window.IReplyNotify) window.IReplyNotify(historyEntry.message, historyEntry.variant, true, historyEntry);
-            else window.dispatchEvent(new CustomEvent('ireply:history', { detail: historyEntry }));
-          } catch (_e) {}
+          if (ok) {
+            logActivity(`Request submitted: ${group.name} (${unit.id})`, 'success');
+          } else {
+            const msg = data?.message || data?.error || `HTTP ${response.status}`;
+            logActivity(`Request failed: ${group.name} (${unit.id}) - ${msg}`, 'warning');
+          }
         }
       }
 
@@ -550,10 +559,12 @@ const EmployeeHome = () => {
         const firstFailure = results[0] || {};
         const msg = firstFailure?.data?.message || firstFailure?.data?.error || `HTTP ${firstFailure?.status || 'unknown'}`;
         alert(`All requests failed. Please check your inputs and try again.\n\nDetails: ${msg}`);
+        logActivity(`All requests failed - ${msg}`, 'warning');
       }
     } catch (error) {
       console.error('Failed to submit request:', error);
       alert('Failed to submit request. Please try again.\n\nError: ' + error.message);
+      logActivity(`Submit request error: ${error.message}`, 'warning');
     } finally {
       setLoading(false);
     }
@@ -756,8 +767,6 @@ const EmployeeHome = () => {
               </div>
             </div>
 
-{/* Date Pickers Section - Fixed, compact */}
-          {/* Date Pickers Section - Fixed, compact */}
           {cartItems.length > 0 && (
               <div className="px-6 pt-2 pb-2 border-t border-gray-200 flex-shrink-0">
                 <div className="flex gap-2">
