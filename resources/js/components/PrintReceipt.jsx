@@ -8,17 +8,24 @@ const PrintReceipt = ({
   onPrint
 }) => {
   const [isEditing, setIsEditing] = useState(false);
+  const [serialSearchTerms, setSerialSearchTerms] = useState({});
+  const [showDropdowns, setShowDropdowns] = useState({});
+  const [editableItems, setEditableItems] = useState([]);
+  const dropdownRef = React.useRef(null);
   const [editableData, setEditableData] = useState({
     full_name: '',
     position: '',
-    department: 'IT Department',
+    department: 'YD Level 1',
     equipment_name: '',
     serial_number: '',
     notes: '',
     it_admin: 'Arvin D. Salas',
     hr_lead: 'MAUMondres/PMagdadaro',
     it_admin_title: 'IT Administrator',
-    hr_lead_title: 'Senior IT Consultant/HR Lead'
+    hr_lead_title: 'Senior IT Consultant/HR Lead',
+    agreement_text: `I acknowledge receipt of the listed company property hereunder. I agree to maintain the property in good condition and to return it when I terminate employment with the company or when requested by my supervisor. In addition, if I no longer need any of the items, I will report this information to my supervisor and return it to the company. I agree to notify the company if any of the items are damaged, destroyed, or lost. If proven that these items are damaged, destroyed or lost due to my negligence, I will be responsible for the repair or replacement cost. I also agree that I am not allowed to take the equipment outside the company premises, unless permitted by my Coach, Manager, or the HR Department for justifiable reasons.
+
+In the event that I am unable to return any of the company-issued equipment upon the termination of my employment, I acknowledge that the Company reserves the right to take appropriate legal action to recover the property or its equivalent value. I understand that failure to return the equipment may result in the withholding of my final pay and clearance, and could lead to the filing of a formal case against me in accordance with applicable laws.`
   });
 
   // Initialize editable data when transactionData changes
@@ -28,13 +35,35 @@ const PrintReceipt = ({
         ...prev,
         full_name: transactionData.full_name || '',
         position: transactionData.position || '',
-        department: transactionData.department || 'IT Department',
+        department: transactionData.department || 'YD Level 1',
         equipment_name: transactionData.equipment_name || '',
         serial_number: transactionData.serial_number || '',
         notes: transactionData.notes || ''
       }));
+      
+      // Initialize editable items
+      const items = transactionData.items || [{
+        equipment_name: transactionData.equipment_name,
+        serial_number: transactionData.serial_number,
+        notes: transactionData.notes
+      }];
+      setEditableItems(items);
     }
   }, [transactionData]);
+
+  // Close dropdown when clicking outside
+  React.useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowDropdowns({});
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   if (!isOpen || !transactionData) return null;
 
@@ -50,16 +79,24 @@ const PrintReceipt = ({
   };
 
   // Handle both single item and multiple items (grouped)
-  const items = transactionData.items || [{
+  const items = editableItems.length > 0 ? editableItems : (transactionData.items || [{
     equipment_name: transactionData.equipment_name,
     serial_number: transactionData.serial_number,
     notes: transactionData.notes
-  }];
+  }]);
+
+  // Get all unique serial numbers for dropdown
+  const allSerialNumbers = items
+    .map(item => item.serial_number)
+    .filter(serial => serial && serial !== 'N/A');
 
   // Debug: Log items to verify serial numbers are present
   console.log('PrintReceipt - Items to print:', items);
 
   const handlePrint = () => {
+    // Get the logo as absolute URL
+    const logoUrl = window.location.origin + '/images/Frame_89-removebg-preview.png';
+    
     const printWindow = window.open('', '_blank');
     const printContent = `
       <!DOCTYPE html>
@@ -144,7 +181,7 @@ const PrintReceipt = ({
         </head>
         <body>
           <div class="header">
-            <img src="/images/Frame_89-removebg-preview.png" alt="iREPLY Logo" class="logo" />
+            <img src="${logoUrl}" alt="iREPLY Logo" class="logo" onerror="this.style.display='none'" />
           </div>
 
           <div class="title">ACCOUNTABILITY FORM AGREEMENT</div>
@@ -156,61 +193,62 @@ const PrintReceipt = ({
           </div>
 
           <div class="agreement-text">
-            <p>
-              I acknowledge receipt of the company-issued equipment listed below and agree to maintain it in good condition. 
-              I understand that I am responsible for the proper care and return of this equipment upon termination of employment 
-              or upon request by the company. I agree to report any damaged, destroyed, or lost items immediately and understand 
-              that I may be held financially responsible for repair or replacement costs if the damage is due to negligence or misuse.
-            </p>
-            <p>
-              I understand that failure to return the equipment in good condition may result in the company taking appropriate 
-              action, including but not limited to withholding of final pay and clearance, and may be subject to formal legal action.
-            </p>
+            <p>${editableData.agreement_text}</p>
           </div>
 
           <table class="equipment-table">
             <thead>
               <tr>
-                <th>#</th>
-                <th>Equipment Name</th>
+                <th>Item</th>
+                <th>Description</th>
                 <th>Serial Number</th>
                 <th>Date Released</th>
                 <th>Date Returned</th>
               </tr>
             </thead>
             <tbody>
-              ${items.map((item, index) => {
-                const dateReleased = item.date_released ? new Date(item.date_released).toLocaleDateString() : new Date().toLocaleDateString();
-                const dateReturned = item.date_returned ? new Date(item.date_returned).toLocaleDateString() : '';
+              ${[
+                { item: 'Laptop', description: items.find(i => i.equipment_name?.toLowerCase().includes('laptop'))?.equipment_name || 'HP ProBook 450 G3', serial: items.find(i => i.equipment_name?.toLowerCase().includes('laptop'))?.serial_number || 'JPH8137LN7', date_released: items.find(i => i.equipment_name?.toLowerCase().includes('laptop'))?.date_released },
+                { item: 'Monitor', description: 'N/A', serial: 'N/A', date_released: null },
+                { item: 'Mouse', description: items.find(i => i.equipment_name?.toLowerCase().includes('mouse'))?.equipment_name || 'A4Tech', serial: items.find(i => i.equipment_name?.toLowerCase().includes('mouse'))?.serial_number || '24LIU01', date_released: items.find(i => i.equipment_name?.toLowerCase().includes('mouse'))?.date_released },
+                { item: 'Keyboard', description: items.find(i => i.equipment_name?.toLowerCase().includes('keyboard'))?.equipment_name || 'A4Tech', serial: items.find(i => i.equipment_name?.toLowerCase().includes('keyboard'))?.serial_number || '24LIU00', date_released: items.find(i => i.equipment_name?.toLowerCase().includes('keyboard'))?.date_released },
+                { item: 'Headset', description: items.find(i => i.equipment_name?.toLowerCase().includes('headset'))?.equipment_name || 'Plantronics', serial: items.find(i => i.equipment_name?.toLowerCase().includes('headset'))?.serial_number || 'G0JB0Y', date_released: items.find(i => i.equipment_name?.toLowerCase().includes('headset'))?.date_released },
+                { item: 'UPS', description: '', serial: '', date_released: null },
+                { item: 'Internet Broadband', description: '', serial: '', date_released: null }
+              ].map((row) => {
+                const dateReleased = row.date_released ? new Date(row.date_released).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : 'N/A';
                 return `
                   <tr>
-                    <td>${index + 1}</td>
-                    <td>${item.equipment_name || 'N/A'}</td>
-                    <td>${item.serial_number || 'N/A'}</td>
+                    <td>${row.item}</td>
+                    <td>${row.description}</td>
+                    <td>${row.serial}</td>
                     <td>${dateReleased}</td>
-                    <td>${dateReturned}</td>
+                    <td></td>
                   </tr>
                 `;
               }).join('')}
               <tr class="others-row">
-                <td colspan="2">Others/Notes:</td>
-                <td colspan="3">${transactionData.notes || ''}</td>
+                <td colspan="2">Others:</td>
+                <td colspan="3">${transactionData.notes || 'New Hire'}</td>
               </tr>
             </tbody>
           </table>
 
           <div class="signature-section">
             <div class="signature-box">
+              <div class="signature-label" style="margin-bottom: 10px; font-weight: bold;">Understood and Agreed by:</div>
               <div class="signature-line"></div>
               <div class="signature-label">${editableData.full_name}</div>
               <div class="signature-label">Employee's Signature over Printed Name</div>
             </div>
             <div class="signature-box">
+              <div class="signature-label" style="margin-bottom: 10px; font-weight: bold;">Released by:</div>
               <div class="signature-line"></div>
               <div class="signature-label">${editableData.it_admin}</div>
               <div class="signature-label">${editableData.it_admin_title}</div>
             </div>
             <div class="signature-box">
+              <div class="signature-label" style="margin-bottom: 10px; font-weight: bold;">Noted by:</div>
               <div class="signature-line"></div>
               <div class="signature-label">${editableData.hr_lead}</div>
               <div class="signature-label">${editableData.hr_lead_title}</div>
@@ -292,6 +330,28 @@ const PrintReceipt = ({
             </div>
 
             <div className="space-y-4">
+              {/* Agreement Text */}
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-2 flex items-center">
+                  <Edit2 className="h-4 w-4 mr-2" />
+                  Agreement Text
+                </h4>
+                <div className="bg-white rounded-lg p-4">
+                  {isEditing ? (
+                    <textarea
+                      value={editableData.agreement_text}
+                      onChange={(e) => handleInputChange('agreement_text', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded text-sm min-h-[150px]"
+                      placeholder="Enter agreement text..."
+                    />
+                  ) : (
+                    <div className="text-sm text-gray-700 text-justify whitespace-pre-wrap">
+                      {editableData.agreement_text}
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Employee Info */}
               <div>
                 <h4 className="font-semibold text-gray-900 mb-2 flex items-center">
@@ -357,7 +417,71 @@ const PrintReceipt = ({
                     return (
                       <div key={index} className="border-l-2 border-blue-500 pl-3 py-1">
                         <div className="font-medium">{index + 1}. {item.equipment_name || 'N/A'}</div>
-                        <div className="text-sm text-gray-500">Serial: {item.serial_number || 'N/A'}</div>
+                        <div className="text-sm text-gray-500 flex items-center gap-2">
+                          <span>Serial:</span>
+                          {isEditing ? (
+                            <div className="relative">
+                              <input
+                                type="text"
+                                value={serialSearchTerms[index] !== undefined ? serialSearchTerms[index] : item.serial_number || ''}
+                                onChange={(e) => {
+                                  setSerialSearchTerms(prev => ({
+                                    ...prev,
+                                    [index]: e.target.value
+                                  }));
+                                  setShowDropdowns(prev => ({
+                                    ...prev,
+                                    [index]: true
+                                  }));
+                                }}
+                                onFocus={() => {
+                                  setShowDropdowns(prev => ({
+                                    ...prev,
+                                    [index]: true
+                                  }));
+                                }}
+                                placeholder="Type to search serial number..."
+                                className="px-2 py-1 border border-gray-300 rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-48"
+                              />
+                              {showDropdowns[index] && (
+                                <div className="absolute z-10 w-48 mt-1 bg-white border border-gray-300 rounded shadow-lg max-h-40 overflow-y-auto">
+                                  {allSerialNumbers
+                                    .filter(serial => 
+                                      serial.toLowerCase().includes((serialSearchTerms[index] || '').toLowerCase())
+                                    )
+                                    .map((serial, idx) => (
+                                      <div
+                                        key={idx}
+                                        onClick={() => {
+                                          const newItems = [...editableItems];
+                                          newItems[index].serial_number = serial;
+                                          setEditableItems(newItems);
+                                          setSerialSearchTerms(prev => ({
+                                            ...prev,
+                                            [index]: serial
+                                          }));
+                                          setShowDropdowns(prev => ({
+                                            ...prev,
+                                            [index]: false
+                                          }));
+                                        }}
+                                        className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm"
+                                      >
+                                        {serial}
+                                      </div>
+                                    ))}
+                                  {allSerialNumbers.filter(serial => 
+                                    serial.toLowerCase().includes((serialSearchTerms[index] || '').toLowerCase())
+                                  ).length === 0 && (
+                                    <div className="px-3 py-2 text-sm text-gray-500">No matching serial numbers</div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="px-2 py-1 bg-gray-100 rounded border border-gray-300">{item.serial_number || 'N/A'}</span>
+                          )}
+                        </div>
                         <div className="text-xs text-gray-400 mt-1">
                           Released: {dateReleased}
                           {dateReturned && ` | Returned: ${dateReturned}`}
@@ -382,7 +506,7 @@ const PrintReceipt = ({
                 <div className="bg-white rounded-lg p-4 space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="text-center">
-                      <div className="text-sm text-gray-600 mb-1">Employee</div>
+                      <div className="text-sm font-semibold text-gray-900 mb-2">Understood and Agreed by:</div>
                       {isEditing ? (
                         <input
                           type="text"
@@ -393,9 +517,10 @@ const PrintReceipt = ({
                       ) : (
                         <div className="text-sm font-medium">{editableData.full_name}</div>
                       )}
+                      <div className="text-xs text-gray-500 mt-1">Employee's Signature over Printed Name</div>
                     </div>
                     <div className="text-center">
-                      <div className="text-sm text-gray-600 mb-1">IT Admin</div>
+                      <div className="text-sm font-semibold text-gray-900 mb-2">Released by:</div>
                       {isEditing ? (
                         <div className="space-y-1">
                           <input
@@ -419,7 +544,7 @@ const PrintReceipt = ({
                       )}
                     </div>
                     <div className="text-center">
-                      <div className="text-sm text-gray-600 mb-1">HR Lead</div>
+                      <div className="text-sm font-semibold text-gray-900 mb-2">Noted by:</div>
                       {isEditing ? (
                         <div className="space-y-1">
                           <input

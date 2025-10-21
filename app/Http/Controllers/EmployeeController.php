@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Models\Employee;
+use App\Models\User;
 
 class EmployeeController extends Controller
 {
@@ -18,6 +19,7 @@ class EmployeeController extends Controller
                 'first_name' => 'required|string|max:255',
                 'last_name' => 'required|string|max:255',
                 'email' => 'required|email|max:255|unique:employees,email',
+                'user_id' => 'nullable|exists:users,id',
                 'employee_type' => 'nullable|string|max:255',
                 'department' => 'nullable|string|max:255',
                 'position' => 'nullable|string|max:255',
@@ -85,6 +87,7 @@ class EmployeeController extends Controller
                 'first_name' => 'required|string|max:255',
                 'last_name' => 'required|string|max:255',
                 'email' => 'required|email|max:255|unique:employees,email,' . $id,
+                'user_id' => 'nullable|exists:users,id',
                 'employee_type' => 'nullable|string|max:255',
                 'department' => 'nullable|string|max:255',
                 'position' => 'nullable|string|max:255',
@@ -203,8 +206,8 @@ class EmployeeController extends Controller
     public function index()
     {
         try {
-            // Using Employee model to respect soft deletes
-            $employees = Employee::orderBy('first_name', 'asc')->get();
+            // Using Employee model to respect soft deletes and include user relationship
+            $employees = Employee::with('user')->orderBy('first_name', 'asc')->get();
 
             return response()->json([
                 'success' => true,
@@ -356,6 +359,113 @@ class EmployeeController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error fetching verify returns: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get available users for employee connection
+     */
+    public function getAvailableUsers()
+    {
+        try {
+            // Get users that don't have an employee record yet
+            $availableUsers = User::whereDoesntHave('employee')
+                ->where('is_active', true)
+                ->select('id', 'name', 'email', 'role_id')
+                ->with('role:id,name')
+                ->orderBy('name', 'asc')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $availableUsers,
+                'count' => $availableUsers->count()
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error fetching available users: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Connect an employee to a user
+     */
+    public function connectUser(Request $request, $id)
+    {
+        try {
+            $employee = Employee::find($id);
+            
+            if (!$employee) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Employee not found'
+                ], 404);
+            }
+
+            $validated = $request->validate([
+                'user_id' => 'required|exists:users,id'
+            ]);
+
+            // Check if user is already connected to another employee
+            $existingEmployee = Employee::where('user_id', $validated['user_id'])->first();
+            if ($existingEmployee && $existingEmployee->id != $id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This user is already connected to another employee'
+                ], 422);
+            }
+
+            $employee->update(['user_id' => $validated['user_id']]);
+            $employee->load('user');
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Employee connected to user successfully',
+                'data' => $employee
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error connecting employee to user: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Disconnect an employee from a user
+     */
+    public function disconnectUser($id)
+    {
+        try {
+            $employee = Employee::find($id);
+            
+            if (!$employee) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Employee not found'
+                ], 404);
+            }
+
+            $employee->update(['user_id' => null]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Employee disconnected from user successfully',
+                'data' => $employee
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error disconnecting employee from user: ' . $e->getMessage()
             ], 500);
         }
     }
