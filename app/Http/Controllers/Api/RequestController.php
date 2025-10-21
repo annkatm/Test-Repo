@@ -15,6 +15,48 @@ use Illuminate\Support\Facades\DB;
 class RequestController extends Controller
 {
     /**
+     * Generate a unique transaction number
+     */
+    private function generateUniqueTransactionNumber(): string
+    {
+        $maxAttempts = 10;
+        $attempt = 0;
+        
+        do {
+            $attempt++;
+            
+            // Get the highest existing transaction number
+            $lastTransaction = DB::table('transactions')
+                ->where('transaction_number', 'LIKE', 'TXN-%')
+                ->orderBy('transaction_number', 'desc')
+                ->first();
+            
+            if ($lastTransaction) {
+                // Extract the number part and increment
+                $lastNumber = (int) substr($lastTransaction->transaction_number, 4);
+                $nextNumber = $lastNumber + 1;
+            } else {
+                // First transaction
+                $nextNumber = 1;
+            }
+            
+            $transactionNumber = 'TXN-' . str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
+            
+            // Check if this number already exists
+            $exists = DB::table('transactions')
+                ->where('transaction_number', $transactionNumber)
+                ->exists();
+            
+            if (!$exists) {
+                return $transactionNumber;
+            }
+            
+        } while ($attempt < $maxAttempts);
+        
+        // Fallback: use timestamp-based number
+        return 'TXN-' . date('YmdHis');
+    }
+    /**
      * Display a listing of the resource.
      */
     public function index(Request $request): JsonResponse
@@ -425,8 +467,8 @@ class RequestController extends Controller
                     'updated_at' => now(),
                 ]);
 
-                // Create transaction record
-                $transactionNumber = 'TXN-' . str_pad(DB::table('transactions')->count() + 1, 6, '0', STR_PAD_LEFT);
+                // Create transaction record with unique transaction number
+                $transactionNumber = $this->generateUniqueTransactionNumber();
                 
                 DB::table('transactions')->insert([
                     'transaction_number' => $transactionNumber,

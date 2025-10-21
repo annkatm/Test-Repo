@@ -14,6 +14,48 @@ use App\Models\User;
 class TransactionController extends Controller
 {
     /**
+     * Generate a unique transaction number
+     */
+    private function generateUniqueTransactionNumber(): string
+    {
+        $maxAttempts = 10;
+        $attempt = 0;
+        
+        do {
+            $attempt++;
+            
+            // Get the highest existing transaction number
+            $lastTransaction = DB::table('transactions')
+                ->where('transaction_number', 'LIKE', 'TXN-%')
+                ->orderBy('transaction_number', 'desc')
+                ->first();
+            
+            if ($lastTransaction) {
+                // Extract the number part and increment
+                $lastNumber = (int) substr($lastTransaction->transaction_number, 4);
+                $nextNumber = $lastNumber + 1;
+            } else {
+                // First transaction
+                $nextNumber = 1;
+            }
+            
+            $transactionNumber = 'TXN-' . str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
+            
+            // Check if this number already exists
+            $exists = DB::table('transactions')
+                ->where('transaction_number', $transactionNumber)
+                ->exists();
+            
+            if (!$exists) {
+                return $transactionNumber;
+            }
+            
+        } while ($attempt < $maxAttempts);
+        
+        // Fallback: use timestamp-based number
+        return 'TXN-' . date('YmdHis');
+    }
+    /**
      * Get transaction statistics for employee dashboard
      */
     public function stats()
@@ -761,13 +803,19 @@ class TransactionController extends Controller
             $validatedData = $request->validate([
                 'employee_id' => 'required|exists:employees,id',
                 'equipment_id' => 'required|exists:equipment,id',
-                'transaction_number' => 'required|string|unique:transactions,transaction_number',
+                'transaction_number' => 'sometimes|string|unique:transactions,transaction_number',
                 'request_mode' => 'required|in:on_site,work_from_home',
                 'expected_return_date' => 'required|date',
                 'status' => 'sometimes|in:pending,released,returned,lost,damaged',
             ]);
 
             $validatedData['status'] = $validatedData['status'] ?? 'pending';
+            
+            // Generate transaction number if not provided
+            if (empty($validatedData['transaction_number'])) {
+                $validatedData['transaction_number'] = $this->generateUniqueTransactionNumber();
+            }
+            
             // Attach user_id of the staff processing/creating this transaction
             $validatedData['user_id'] = auth()->id();
             $validatedData['created_at'] = now();
