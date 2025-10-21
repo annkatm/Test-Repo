@@ -46,6 +46,22 @@ class Employee extends Model
     }
 
     /**
+     * Get all transactions for this employee.
+     */
+    public function transactions(): HasMany
+    {
+        return $this->hasMany(Transaction::class);
+    }
+
+    /**
+     * Get currently borrowed items (transactions with released status).
+     */
+    public function borrowedItems(): HasMany
+    {
+        return $this->hasMany(Transaction::class)->where('status', 'released');
+    }
+
+    /**
      * Get the full name of the employee.
      */
     public function getFullNameAttribute(): string

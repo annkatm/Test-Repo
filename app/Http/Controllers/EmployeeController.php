@@ -207,7 +207,47 @@ class EmployeeController extends Controller
     {
         try {
             // Using Employee model to respect soft deletes and include user relationship
-            $employees = Employee::with('user')->orderBy('first_name', 'asc')->get();
+            $employees = Employee::with(['user', 'borrowedItems.equipment.category'])
+                ->orderBy('first_name', 'asc')
+                ->get();
+
+            // Process each employee to combine assigned and borrowed items
+            $employees->each(function ($employee) {
+                $assignedItems = [];
+                $borrowedItems = [];
+
+                // Parse assigned items from issued_item field
+                if ($employee->issued_item) {
+                    try {
+                        $assignedItems = json_decode($employee->issued_item, true) ?? [];
+                    } catch (\Exception $e) {
+                        $assignedItems = [];
+                    }
+                }
+
+                // Get borrowed items from transactions
+                foreach ($employee->borrowedItems as $transaction) {
+                    if ($transaction->equipment) {
+                        $borrowedItems[] = [
+                            'id' => $transaction->equipment->id,
+                            'name' => $transaction->equipment->name,
+                            'specs' => $transaction->equipment->specifications ?? 'N/A',
+                            'serial_number' => $transaction->equipment->serial_number ?? 'N/A',
+                            'type' => 'borrowed',
+                            'transaction_id' => $transaction->id,
+                            'expected_return_date' => $transaction->expected_return_date,
+                            'release_date' => $transaction->release_date,
+                            'category' => $transaction->equipment->category->name ?? 'Uncategorized'
+                        ];
+                    }
+                }
+
+                // Combine assigned and borrowed items
+                $allItems = array_merge($assignedItems, $borrowedItems);
+                
+                // Update the employee's issued_item to include both types
+                $employee->issued_item = json_encode($allItems);
+            });
 
             return response()->json([
                 'success' => true,
@@ -228,7 +268,7 @@ class EmployeeController extends Controller
     public function show($id)
     {
         try {
-            $employee = Employee::find($id);
+            $employee = Employee::with(['user', 'borrowedItems.equipment.category'])->find($id);
             
             if (!$employee) {
                 return response()->json([
@@ -236,6 +276,42 @@ class EmployeeController extends Controller
                     'message' => 'Employee not found'
                 ], 404);
             }
+
+            // Process employee to combine assigned and borrowed items
+            $assignedItems = [];
+            $borrowedItems = [];
+
+            // Parse assigned items from issued_item field
+            if ($employee->issued_item) {
+                try {
+                    $assignedItems = json_decode($employee->issued_item, true) ?? [];
+                } catch (\Exception $e) {
+                    $assignedItems = [];
+                }
+            }
+
+            // Get borrowed items from transactions
+            foreach ($employee->borrowedItems as $transaction) {
+                if ($transaction->equipment) {
+                    $borrowedItems[] = [
+                        'id' => $transaction->equipment->id,
+                        'name' => $transaction->equipment->name,
+                        'specs' => $transaction->equipment->specifications ?? 'N/A',
+                        'serial_number' => $transaction->equipment->serial_number ?? 'N/A',
+                        'type' => 'borrowed',
+                        'transaction_id' => $transaction->id,
+                        'expected_return_date' => $transaction->expected_return_date,
+                        'release_date' => $transaction->release_date,
+                        'category' => $transaction->equipment->category->name ?? 'Uncategorized'
+                    ];
+                }
+            }
+
+            // Combine assigned and borrowed items
+            $allItems = array_merge($assignedItems, $borrowedItems);
+            
+            // Update the employee's issued_item to include both types
+            $employee->issued_item = json_encode($allItems);
 
             return response()->json([
                 'success' => true,

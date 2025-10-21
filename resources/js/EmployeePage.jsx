@@ -111,8 +111,16 @@ const EmployeePage = () => {
   };
 
   const validatePhone = (phone) => {
-    const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
-    return phoneRegex.test(phone.replace(/[\s\-\(\)]/g, ''));
+    // Remove all non-digit characters except + at the beginning
+    const cleanedPhone = phone.replace(/[\s\-\(\)]/g, '');
+    
+    // Philippine phone number patterns:
+    // - Mobile: 09XX-XXX-XXXX (11 digits starting with 09)
+    // - Landline: 0X-XXX-XXXX (10 digits starting with 02, 03, etc.)
+    // - International: +63XXXXXXXXXX (with country code)
+    const phoneRegex = /^(\+63|0)?[2-9]\d{7,9}$/;
+    
+    return phoneRegex.test(cleanedPhone);
   };
 
   const validatePassword = (password) => {
@@ -791,11 +799,25 @@ const EmployeePage = () => {
                             return items.map((item, index) => (
                               <div key={index} className="px-4 py-3">
                                 <div className="grid grid-cols-3 gap-4 items-center">
-                                  <div className="text-blue-600 underline cursor-pointer font-medium">
-                                    {item.name || 'N/A'}
+                                  <div className="flex items-center space-x-2">
+                                    <div className={`text-blue-600 underline cursor-pointer font-medium ${
+                                      item.type === 'borrowed' ? 'text-orange-600' : 'text-blue-600'
+                                    }`}>
+                                      {item.name || 'N/A'}
+                                    </div>
+                                    {item.type === 'borrowed' && (
+                                      <span className="px-2 py-0.5 text-xs bg-orange-100 text-orange-700 rounded-full">
+                                        Borrowed
+                                      </span>
+                                    )}
                                   </div>
                                   <div className="text-gray-700 text-sm leading-tight">
                                     {item.specs || 'N/A'}
+                                    {item.type === 'borrowed' && item.expected_return_date && (
+                                      <div className="text-xs text-orange-600 mt-1">
+                                        Return by: {new Date(item.expected_return_date).toLocaleDateString()}
+                                      </div>
+                                    )}
                                   </div>
                                   <div className="text-gray-700 text-sm">
                                     {item.serial_number || 'N/A'}
@@ -1143,20 +1165,53 @@ const EmployeePage = () => {
                     </div>
                     <div className="max-h-40 overflow-y-auto">
                       <div className="divide-y divide-gray-200">
-                        <div className="px-4 py-3">
-                          <div className="grid grid-cols-3 gap-4 items-center">
-                            <div className="text-blue-600 underline cursor-pointer font-medium">Laptop</div>
-                            <div className="text-gray-700 text-sm leading-tight">23.8" IPS panel, 1920x1080</div>
-                            <div className="text-gray-700 text-sm">JS23434</div>
-                          </div>
-                        </div>
-                        <div className="px-4 py-3">
-                          <div className="grid grid-cols-3 gap-4 items-center">
-                            <div className="text-blue-600 underline cursor-pointer font-medium">Mouse</div>
-                            <div className="text-gray-700 text-sm leading-tight">Logitech G Pro X Superlight 2</div>
-                            <div className="text-gray-700 text-sm">YT56456</div>
-                          </div>
-                        </div>
+                        {(() => {
+                          try {
+                            const items = editing.issuedItem ? JSON.parse(editing.issuedItem) : [];
+                            if (!Array.isArray(items) || items.length === 0) {
+                              return (
+                                <div className="px-4 py-3 text-center text-gray-500">
+                                  No items issued
+                                </div>
+                              );
+                            }
+                            return items.map((item, index) => (
+                              <div key={index} className="px-4 py-3">
+                                <div className="grid grid-cols-3 gap-4 items-center">
+                                  <div className="flex items-center space-x-2">
+                                    <div className={`text-blue-600 underline cursor-pointer font-medium ${
+                                      item.type === 'borrowed' ? 'text-orange-600' : 'text-blue-600'
+                                    }`}>
+                                      {item.name || 'N/A'}
+                                    </div>
+                                    {item.type === 'borrowed' && (
+                                      <span className="px-2 py-0.5 text-xs bg-orange-100 text-orange-700 rounded-full">
+                                        Borrowed
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-gray-700 text-sm leading-tight">
+                                    {item.specs || 'N/A'}
+                                    {item.type === 'borrowed' && item.expected_return_date && (
+                                      <div className="text-xs text-orange-600 mt-1">
+                                        Return by: {new Date(item.expected_return_date).toLocaleDateString()}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="text-gray-700 text-sm">
+                                    {item.serial_number || 'N/A'}
+                                  </div>
+                                </div>
+                              </div>
+                            ));
+                          } catch (e) {
+                            return (
+                              <div className="px-4 py-3 text-center text-gray-500">
+                                No items issued
+                              </div>
+                            );
+                          }
+                        })()}
                       </div>
                     </div>
                     <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
