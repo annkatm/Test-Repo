@@ -111,8 +111,13 @@ const EmployeePage = () => {
   };
 
   const validatePhone = (phone) => {
-    const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
-    return phoneRegex.test(phone.replace(/[\s\-\(\)]/g, ''));
+    // Remove all non-digit characters
+    const cleanedPhone = phone.replace(/[\s\-\(\)]/g, '');
+    
+    // Only allow exactly 11 digits starting with "09" (Philippine mobile number format)
+    const phoneRegex = /^09\d{9}$/;
+    
+    return phoneRegex.test(cleanedPhone);
   };
 
   const validatePassword = (password) => {
