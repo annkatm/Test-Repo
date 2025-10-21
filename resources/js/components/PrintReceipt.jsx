@@ -111,19 +111,22 @@ In the event that I am unable to return any of the company-issued equipment upon
             }
             .header { 
               text-align: center; 
-              margin-bottom: 30px; 
+              margin-bottom: 10px;
+              padding-top: 20px;
             }
             .logo { 
-              width: 120px; 
+              width: 150px; 
               height: auto; 
-              margin: 0 auto 20px auto; 
-              display: block; 
+              margin: 0 auto 15px auto; 
+              display: block;
+              text-align: center;
             }
             .title { 
               text-align: center; 
-              font-size: 18px; 
+              font-size: 16px; 
               font-weight: bold; 
-              margin: 20px 0; 
+              margin: 15px 0 20px 0;
+              letter-spacing: 1px;
             }
             .employee-info { 
               margin: 20px 0; 
@@ -207,23 +210,24 @@ In the event that I am unable to return any of the company-issued equipment upon
               </tr>
             </thead>
             <tbody>
-              ${[
-                { item: 'Laptop', description: items.find(i => i.equipment_name?.toLowerCase().includes('laptop'))?.equipment_name || 'HP ProBook 450 G3', serial: items.find(i => i.equipment_name?.toLowerCase().includes('laptop'))?.serial_number || 'JPH8137LN7', date_released: items.find(i => i.equipment_name?.toLowerCase().includes('laptop'))?.date_released },
-                { item: 'Monitor', description: 'N/A', serial: 'N/A', date_released: null },
-                { item: 'Mouse', description: items.find(i => i.equipment_name?.toLowerCase().includes('mouse'))?.equipment_name || 'A4Tech', serial: items.find(i => i.equipment_name?.toLowerCase().includes('mouse'))?.serial_number || '24LIU01', date_released: items.find(i => i.equipment_name?.toLowerCase().includes('mouse'))?.date_released },
-                { item: 'Keyboard', description: items.find(i => i.equipment_name?.toLowerCase().includes('keyboard'))?.equipment_name || 'A4Tech', serial: items.find(i => i.equipment_name?.toLowerCase().includes('keyboard'))?.serial_number || '24LIU00', date_released: items.find(i => i.equipment_name?.toLowerCase().includes('keyboard'))?.date_released },
-                { item: 'Headset', description: items.find(i => i.equipment_name?.toLowerCase().includes('headset'))?.equipment_name || 'Plantronics', serial: items.find(i => i.equipment_name?.toLowerCase().includes('headset'))?.serial_number || 'G0JB0Y', date_released: items.find(i => i.equipment_name?.toLowerCase().includes('headset'))?.date_released },
-                { item: 'UPS', description: '', serial: '', date_released: null },
-                { item: 'Internet Broadband', description: '', serial: '', date_released: null }
-              ].map((row) => {
-                const dateReleased = row.date_released ? new Date(row.date_released).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : 'N/A';
+              ${items.map((item, index) => {
+                const itemName = item.category_name || item.category || 'N/A';
+                const description = item.equipment_name || 'N/A';
+                const serial = item.serial_number || 'N/A';
+                const dateReleased = item.date_released 
+                  ? new Date(item.date_released).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) 
+                  : new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+                const dateReturned = item.date_returned 
+                  ? new Date(item.date_returned).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) 
+                  : '';
+                
                 return `
                   <tr>
-                    <td>${row.item}</td>
-                    <td>${row.description}</td>
-                    <td>${row.serial}</td>
+                    <td>${itemName}</td>
+                    <td>${description}</td>
+                    <td>${serial}</td>
                     <td>${dateReleased}</td>
-                    <td></td>
+                    <td>${dateReturned}</td>
                   </tr>
                 `;
               }).join('')}
@@ -260,9 +264,41 @@ In the event that I am unable to return any of the company-issued equipment upon
     
     printWindow.document.write(printContent);
     printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
-    printWindow.close();
+    
+    // Wait for the logo image to load before printing
+    const logoImg = printWindow.document.querySelector('.logo');
+    if (logoImg) {
+      logoImg.onload = () => {
+        printWindow.focus();
+        setTimeout(() => {
+          printWindow.print();
+          printWindow.close();
+        }, 500); // Small delay to ensure everything is rendered
+      };
+      
+      // Fallback if image fails to load
+      logoImg.onerror = () => {
+        printWindow.focus();
+        setTimeout(() => {
+          printWindow.print();
+          printWindow.close();
+        }, 500);
+      };
+      
+      // Timeout fallback in case onload doesn't fire
+      setTimeout(() => {
+        if (printWindow && !printWindow.closed) {
+          printWindow.focus();
+          printWindow.print();
+          printWindow.close();
+        }
+      }, 2000);
+    } else {
+      // If no logo, print immediately
+      printWindow.focus();
+      printWindow.print();
+      printWindow.close();
+    }
     
     if (onPrint) {
       onPrint();
@@ -324,9 +360,10 @@ In the event that I am unable to return any of the company-issued equipment upon
               <img 
                 src="/images/Frame_89-removebg-preview.png" 
                 alt="iREPLY Logo" 
-                className="w-24 h-auto mx-auto mb-4"
+                className="w-32 h-auto mx-auto mb-4 block"
+                style={{ maxWidth: '150px' }}
               />
-              <div className="text-lg font-semibold text-gray-900">ACCOUNTABILITY FORM AGREEMENT</div>
+              <div className="text-base font-bold text-gray-900 tracking-wide">ACCOUNTABILITY FORM AGREEMENT</div>
             </div>
 
             <div className="space-y-4">

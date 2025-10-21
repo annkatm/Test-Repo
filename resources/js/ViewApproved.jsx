@@ -396,12 +396,24 @@ const ViewApproved = () => {
             || request?.serial_number
             || request?.equipment_serial_number;
           
-          // If still no serial number, try fetching equipment details
-          if (!serialNumber && request.equipment_id) {
+          // Try to get category name
+          let categoryName = tx?.category_name 
+            || tx?.equipment?.category?.name 
+            || request?.category_name
+            || null;
+          
+          // If still no serial number or category, try fetching equipment details
+          if ((!serialNumber || !categoryName) && request.equipment_id) {
             try {
               const equipmentResponse = await api.get(`/equipment/${request.equipment_id}`);
               if (equipmentResponse?.data?.success) {
-                serialNumber = equipmentResponse.data.data?.serial_number;
+                const equipmentData = equipmentResponse.data.data;
+                if (!serialNumber) {
+                  serialNumber = equipmentData?.serial_number;
+                }
+                if (!categoryName) {
+                  categoryName = equipmentData?.category?.name || equipmentData?.category_name;
+                }
               }
             } catch (e) {
               console.warn('Could not fetch equipment details:', e);
@@ -411,6 +423,7 @@ const ViewApproved = () => {
           allItems.push({
             equipment_name: request.equipment_name || tx?.equipment_name || tx?.equipment?.name || 'N/A',
             serial_number: serialNumber || 'N/A',
+            category_name: categoryName || 'N/A',
             date_released: tx?.release_date || tx?.released_at || tx?.created_at || new Date().toISOString(),
             date_returned: tx?.return_date || tx?.returned_at || null
           });
@@ -418,11 +431,19 @@ const ViewApproved = () => {
           // If no transaction found, try to fetch equipment serial number directly
           let serialNumber = request?.serial_number || request?.equipment_serial_number;
           
-          if (!serialNumber && request.equipment_id) {
+          let categoryName = request.category_name || null;
+          
+          if ((!serialNumber || !categoryName) && request.equipment_id) {
             try {
               const equipmentResponse = await api.get(`/equipment/${request.equipment_id}`);
               if (equipmentResponse?.data?.success) {
-                serialNumber = equipmentResponse.data.data?.serial_number;
+                const equipmentData = equipmentResponse.data.data;
+                if (!serialNumber) {
+                  serialNumber = equipmentData?.serial_number;
+                }
+                if (!categoryName) {
+                  categoryName = equipmentData?.category?.name || equipmentData?.category_name;
+                }
               }
             } catch (e) {
               console.warn('Could not fetch equipment details:', e);
@@ -432,6 +453,7 @@ const ViewApproved = () => {
           allItems.push({
             equipment_name: request.equipment_name || 'N/A',
             serial_number: serialNumber || 'N/A',
+            category_name: categoryName || 'N/A',
             date_released: request?.release_date || request?.created_at || new Date().toISOString(),
             date_returned: request?.return_date || request?.returned_at || null
           });
