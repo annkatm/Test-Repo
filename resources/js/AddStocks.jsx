@@ -526,6 +526,7 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
 
   const handleCategorySelect = (category) => {
     setSelectedCategory(category);
+    fetchProducts(category.id); // Fetch products when category is selected
     setCurrentMode('product');
     setErrors({});
   };
