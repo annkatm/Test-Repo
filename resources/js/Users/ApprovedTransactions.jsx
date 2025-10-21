@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 // Props now accept dynamic data instead of hardcoded examples
 // - approvedTransactions: [{ date, item, status, exchangeItems?: [...] }]
@@ -11,7 +11,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
       const entry = { id: Date.now(), message, variant, time: new Date().toISOString() };
       const next = [entry, ...(Array.isArray(prev) ? prev : [])].slice(0, 50);
       localStorage.setItem('employee_activities', JSON.stringify(next));
-    } catch (_) {}
+    } catch (_) { }
   };
   const [selectedRow, setSelectedRow] = useState(null);
   const [showReturnModal, setShowReturnModal] = useState(false);
@@ -25,8 +25,50 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
   const [actionLoading, setActionLoading] = useState(false);
   const [isViewAllOpen, setIsViewAllOpen] = useState(false);
   const [isBorrowedOpen, setIsBorrowedOpen] = useState(false);
+  const [isLaptopListOpen, setIsLaptopListOpen] = useState(false);
+  const [isProjectorListOpen, setIsProjectorListOpen] = useState(false);
+  const [isAccessoryListOpen, setIsAccessoryListOpen] = useState(false);
+  const [laptopUnits, setLaptopUnits] = useState([]);
+  const [projectorUnits, setProjectorUnits] = useState([]);
+  const [accessoryUnits, setAccessoryUnits] = useState([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10); // number-only sorting/display count
+  const [selectedUnit, setSelectedUnit] = useState(null);
+  const [showUnitConfirmModal, setShowUnitConfirmModal] = useState(false);
+  const [chosenUnit, setChosenUnit] = useState(() => {
+    try {
+      const saved = localStorage.getItem('approved_selected_unit');
+      return saved ? JSON.parse(saved) : null;
+    } catch (_) { return null; }
+  });
+
+  // Keep chosenUnit in sync if changed by another tab/process
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key === 'approved_selected_unit') {
+        try {
+          const val = e.newValue ? JSON.parse(e.newValue) : null;
+          setChosenUnit(val);
+        } catch (_) {
+          setChosenUnit(null);
+        }
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  // Refresh selection whenever Browse Laptops reopens
+  useEffect(() => {
+    if (showBrowseLaptopsModal) {
+      try {
+        const saved = localStorage.getItem('approved_selected_unit');
+        setChosenUnit(saved ? JSON.parse(saved) : null);
+      } catch (_) {
+        setChosenUnit(null);
+      }
+    }
+  }, [showBrowseLaptopsModal]);
 
   const totalPages = Math.max(1, Math.ceil((approvedTransactions?.length || 0) / pageSize));
   const paginated = useMemo(() => {
@@ -47,8 +89,49 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
   const handleConfirmExchange = () => {
     setShowReasonModal(false);
     setShowExchangeConfirmModal(true);
-    setExchangeReason('');
-    setUploadedFile(null);
+  };
+
+  const handleSendExchange = async () => {
+    const txId = selectedTransactionData?.id;
+    if (!txId) {
+      alert('Cannot send exchange: missing transaction id.');
+      return;
+    }
+    if (!chosenUnit) {
+      alert('Please select a unit first.');
+      return;
+    }
+
+    if (actionLoading) return;
+    setActionLoading(true);
+    try {
+      const payload = {
+        new_equipment_id: chosenUnit.id,
+        reason: exchangeReason || 'N/A',
+        evidence_file: uploadedFile ? uploadedFile.name : null,
+      };
+
+      const res = await fetch(`/api/transactions/${txId}/exchange`, {
+        method: 'POST',
+        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || `HTTP ${res.status}`);
+      }
+
+      setShowExchangeConfirmModal(false);
+      setSelectedRow(null);
+      onBack();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to send exchange request. Please try again.');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   return (
@@ -58,18 +141,176 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
           <div className="h-12 w-12 border-4 border-white/60 border-t-blue-600 rounded-full animate-spin"></div>
         </div>
       )}
-      
+
+      {isLaptopListOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm animate-fadeIn">
+          <div className="relative w-full max-w-3xl max-h-[90vh] bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden motion-safe:animate-pop3D">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
+              <h2 className="text-xl font-bold text-blue-600">{selectedLaptop} Units</h2>
+              <button
+                onClick={() => { setIsLaptopListOpen(false); setShowBrowseLaptopsModal(true); }}
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-100 rounded-lg"
+              >
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {laptopUnits.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {laptopUnits.map((u) => (
+                    <div
+                      key={u.id}
+                      onClick={() => { setSelectedUnit({ ...u, brand: selectedLaptop }); setShowUnitConfirmModal(true); }}
+                      className="border border-gray-200 rounded-lg p-4 flex items-start gap-3 bg-white cursor-pointer hover:shadow-md hover:border-blue-300 transition"
+                    >
+                      <div className="w-12 h-12 rounded-md bg-gray-100 flex items-center justify-center">💻</div>
+                      <div>
+                        <div className="font-semibold text-gray-800">{u.name}</div>
+                        <div className="text-sm text-gray-600">{u.specs}</div>
+                        <div className="text-xs mt-1 inline-flex items-center px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200">Available</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center text-gray-500">No units available</div>
+              )}
+            </div>
+            <div className="px-6 py-4 border-t bg-gray-50 text-right">
+              <button onClick={() => { setIsLaptopListOpen(false); setShowBrowseLaptopsModal(true); }} className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isProjectorListOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm animate-fadeIn">
+          <div className="relative w-full max-w-3xl max-h-[90vh] bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden motion-safe:animate-pop3D">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
+              <h2 className="text-xl font-bold text-blue-600">{selectedLaptop} Projectors</h2>
+              <button
+                onClick={() => { setIsProjectorListOpen(false); setShowBrowseLaptopsModal(true); }}
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-100 rounded-lg"
+              >
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {projectorUnits.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {projectorUnits.map((u) => (
+                    <div
+                      key={u.id}
+                      onClick={() => { setSelectedUnit({ ...u, brand: selectedLaptop }); setShowUnitConfirmModal(true); }}
+                      className="border border-gray-200 rounded-lg p-4 flex items-start gap-3 bg-white cursor-pointer hover:shadow-md hover:border-blue-300 transition"
+                    >
+                      <div className="w-12 h-12 rounded-md bg-gray-100 flex items-center justify-center">📽️</div>
+                      <div>
+                        <div className="font-semibold text-gray-800">{u.name}</div>
+                        <div className="text-sm text-gray-600">{u.specs}</div>
+                        <div className="text-xs mt-1 inline-flex items-center px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200">Available</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center text-gray-500">No units available</div>
+              )}
+            </div>
+            <div className="px-6 py-4 border-t bg-gray-50 text-right">
+              <button onClick={() => { setIsProjectorListOpen(false); setShowBrowseLaptopsModal(true); }} className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isAccessoryListOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm animate-fadeIn">
+          <div className="relative w-full max-w-3xl max-h-[90vh] bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden motion-safe:animate-pop3D">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
+              <h2 className="text-xl font-bold text-blue-600">{selectedLaptop} Accessories</h2>
+              <button
+                onClick={() => { setIsAccessoryListOpen(false); setShowBrowseLaptopsModal(true); }}
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-100 rounded-lg"
+              >
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {accessoryUnits.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {accessoryUnits.map((u) => (
+                    <div
+                      key={u.id}
+                      onClick={() => { setSelectedUnit({ ...u, brand: selectedLaptop }); setShowUnitConfirmModal(true); }}
+                      className="border border-gray-200 rounded-lg p-4 flex items-start gap-3 bg-white cursor-pointer hover:shadow-md hover:border-blue-300 transition"
+                    >
+                      <div className="w-12 h-12 rounded-md bg-gray-100 flex items-center justify-center">🎧</div>
+                      <div>
+                        <div className="font-semibold text-gray-800">{u.name}</div>
+                        <div className="text-sm text-gray-600">{u.specs}</div>
+                        <div className="text-xs mt-1 inline-flex items-center px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-200">Available</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center text-gray-500">No items available</div>
+              )}
+            </div>
+            <div className="px-6 py-4 border-t bg-gray-50 text-right">
+              <button onClick={() => { setIsAccessoryListOpen(false); setShowBrowseLaptopsModal(true); }} className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unit Selection Confirm Modal */}
+      {showUnitConfirmModal && selectedUnit && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">Confirm Selection</h3>
+            <div className="flex items-start gap-4 mb-6">
+              <div className="w-12 h-12 rounded-md bg-gray-100 flex items-center justify-center">💻</div>
+              <div>
+                <div className="font-semibold text-gray-900">{selectedUnit.name}</div>
+                <div className="text-sm text-gray-600">Brand: {selectedUnit.brand}</div>
+                <div className="text-sm text-gray-600">{selectedUnit.specs}</div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowUnitConfirmModal(false)}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  try { localStorage.setItem('approved_selected_unit', JSON.stringify(selectedUnit)); } catch (_) { }
+                  setChosenUnit(selectedUnit);
+                  logActivity(`Approved: Selected unit ${selectedUnit.name}`, 'success');
+                  setShowUnitConfirmModal(false);
+                  setIsLaptopListOpen(false);
+                  setShowBrowseLaptopsModal(true);
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto">
         {/* Header Row - Title and Back Button */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 -mt-2">
           <h1 className="text-2xl sm:text-3xl font-bold text-[#2262C6]">Approved</h1>
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => { setIsViewAllOpen(true); logActivity('Approved: Opened View All', 'info'); }}
-              className="text-blue-600 hover:text-blue-800 text-sm sm:text-base font-semibold"
-            >
-              View all
-            </button>
             <button
               onClick={() => { logActivity('Approved: Back to transactions', 'info'); onBack(); }}
               className="bg-white text-blue-600 font-medium px-6 py-3 rounded-lg shadow hover:shadow-md hover:bg-blue-50 transition-all border border-gray-200 w-full sm:w-auto"
@@ -97,9 +338,8 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                     <div
                       key={index}
                       onClick={() => { setSelectedRow(index); logActivity(`Approved: Selected row ${index + 1} (${transaction.item})`, 'info'); }}
-                      className={`grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-0 items-start sm:items-center py-4 sm:py-6 px-4 sm:px-6 transition-colors cursor-pointer ${
-                        selectedRow === index ? 'border-l-4 border-blue-600' : ''
-                      }`}
+                      className={`grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-0 items-start sm:items-center py-4 sm:py-6 px-4 sm:px-6 transition-colors cursor-pointer ${selectedRow === index ? 'border-l-4 border-blue-600' : ''
+                        }`}
                     >
                       {/* Mobile layout */}
                       <div className="sm:hidden space-y-2">
@@ -315,46 +555,201 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                   <button
                     key={category}
                     onClick={() => setActiveCategory(category)}
-                    className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                      activeCategory === category
-                        ? 'bg-blue-600 text-white shadow-md'
-                        : 'bg-white text-gray-700 hover:bg-gray-100'
-                    }`}
+                    className={`px-4 py-2 rounded-lg font-medium transition-all ${activeCategory === category
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'bg-white text-gray-700 hover:bg-gray-100'
+                      }`}
                   >
                     {category}
                   </button>
                 ))}
               </div>
+
+              {chosenUnit && (
+                <div className="mt-4 flex items-center justify-between bg-white border border-blue-200 rounded-lg p-3">
+                  <div className="text-sm text-gray-700">
+                    <span className="font-semibold text-blue-700">Selected:</span> {chosenUnit.brand} — {chosenUnit.name}
+                  </div>
+                  <button
+                    onClick={() => { setChosenUnit(null); try { localStorage.removeItem('approved_selected_unit'); } catch (_) { }; }}
+                    className="text-xs px-2 py-1 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700"
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* Body - Laptop Grid */}
+            {/* Body - Category Grid */}
             <div className="flex-1 overflow-y-auto p-6">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                {[
+                {activeCategory === 'All' && (
+                  <>
+                    {[{ brand: 'Asus', available: 9 }, { brand: 'Lenovo', available: 7 }, { brand: 'Acer', available: 4 }, { brand: 'Razor', available: 9 }].map((item, index) => (
+                      <div key={`all-l-${index}`}
+                        onClick={() => setSelectedLaptop(item.brand)}
+                        className={`bg-white rounded-xl border-2 p-6 cursor-pointer transition-all duration-300 hover:shadow-lg ${selectedLaptop === item.brand ? 'border-blue-600 shadow-lg ring-2 ring-blue-200' : 'border-gray-200 hover:border-blue-300'}`}
+                      >
+                        <div className="flex flex-col items-center text-center">
+                          <div className="w-32 h-32 bg-gray-100 rounded-lg flex items-center justify-center mb-4 overflow-hidden"><span className="text-6xl">💻</span></div>
+                          <h3 className="font-bold text-gray-900 mb-2">{item.brand}</h3>
+                          <p className="text-sm text-gray-600 mb-1">Available Unit:</p>
+                          <p className="text-2xl font-bold text-blue-600">{item.available}</p>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedLaptop(item.brand);
+                              const count = Number(item.available) || 0;
+                              const units = Array.from({ length: count }, (_, i) => ({ id: `${item.brand}-${i + 1}`, name: `${item.brand} Unit #${i + 1}`, specs: 'Core i5, 16GB RAM, 512GB SSD' }));
+                              setLaptopUnits(units);
+                              setShowBrowseLaptopsModal(false);
+                              setIsLaptopListOpen(true);
+                            }}
+                            className="mt-4 w-full py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                          >View All</button>
+                        </div>
+                      </div>
+                    ))}
+
+                    {[{ brand: 'Epson', available: 5 }, { brand: 'BenQ', available: 3 }, { brand: 'Sony', available: 4 }, { brand: 'ViewSonic', available: 2 }].map((item, index) => (
+                      <div key={`all-p-${index}`}
+                        onClick={() => setSelectedLaptop(item.brand)}
+                        className={`bg-white rounded-xl border-2 p-6 cursor-pointer transition-all duration-300 hover:shadow-lg ${selectedLaptop === item.brand ? 'border-blue-600 shadow-lg ring-2 ring-blue-200' : 'border-gray-200 hover:border-blue-300'}`}
+                      >
+                        <div className="flex flex-col items-center text-center">
+                          <div className="w-32 h-32 bg-gray-100 rounded-lg flex items-center justify-center mb-4 overflow-hidden"><span className="text-6xl">📽️</span></div>
+                          <h3 className="font-bold text-gray-900 mb-2">{item.brand}</h3>
+                          <p className="text-sm text-gray-600 mb-1">Available Unit:</p>
+                          <p className="text-2xl font-bold text-blue-600">{item.available}</p>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedLaptop(item.brand);
+                              const count = Number(item.available) || 0;
+                              const units = Array.from({ length: count }, (_, i) => ({ id: `${item.brand}-${i + 1}`, name: `${item.brand} Projector #${i + 1}`, specs: '1080p, 3500 lumens' }));
+                              setProjectorUnits(units);
+                              setShowBrowseLaptopsModal(false);
+                              setIsProjectorListOpen(true);
+                            }}
+                            className="mt-4 w-full py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                          >View All</button>
+                        </div>
+                      </div>
+                    ))}
+
+                    {[{ brand: 'Headsets', available: 12 }, { brand: 'Mice', available: 20 }, { brand: 'Keyboards', available: 15 }, { brand: 'HDMI Cables', available: 30 }].map((item, index) => (
+                      <div key={`all-a-${index}`}
+                        onClick={() => setSelectedLaptop(item.brand)}
+                        className={`bg-white rounded-xl border-2 p-6 cursor-pointer transition-all duration-300 hover:shadow-lg ${selectedLaptop === item.brand ? 'border-blue-600 shadow-lg ring-2 ring-blue-200' : 'border-gray-200 hover:border-blue-300'}`}
+                      >
+                        <div className="flex flex-col items-center text-center">
+                          <div className="w-32 h-32 bg-gray-100 rounded-lg flex items-center justify-center mb-4 overflow-hidden"><span className="text-6xl">🎧</span></div>
+                          <h3 className="font-bold text-gray-900 mb-2">{item.brand}</h3>
+                          <p className="text-sm text-gray-600 mb-1">Available Items:</p>
+                          <p className="text-2xl font-bold text-blue-600">{item.available}</p>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedLaptop(item.brand);
+                              const count = Number(item.available) || 0;
+                              const units = Array.from({ length: count }, (_, i) => ({ id: `${item.brand}-${i + 1}`, name: `${item.brand} #${i + 1}`, specs: 'Standard accessory' }));
+                              setAccessoryUnits(units);
+                              setShowBrowseLaptopsModal(false);
+                              setIsAccessoryListOpen(true);
+                            }}
+                            className="mt-4 w-full py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                          >View All</button>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+                {activeCategory === 'Laptops' && [
                   { brand: 'Asus', available: 9 },
                   { brand: 'Lenovo', available: 7 },
                   { brand: 'Acer', available: 4 },
                   { brand: 'Razor', available: 9 }
-                ].map((laptop, index) => (
-                  <div
-                    key={index}
-                    onClick={() => setSelectedLaptop(laptop.brand)}
-                    className={`bg-white rounded-xl border-2 p-6 cursor-pointer transition-all duration-300 hover:shadow-lg ${
-                      selectedLaptop === laptop.brand
-                        ? 'border-blue-600 shadow-lg ring-2 ring-blue-200'
-                        : 'border-gray-200 hover:border-blue-300'
-                    }`}
+                ].map((item, index) => (
+                  <div key={`l-${index}`}
+                    onClick={() => setSelectedLaptop(item.brand)}
+                    className={`bg-white rounded-xl border-2 p-6 cursor-pointer transition-all duration-300 hover:shadow-lg ${selectedLaptop === item.brand ? 'border-blue-600 shadow-lg ring-2 ring-blue-200' : 'border-gray-200 hover:border-blue-300'}`}
                   >
                     <div className="flex flex-col items-center text-center">
-                      <div className="w-32 h-32 bg-gray-100 rounded-lg flex items-center justify-center mb-4 overflow-hidden">
-                        <span className="text-6xl">💻</span>
-                      </div>
-                      <h3 className="font-bold text-gray-900 mb-2">{laptop.brand}</h3>
+                      <div className="w-32 h-32 bg-gray-100 rounded-lg flex items-center justify-center mb-4 overflow-hidden"><span className="text-6xl">💻</span></div>
+                      <h3 className="font-bold text-gray-900 mb-2">{item.brand}</h3>
                       <p className="text-sm text-gray-600 mb-1">Available Unit:</p>
-                      <p className="text-2xl font-bold text-blue-600">{laptop.available}</p>
-                      <button className="mt-4 w-full py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
-                        View All
-                      </button>
+                      <p className="text-2xl font-bold text-blue-600">{item.available}</p>
+                      <button
+                        onClick={() => {
+                          setSelectedLaptop(item.brand);
+                          const count = Number(item.available) || 0;
+                          const units = Array.from({ length: count }, (_, i) => ({ id: `${item.brand}-${i + 1}`, name: `${item.brand} Unit #${i + 1}`, specs: 'Core i5, 16GB RAM, 512GB SSD' }));
+                          setLaptopUnits(units);
+                          setShowBrowseLaptopsModal(false);
+                          setIsLaptopListOpen(true);
+                        }}
+                        className="mt-4 w-full py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                      >View All</button>
+                    </div>
+                  </div>
+                ))}
+
+                {activeCategory === 'Projectors' && [
+                  { brand: 'Epson', available: 5 },
+                  { brand: 'BenQ', available: 3 },
+                  { brand: 'Sony', available: 4 },
+                  { brand: 'ViewSonic', available: 2 }
+                ].map((item, index) => (
+                  <div key={`p-${index}`}
+                    onClick={() => setSelectedLaptop(item.brand)}
+                    className={`bg-white rounded-xl border-2 p-6 cursor-pointer transition-all duration-300 hover:shadow-lg ${selectedLaptop === item.brand ? 'border-blue-600 shadow-lg ring-2 ring-blue-200' : 'border-gray-200 hover:border-blue-300'}`}
+                  >
+                    <div className="flex flex-col items-center text-center">
+                      <div className="w-32 h-32 bg-gray-100 rounded-lg flex items-center justify-center mb-4 overflow-hidden"><span className="text-6xl">📽️</span></div>
+                      <h3 className="font-bold text-gray-900 mb-2">{item.brand}</h3>
+                      <p className="text-sm text-gray-600 mb-1">Available Unit:</p>
+                      <p className="text-2xl font-bold text-blue-600">{item.available}</p>
+                      <button
+                        onClick={() => {
+                          setSelectedLaptop(item.brand);
+                          const count = Number(item.available) || 0;
+                          const units = Array.from({ length: count }, (_, i) => ({ id: `${item.brand}-${i + 1}`, name: `${item.brand} Projector #${i + 1}`, specs: '1080p, 3500 lumens' }));
+                          setProjectorUnits(units);
+                          setShowBrowseLaptopsModal(false);
+                          setIsProjectorListOpen(true);
+                        }}
+                        className="mt-4 w-full py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                      >View All</button>
+                    </div>
+                  </div>
+                ))}
+
+                {activeCategory === 'Accesories' && [
+                  { brand: 'Headsets', available: 12 },
+                  { brand: 'Mice', available: 20 },
+                  { brand: 'Keyboards', available: 15 },
+                  { brand: 'HDMI Cables', available: 30 }
+                ].map((item, index) => (
+                  <div key={`a-${index}`}
+                    onClick={() => setSelectedLaptop(item.brand)}
+                    className={`bg-white rounded-xl border-2 p-6 cursor-pointer transition-all duration-300 hover:shadow-lg ${selectedLaptop === item.brand ? 'border-blue-600 shadow-lg ring-2 ring-blue-200' : 'border-gray-200 hover:border-blue-300'}`}
+                  >
+                    <div className="flex flex-col items-center text-center">
+                      <div className="w-32 h-32 bg-gray-100 rounded-lg flex items-center justify-center mb-4 overflow-hidden"><span className="text-6xl">🎧</span></div>
+                      <h3 className="font-bold text-gray-900 mb-2">{item.brand}</h3>
+                      <p className="text-sm text-gray-600 mb-1">Available Items:</p>
+                      <p className="text-2xl font-bold text-blue-600">{item.available}</p>
+                      <button
+                        onClick={() => {
+                          setSelectedLaptop(item.brand);
+                          const count = Number(item.available) || 0;
+                          const units = Array.from({ length: count }, (_, i) => ({ id: `${item.brand}-${i + 1}`, name: `${item.brand} #${i + 1}`, specs: 'Standard accessory' }));
+                          setAccessoryUnits(units);
+                          setShowBrowseLaptopsModal(false);
+                          setIsAccessoryListOpen(true);
+                        }}
+                        className="mt-4 w-full py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                      >View All</button>
                     </div>
                   </div>
                 ))}
@@ -362,14 +757,22 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
             </div>
 
             {/* Footer */}
-            <div className="p-6 border-t bg-gray-50 flex justify-end">
+            <div className="p-6 border-t bg-gray-50 flex items-center justify-between">
+              <div className="text-sm text-gray-600">
+                {chosenUnit ? (
+                  <span>Proceed with <span className="font-semibold text-gray-800">{chosenUnit.brand} — {chosenUnit.name}</span></span>
+                ) : (
+                  <span>Select a unit to proceed</span>
+                )}
+              </div>
               <button
                 onClick={() => {
                   setShowBrowseLaptopsModal(false);
                   setShowReasonModal(true);
                   logActivity('Approved: Proceed to Reason for Exchange', 'exchange');
                 }}
-                className="px-8 py-3 bg-blue-600 text-white rounded-lg font-semibold shadow-md hover:bg-blue-700 hover:shadow-xl transition-all transform hover:scale-105"
+                disabled={!chosenUnit}
+                className={`px-8 py-3 rounded-lg font-semibold shadow-md transition-all transform hover:scale-105 ${chosenUnit ? 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-xl' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
               >
                 Next
               </button>
@@ -492,9 +895,9 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                 className="w-16 h-16 object-contain"
               />
               <div>
-                <p className="font-semibold text-gray-900">Laptop</p>
-                <p className="text-sm text-gray-500">Razor</p>
-                <p className="text-sm text-gray-500">Basic i4 16GB</p>
+                <p className="font-semibold text-gray-900">{chosenUnit?.name || 'Laptop'}</p>
+                {chosenUnit?.brand && <p className="text-sm text-gray-500">{chosenUnit.brand}</p>}
+                {chosenUnit?.specs && <p className="text-sm text-gray-500">{chosenUnit.specs}</p>}
               </div>
             </div>
 
@@ -504,11 +907,11 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
               <div className="space-y-2">
                 <div>
                   <p className="text-xs text-gray-500">Laptop</p>
-                  <p className="text-sm text-gray-900">Razor Basic i4 16GB</p>
+                  <p className="text-sm text-gray-900">{chosenUnit ? `${chosenUnit.brand || ''} ${chosenUnit.name || ''}`.trim() : '—'}</p>
                 </div>
                 <div className="pt-2 border-t border-gray-200">
                   <p className="text-xs text-gray-500">Request Date</p>
-                  <p className="text-sm text-gray-900">09.24.2025</p>
+                  <p className="text-sm text-gray-900">{new Date().toLocaleDateString()}</p>
                 </div>
               </div>
             </div>
@@ -521,7 +924,6 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                 setTimeout(() => {
                   setShowExchangeConfirmModal(false);
                   setSelectedRow(null);
-                  logActivity('Approved: Sent Exchange Request', 'success');
                   onBack();
                   setActionLoading(false);
                 }, 1000);
@@ -529,7 +931,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
               disabled={actionLoading}
               className="w-full bg-blue-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg hover:bg-blue-700 transition-colors shadow-md"
             >
-              Send Request
+              {actionLoading ? 'Sending...' : 'Send Request'}
             </button>
           </div>
         </div>
@@ -586,7 +988,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-600">Display</span>
                 <select value={pageSize} onChange={(e) => { const n = Number(e.target.value); setPageSize(n); setPage(1); logActivity(`Approved: View All page size ${n}`, 'info'); }} className="border border-gray-300 rounded-md px-2 py-1 text-sm">
-                  {[5,10,20,50].map(n => (<option key={n} value={n}>{n}</option>))}
+                  {[5, 10, 20, 50].map(n => (<option key={n} value={n}>{n}</option>))}
                 </select>
               </div>
             </div>

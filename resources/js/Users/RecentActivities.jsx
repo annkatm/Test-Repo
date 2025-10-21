@@ -1,6 +1,6 @@
 import React from 'react';
 
-const RecentActivities = ({ activities = [], iconFor }) => {
+const RecentActivities = ({ activities = [], iconFor, timeAgo }) => {
   const getRecentActivities = (limit = 10) => activities.slice(0, Math.max(0, limit));
 
   return (
@@ -23,7 +23,7 @@ const RecentActivities = ({ activities = [], iconFor }) => {
                       <span className="text-sm text-gray-800 truncate">{a.message}</span>
                     </div>
                     <span className="text-xs text-gray-500 whitespace-nowrap">
-                      {new Date(a.time || a.date).toLocaleString()}
+                      {timeAgo ? timeAgo(a.time || a.date) : new Date(a.time || a.date).toLocaleString()}
                     </span>
                   </li>
                 );

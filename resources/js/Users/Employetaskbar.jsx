@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { Search } from "lucide-react";
 import { useApp } from "../contexts/AppContext";
 
 const EmployeeTaskbar = ({ 
@@ -9,7 +8,6 @@ const EmployeeTaskbar = ({
   onProfileClick,
   onLogoutClick,
   onPersonalDetailsClick,
-  onArchiveClick,
   onHomeScreenClick
 }) => {
   const { user, isAuthenticated } = useApp ? useApp() : { user: null, isAuthenticated: false };
@@ -18,12 +16,16 @@ const EmployeeTaskbar = ({
   const [isEditing, setIsEditing] = useState(false);
   const [employeeName, setEmployeeName] = useState(initialEmployeeName);
   const [searchQuery, setSearchQuery] = useState("");
+  const [employeeId, setEmployeeId] = useState(null);
+  const [profileImageUrl, setProfileImageUrl] = useState("");
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [toast, setToast] = useState({ show: false, message: "", variant: "success" });
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
     email: "",
     phoneNumber: "",
-    location: "",
+    Department: "",
     accountType: "",
     position: ""
   });
@@ -50,7 +52,7 @@ const EmployeeTaskbar = ({
       lastName: last,
       email: user.email || "",
       accountType: user.role?.name || "employee",
-      location: user.department || user.location || "",
+      Department: user.department || user.Department || "",
       position: user.position || "",
       phoneNumber: formData.phoneNumber || "",
     };
@@ -109,6 +111,7 @@ const EmployeeTaskbar = ({
 
         if (cancelled) return;
         if (employee) {
+          try { setEmployeeId(employee.id || authData.user.linked_employee_id || null); } catch (_) {}
           const first = employee.first_name || user?.first_name || user?.firstName || '';
           const last = employee.last_name || user?.last_name || user?.lastName || '';
           const full = `${first} ${last}`.trim() || employee.name || user?.name || initialEmployeeName;
@@ -118,12 +121,15 @@ const EmployeeTaskbar = ({
             lastName: last || '',
             email: employee.email || user?.email || '',
             phoneNumber: employee.phone || employee.contact || '',
-            location: employee.department || employee.location || '',
+            Department: employee.department || employee.Department || '',
             position: employee.position || employee.job_title || user?.position || '',
             accountType: user?.role?.name || 'employee',
           };
           setFormData(prev => ({ ...prev, ...profile }));
           setOriginalProfile(profile);
+          // Try to derive existing profile photo url if provided by API/user
+          const photo = employee.photo_url || employee.avatar_url || employee.profile_photo_url || user?.avatar_url || user?.profile_photo_url || "";
+          if (photo) setProfileImageUrl(photo);
         }
       } catch (_) {
         // ignore and keep existing UI defaults
@@ -166,9 +172,6 @@ const EmployeeTaskbar = ({
       case 'logout':
         onLogoutClick?.();
         break;
-      case 'archive':
-        onArchiveClick?.();
-        break;
       case 'homescreen':
         onHomeScreenClick?.();
         break;
@@ -198,6 +201,7 @@ const EmployeeTaskbar = ({
     console.log("Saved data:", formData);
     // After save, update snapshot so future cancel doesn't jump back further
     setOriginalProfile({ ...formData });
+    try { showSuccess('Profile updated successfully'); } catch (_) {}
   };
 
   const handleChange = (field, value) => {
@@ -210,6 +214,68 @@ const EmployeeTaskbar = ({
 
   const getModalInitials = () => {
     return `${formData.firstName.charAt(0)}${formData.lastName.charAt(0)}`.toUpperCase();
+  };
+
+  const showSuccess = (message) => {
+    setToast({ show: true, message, variant: 'success' });
+    setTimeout(() => setToast({ show: false, message: '', variant: 'success' }), 2000);
+  };
+
+  const modalFileInputRef = React.useRef(null);
+
+  const handleModalAvatarClick = () => {
+    if (modalFileInputRef.current) modalFileInputRef.current.click();
+  };
+
+  const uploadProfilePhoto = async (file) => {
+    if (!file) return false;
+    try {
+      setUploadingPhoto(true);
+      const form = new FormData();
+      form.append('photo', file);
+      // Attempt employee-specific endpoint first if we have an id
+      let res = null;
+      if (employeeId) {
+        try {
+          res = await fetch(`/api/employees/${employeeId}/photo`, { method: 'POST', body: form });
+        } catch (_) { res = null; }
+      }
+      if (!res || !res.ok) {
+        // Fallback to a generic profile photo endpoint
+        try {
+          res = await fetch('/api/profile/photo', { method: 'POST', body: form });
+        } catch (_) { res = null; }
+      }
+      if (res && res.ok) {
+        let data = null; try { data = await res.json(); } catch (_) {}
+        const url = data?.url || data?.photo_url || data?.path || profileImageUrl;
+        // Update UI immediately
+        const localUrl = url || URL.createObjectURL(file);
+        setProfileImageUrl(localUrl);
+        showSuccess('Profile photo updated');
+        return true;
+      } else {
+        // Still show local preview if upload failed silently
+        const localUrl = URL.createObjectURL(file);
+        setProfileImageUrl(localUrl);
+        showSuccess('Profile photo updated locally');
+        return false;
+      }
+    } catch (_) {
+      try {
+        const localUrl = URL.createObjectURL(file);
+        setProfileImageUrl(localUrl);
+      } catch (_) {}
+      return false;
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const handleAvatarFileChange = async (e) => {
+    const file = e?.target?.files?.[0];
+    if (!file) return;
+    await uploadProfilePhoto(file);
   };
 
   const performGlobalSearch = async (q) => {
@@ -262,40 +328,7 @@ const EmployeeTaskbar = ({
 
   return (
     <>
-      <header className="flex items-center justify-between px-10 py-6">
-        {/* Search Section */}
-        <div className="flex-1" style={{ maxWidth: "644px" }}>
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Search equipment, requests, or transactions..."
-              className="w-full pl-10 pr-4 py-3 rounded-full bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-colors"
-              value={searchQuery}
-              onChange={(e) => {
-                const val = e.target.value;
-                setSearchQuery(val);
-                onSearch?.(val);
-                window.dispatchEvent(new CustomEvent('employee-search', { detail: val }));
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  const val = searchQuery.trim();
-                  onSearch?.(val);
-                  window.dispatchEvent(new CustomEvent('employee-search', { detail: val }));
-                  window.dispatchEvent(new CustomEvent('employee-search-submit', { detail: val }));
-                  performGlobalSearch(val);
-                  const target = document.querySelector('[data-employee-search-target]') || document.getElementById('items-section');
-                  if (target && typeof target.scrollIntoView === 'function') {
-                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  }
-                }
-              }}
-            />
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          </div>
-        </div>
-
-        {/* Right Section */}
+      <header className="flex items-center justify-end px-10 py-6">
         <div className="flex items-center space-x-4">
           
 
@@ -308,10 +341,15 @@ const EmployeeTaskbar = ({
               <span className="hidden md:block text-sm font-medium text-gray-700">
                 {employeeName}
               </span>
-              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-semibold">
-                {getInitials(employeeName)}
+              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-semibold overflow-hidden">
+                {profileImageUrl ? (
+                  <img src={profileImageUrl} alt="profile" className="w-full h-full object-cover" />
+                ) : (
+                  getInitials(employeeName)
+                )}
               </div>
             </button>
+            {/* No header upload input; uploads are handled in the modal while editing */}
 
             {/* Dropdown Menu */}
             {showProfileMenu && (
@@ -319,9 +357,14 @@ const EmployeeTaskbar = ({
                 {/* Profile Header */}
                 <div className="px-4 py-5 border-b border-gray-200">
                   <div className="flex items-start space-x-3">
-                    <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-xl font-semibold flex-shrink-0">
-                      {getInitials(employeeName)}
+                    <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-xl font-semibold flex-shrink-0 overflow-hidden">
+                      {profileImageUrl ? (
+                        <img src={profileImageUrl} alt="profile" className="w-full h-full object-cover" />
+                      ) : (
+                        getInitials(employeeName)
+                      )}
                     </div>
+                    {/* Hidden modal input exists below in the Profile Card where editing happens */}
                     <div className="flex-1 min-w-0">
                       <div className="text-base font-semibold text-gray-900 truncate">{employeeName}</div>
                       <div className="text-sm text-gray-500 mt-0.5">{formData.accountType ? (formData.accountType.charAt(0).toUpperCase()+formData.accountType.slice(1)) : 'Employee'}</div>
@@ -349,17 +392,6 @@ const EmployeeTaskbar = ({
                     </svg>
                     Edit Profile
                   </button>
-                  
-                  <button
-                    onClick={() => handleMenuItemClick('archive')}
-                    className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
-                    <svg className="w-5 h-5 mr-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                    </svg>
-                    Archive
-                  </button>
-                  
                   <button
                     onClick={() => handleMenuItemClick('homescreen')}
                     className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
@@ -422,13 +454,18 @@ const EmployeeTaskbar = ({
               <div className="bg-blue-600 rounded-2xl p-6 mb-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-4">
-                    <div className="w-24 h-24 bg-blue-500 bg-opacity-50 rounded-2xl flex items-center justify-center text-white text-3xl font-semibold">
-                      {getModalInitials()}
+                    <div onClick={isEditing ? handleModalAvatarClick : undefined} title={isEditing ? "Change photo" : ""} className={`w-24 h-24 bg-blue-500 bg-opacity-50 rounded-2xl flex items-center justify-center text-white text-3xl font-semibold overflow-hidden ${isEditing ? 'cursor-pointer' : 'cursor-default'}`}>
+                      {profileImageUrl ? (
+                        <img src={profileImageUrl} alt="profile" className="w-full h-full object-cover" />
+                      ) : (
+                        getModalInitials()
+                      )}
                     </div>
+                    <input ref={modalFileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarFileChange} />
                     <div className="text-white">
                       <h3 className="text-2xl font-semibold">{formData.firstName} {formData.lastName}</h3>
                       <p className="text-blue-100 text-sm mt-1">{formData.accountType}</p>
-                      <p className="text-blue-100 text-sm">{formData.location}</p>
+                      <p className="text-blue-100 text-sm">{formData.Department}</p>
                     </div>
                   </div>
                   {!isEditing && (
@@ -532,20 +569,11 @@ const EmployeeTaskbar = ({
                   </div>
                 </div>
 
-                {/* Location (Account Type removed) */}
+                {/* Department (not editable; shows Employee role) */}
                 <div className="grid grid-cols-1 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        value={formData.location}
-                        onChange={(e) => handleChange('location', e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    ) : (
-                      <p className="text-base text-gray-900 font-medium">{formData.location}</p>
-                    )}
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Department</label>
+                    <p className="text-base text-gray-900 font-medium">{formData.accountType ? (formData.accountType.charAt(0).toUpperCase()+formData.accountType.slice(1)) : 'Employee'}</p>
                   </div>
                 </div>
 
@@ -573,6 +601,11 @@ const EmployeeTaskbar = ({
               </div>
             </div>
           </div>
+        </div>
+      )}
+      {toast.show && (
+        <div className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-lg shadow-lg text-white ${toast.variant === 'success' ? 'bg-green-600' : 'bg-gray-800'}`}>
+          {toast.message}
         </div>
       )}
     </>
