@@ -433,30 +433,52 @@ const EmployeeTransaction = () => {
         if (employeeId && Echo) {
           try {
             subscribedChannel = Echo.private(`user.history.${employeeId}`);
-            subscribedChannel.listen('RequestCreated', (e) => {
-              const payload = e || {};
-              const entry = {
-                id: payload.id || payload.data?.id || Date.now(),
-                item: payload.equipment_name || payload.item || payload.data?.equipment_name || payload.message || 'Request',
-                message: payload.message || `Request ${payload.request_number || ''}`,
-                variant: 'info',
-                date: payload.created_at || payload.date || new Date().toISOString(),
-                time: payload.created_at || payload.date || new Date().toISOString()
-              };
-              // Append to history and increment badge
-              incrementNotification(1, entry);
-            }).listen('RequestUpdated', (e) => {
-              const payload = e || {};
-              const entry = {
-                id: payload.id || payload.data?.id || Date.now(),
-                item: payload.equipment_name || payload.item || payload.data?.equipment_name || payload.message || 'Request',
-                message: payload.message || `Request updated ${payload.request_number || ''}`,
-                variant: 'info',
-                date: payload.updated_at || payload.date || new Date().toISOString(),
-                time: payload.updated_at || payload.date || new Date().toISOString()
-              };
-              incrementNotification(1, entry);
-            });
+            subscribedChannel
+              .listen('RequestCreated', (e) => {
+                const payload = e || {};
+                const entry = {
+                  id: payload.id || payload.data?.id || Date.now(),
+                  item: payload.equipment_name || payload.item || payload.data?.equipment_name || payload.message || 'Request',
+                  message: payload.message || `Request ${payload.request_number || ''}`,
+                  variant: 'info',
+                  date: payload.created_at || payload.date || new Date().toISOString(),
+                  time: payload.created_at || payload.date || new Date().toISOString()
+                };
+                // Append to history and increment badge
+                incrementNotification(1, entry);
+              })
+              .listen('RequestUpdated', (e) => {
+                const payload = e || {};
+                const entry = {
+                  id: payload.id || payload.data?.id || Date.now(),
+                  item: payload.equipment_name || payload.item || payload.data?.equipment_name || payload.message || 'Request',
+                  message: payload.message || `Request updated ${payload.request_number || ''}`,
+                  variant: 'info',
+                  date: payload.updated_at || payload.date || new Date().toISOString(),
+                  time: payload.updated_at || payload.date || new Date().toISOString()
+                };
+                incrementNotification(1, entry);
+
+                // Remove from local pending list ONLY when status transitions to a finalized state
+                try {
+                  const updatedId = payload.id || payload.data?.id;
+                  const statusRaw = payload.status ?? payload.data?.status ?? payload.new_status ?? payload.data?.new_status;
+                  const status = (statusRaw || '').toString().toLowerCase().trim();
+                  const finalized = new Set(['approved','rejected','fulfilled','denied','cancelled','completed','closed']);
+                  if (updatedId && finalized.has(status)) {
+                    setPendingTransactions((prev) => prev.filter((r) => String(r.id) !== String(updatedId)));
+                  }
+
+                  if (['rejected','denied','cancelled'].includes(status)) {
+                    const eqId = payload.equipment_id ?? payload.data?.equipment_id ?? payload.request?.equipment_id ?? null;
+                    if (eqId) {
+                      try { window.dispatchEvent(new CustomEvent('ireply:equipment:restore', { detail: { equipment_id: eqId } })); } catch (_) {}
+                    } else {
+                      try { window.dispatchEvent(new CustomEvent('ireply:equipment:restore', { detail: {} })); } catch (_) {}
+                    }
+                  }
+                } catch (_err) {}
+              });
           } catch (e) {
             // ignore Echo errors
           }

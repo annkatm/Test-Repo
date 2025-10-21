@@ -396,24 +396,12 @@ const ViewApproved = () => {
             || request?.serial_number
             || request?.equipment_serial_number;
           
-          // Try to get category name
-          let categoryName = tx?.category_name 
-            || tx?.equipment?.category?.name 
-            || request?.category_name
-            || null;
-          
-          // If still no serial number or category, try fetching equipment details
-          if ((!serialNumber || !categoryName) && request.equipment_id) {
+          // If still no serial number, try fetching equipment details
+          if (!serialNumber && request.equipment_id) {
             try {
               const equipmentResponse = await api.get(`/equipment/${request.equipment_id}`);
               if (equipmentResponse?.data?.success) {
-                const equipmentData = equipmentResponse.data.data;
-                if (!serialNumber) {
-                  serialNumber = equipmentData?.serial_number;
-                }
-                if (!categoryName) {
-                  categoryName = equipmentData?.category?.name || equipmentData?.category_name;
-                }
+                serialNumber = equipmentResponse.data.data?.serial_number;
               }
             } catch (e) {
               console.warn('Could not fetch equipment details:', e);
@@ -423,7 +411,6 @@ const ViewApproved = () => {
           allItems.push({
             equipment_name: request.equipment_name || tx?.equipment_name || tx?.equipment?.name || 'N/A',
             serial_number: serialNumber || 'N/A',
-            category_name: categoryName || 'N/A',
             date_released: tx?.release_date || tx?.released_at || tx?.created_at || new Date().toISOString(),
             date_returned: tx?.return_date || tx?.returned_at || null
           });
@@ -431,19 +418,11 @@ const ViewApproved = () => {
           // If no transaction found, try to fetch equipment serial number directly
           let serialNumber = request?.serial_number || request?.equipment_serial_number;
           
-          let categoryName = request.category_name || null;
-          
-          if ((!serialNumber || !categoryName) && request.equipment_id) {
+          if (!serialNumber && request.equipment_id) {
             try {
               const equipmentResponse = await api.get(`/equipment/${request.equipment_id}`);
               if (equipmentResponse?.data?.success) {
-                const equipmentData = equipmentResponse.data.data;
-                if (!serialNumber) {
-                  serialNumber = equipmentData?.serial_number;
-                }
-                if (!categoryName) {
-                  categoryName = equipmentData?.category?.name || equipmentData?.category_name;
-                }
+                serialNumber = equipmentResponse.data.data?.serial_number;
               }
             } catch (e) {
               console.warn('Could not fetch equipment details:', e);
@@ -453,7 +432,6 @@ const ViewApproved = () => {
           allItems.push({
             equipment_name: request.equipment_name || 'N/A',
             serial_number: serialNumber || 'N/A',
-            category_name: categoryName || 'N/A',
             date_released: request?.release_date || request?.created_at || new Date().toISOString(),
             date_returned: request?.return_date || request?.returned_at || null
           });
@@ -557,7 +535,7 @@ const ViewApproved = () => {
                 <div className="bg-gradient-to-b from-[#0064FF] to-[#003C99] text-white rounded-2xl p-3 shadow flex flex-col h-26">
                   <h4 className="text-sm uppercase tracking-wider opacity-80">New Approved</h4>
                   <div className="mt-2 flex items-center justify-between">
-                    <p className="text-5xl font-bold">{loading ? '...' : groupedApproved.length}</p>
+                    <p className="text-5xl font-bold">{loading ? '...' : dashboardStats.new_requests}</p>
                     <Clock className="w-8 h-8 text-white/70" />
                   </div>
                 </div>
