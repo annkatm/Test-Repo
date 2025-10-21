@@ -49,6 +49,8 @@ const EmployeeTransaction = () => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, ttl);
   };
+
+  
   const [notificationCount, setNotificationCount] = useState(() => {
     try {
       const v = Number(localStorage.getItem('employee_history_unseen') || '0');
@@ -214,6 +216,10 @@ const EmployeeTransaction = () => {
     if (variant === 'warning') return { Icon: Mouse, bg: 'bg-yellow-50', text: 'text-yellow-700' };
     return { Icon: ClipboardList, bg: 'bg-gray-50', text: 'text-gray-700' };
   };
+
+  // sidebarActions and navSuggestions moved below fetchTransactionHistory()
+
+  
 
   // 🔍 Filter by search term
   const filteredData = useMemo(() => {
