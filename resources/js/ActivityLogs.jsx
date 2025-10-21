@@ -130,6 +130,13 @@ const ActivityLogs = () => {
                   <Filter className="h-4 w-4" />
                   <span className="text-sm font-medium">Filter</span>
                 </div>
+                
+                <button 
+                  onClick={() => window.location.href = '/archive'}
+                  className="flex items-center space-x-2 px-4 py-2 border border-red-600 text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+                >
+                  <span className="text-sm font-medium">Archive</span>
+                </button>
               </div>
             </div>
 

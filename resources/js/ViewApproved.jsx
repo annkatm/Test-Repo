@@ -52,11 +52,6 @@ const ViewApproved = () => {
     isOpen: false,
     transactionData: null
   });
-  const [printConfirmModal, setPrintConfirmModal] = useState({
-    isOpen: false,
-    itemCount: 0,
-    transactionData: null
-  });
 
   const [viewHolderModal, setViewHolderModal] = useState({
     isOpen: false,
@@ -364,91 +359,6 @@ const ViewApproved = () => {
     }
   };
 
-  // Handle confirmed print after modal validation
-  const handleConfirmPrint = async () => {
-    const transactionData = printConfirmModal.transactionData;
-    setPrintConfirmModal({ isOpen: false, itemCount: 0, transactionData: null });
-    
-    try {
-      const requests = transactionData.requests || [transactionData];
-      
-      // Collect all equipment items with their details
-      const allItems = [];
-      for (const request of requests) {
-        const txList = await transactionService.getAll({ request_id: request.id });
-        if (txList?.success && Array.isArray(txList.data) && txList.data.length > 0) {
-          const tx = txList.data[0];
-          
-          // Try to get serial number from multiple sources
-          let serialNumber = tx?.serial_number 
-            || tx?.equipment_serial_number 
-            || tx?.equipment?.serial_number
-            || request?.serial_number
-            || request?.equipment_serial_number;
-          
-          // If still no serial number, try fetching equipment details
-          if (!serialNumber && request.equipment_id) {
-            try {
-              const equipmentResponse = await api.get(`/equipment/${request.equipment_id}`);
-              if (equipmentResponse?.data?.success) {
-                serialNumber = equipmentResponse.data.data?.serial_number;
-              }
-            } catch (e) {
-              console.warn('Could not fetch equipment details:', e);
-            }
-          }
-          
-          allItems.push({
-            equipment_name: request.equipment_name || tx?.equipment_name || tx?.equipment?.name || 'N/A',
-            serial_number: serialNumber || 'N/A',
-            date_released: tx?.release_date || tx?.released_at || tx?.created_at || new Date().toISOString(),
-            date_returned: tx?.return_date || tx?.returned_at || null
-          });
-        } else {
-          // If no transaction found, try to fetch equipment serial number directly
-          let serialNumber = request?.serial_number || request?.equipment_serial_number;
-          
-          if (!serialNumber && request.equipment_id) {
-            try {
-              const equipmentResponse = await api.get(`/equipment/${request.equipment_id}`);
-              if (equipmentResponse?.data?.success) {
-                serialNumber = equipmentResponse.data.data?.serial_number;
-              }
-            } catch (e) {
-              console.warn('Could not fetch equipment details:', e);
-            }
-          }
-          
-          allItems.push({
-            equipment_name: request.equipment_name || 'N/A',
-            serial_number: serialNumber || 'N/A',
-            date_released: request?.release_date || request?.created_at || new Date().toISOString(),
-            date_returned: request?.return_date || request?.returned_at || null
-          });
-        }
-      }
-
-      // Use first request for employee info
-      const firstRequest = requests[0];
-
-      // Prepare print data with all items
-      const printData = {
-        full_name: transactionData.full_name || firstRequest.full_name || 'N/A',
-        position: transactionData.position || firstRequest.position || 'N/A',
-        department: firstRequest.department || transactionData.department || 'IT Department',
-        items: allItems,
-        notes: transactionData.notes || firstRequest.notes || ''
-      };
-
-      console.log('ViewApproved - Print data prepared:', printData);
-      console.log('ViewApproved - All items with serial numbers:', allItems);
-
-      setPrintModal({ isOpen: true, transactionData: printData });
-    } catch (err) {
-      console.error('Error fetching print data:', err);
-      alert('Error generating receipt: ' + apiUtils.handleError(err));
-    }
-  };
 
   // Handle print action
   const handlePrint = async (transactionData) => {
@@ -471,16 +381,6 @@ const ViewApproved = () => {
         return;
       }
 
-      // Inform user about multiple items
-      if (requests.length > 1) {
-        const itemCount = requests.length;
-        setPrintConfirmModal({ 
-          isOpen: true, 
-          itemCount: itemCount, 
-          transactionData: transactionData 
-        });
-        return;
-      }
 
       // Collect all equipment items with their details
       const allItems = [];
@@ -980,40 +880,6 @@ const ViewApproved = () => {
         transactionData={viewHolderModal.holderData}
       />
 
-      {/* Print Confirmation Modal */}
-      {printConfirmModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          {/* Backdrop */}
-          <div 
-            className="absolute inset-0 bg-black bg-opacity-50"
-            onClick={() => setPrintConfirmModal({ isOpen: false, itemCount: 0, transactionData: null })}
-          ></div>
-          
-          {/* Modal */}
-          <div className="relative bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md mx-4">
-            <div className="text-white mb-6">
-              <p className="text-base">
-                This employee has {printConfirmModal.itemCount} items. Print accountability form with all items?
-              </p>
-            </div>
-            
-            <div className="flex justify-end space-x-3 mt-4">
-              <button
-                onClick={handleConfirmPrint}
-                className="px-8 py-2.5 bg-blue-400 bg-opacity-30 text-white rounded-full hover:bg-opacity-40 transition-colors font-medium border border-blue-300"
-              >
-                OK
-              </button>
-              <button
-                onClick={() => setPrintConfirmModal({ isOpen: false, itemCount: 0, transactionData: null })}
-                className="px-6 py-2.5 bg-blue-700 text-white rounded-full hover:bg-blue-800 transition-colors font-medium"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
