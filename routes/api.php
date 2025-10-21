@@ -18,10 +18,13 @@ Route::get('/employees', [EmployeeController::class, 'index']);
 Route::get('/employees/current-holders', [EmployeeController::class, 'currentHolders']);
 Route::get('/employees/pending-requests', [EmployeeController::class, 'pendingRequests']);
 Route::get('/employees/verify-returns', [EmployeeController::class, 'verifyReturns']);
+Route::get('/employees/available-users', [EmployeeController::class, 'getAvailableUsers']);
 Route::post('/employees', [EmployeeController::class, 'store']);
 Route::get('/employees/{id}', [EmployeeController::class, 'show']);
 Route::put('/employees/{id}', [EmployeeController::class, 'update']);
 Route::delete('/employees/{id}', [EmployeeController::class, 'destroy']);
+Route::post('/employees/{id}/connect-user', [EmployeeController::class, 'connectUser']);
+Route::post('/employees/{id}/disconnect-user', [EmployeeController::class, 'disconnectUser']);
 
 // Request routes
 Route::get('/requests', [RequestController::class, 'index']);
