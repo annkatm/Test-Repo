@@ -5,6 +5,14 @@ import React, { useMemo, useState } from 'react';
 // - transactionStats: { borrowed: number }
 // - borrowedDetails: { items: [{name, specs}], borrowDate, returnDate }
 const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions = [], borrowedDetails = null }) => {
+  const logActivity = (message, variant = 'info') => {
+    try {
+      const prev = JSON.parse(localStorage.getItem('employee_activities') || '[]');
+      const entry = { id: Date.now(), message, variant, time: new Date().toISOString() };
+      const next = [entry, ...(Array.isArray(prev) ? prev : [])].slice(0, 50);
+      localStorage.setItem('employee_activities', JSON.stringify(next));
+    } catch (_) {}
+  };
   const [selectedRow, setSelectedRow] = useState(null);
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [showBrowseLaptopsModal, setShowBrowseLaptopsModal] = useState(false);
@@ -57,13 +65,13 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
           <h1 className="text-2xl sm:text-3xl font-bold text-[#2262C6]">Approved</h1>
           <div className="flex items-center gap-3">
             <button
-              onClick={() => setIsViewAllOpen(true)}
+              onClick={() => { setIsViewAllOpen(true); logActivity('Approved: Opened View All', 'info'); }}
               className="text-blue-600 hover:text-blue-800 text-sm sm:text-base font-semibold"
             >
               View all
             </button>
             <button
-              onClick={onBack}
+              onClick={() => { logActivity('Approved: Back to transactions', 'info'); onBack(); }}
               className="bg-white text-blue-600 font-medium px-6 py-3 rounded-lg shadow hover:shadow-md hover:bg-blue-50 transition-all border border-gray-200 w-full sm:w-auto"
             >
               ← Back
@@ -88,7 +96,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                   {(approvedTransactions || []).map((transaction, index) => (
                     <div
                       key={index}
-                      onClick={() => setSelectedRow(index)}
+                      onClick={() => { setSelectedRow(index); logActivity(`Approved: Selected row ${index + 1} (${transaction.item})`, 'info'); }}
                       className={`grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-0 items-start sm:items-center py-4 sm:py-6 px-4 sm:px-6 transition-colors cursor-pointer ${
                         selectedRow === index ? 'border-l-4 border-blue-600' : ''
                       }`}
@@ -181,13 +189,13 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
 
                   <div className="flex gap-3">
                     <button
-                      onClick={() => setShowReturnModal(true)}
+                      onClick={() => { setShowReturnModal(true); logActivity('Approved: Clicked Return Now', 'return'); }}
                       className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium shadow-md transform transition-all duration-300 hover:scale-105 hover:shadow-xl hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
                     >
                       Return Now
                     </button>
                     <button
-                      onClick={() => setShowBrowseLaptopsModal(true)}
+                      onClick={() => { setShowBrowseLaptopsModal(true); logActivity('Approved: Clicked Exchange', 'exchange'); }}
                       className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium shadow-md transform transition-all duration-300 hover:scale-105 hover:shadow-xl hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-300"
                     >
                       Exchange
@@ -240,7 +248,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
             {/* Buttons */}
             <div className="flex justify-end gap-3">
               <button
-                onClick={() => setShowReturnModal(false)}
+                onClick={() => { setShowReturnModal(false); logActivity('Approved: Return modal closed', 'info'); }}
                 className="px-5 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 shadow-sm transition-all"
               >
                 Cancel
@@ -252,6 +260,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                   setTimeout(() => {
                     setShowReturnModal(false);
                     setSelectedRow(null);
+                    logActivity('Approved: Confirmed Return', 'success');
                     onBack();
                     setActionLoading(false);
                   }, 1000);
@@ -278,6 +287,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                   setShowBrowseLaptopsModal(false);
                   setSelectedLaptop(null);
                   setActiveCategory('Laptops');
+                  logActivity('Approved: Closed Browse Laptops', 'info');
                 }}
                 className="text-gray-400 hover:text-gray-600 transition"
               >
@@ -357,6 +367,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                 onClick={() => {
                   setShowBrowseLaptopsModal(false);
                   setShowReasonModal(true);
+                  logActivity('Approved: Proceed to Reason for Exchange', 'exchange');
                 }}
                 className="px-8 py-3 bg-blue-600 text-white rounded-lg font-semibold shadow-md hover:bg-blue-700 hover:shadow-xl transition-all transform hover:scale-105"
               >
@@ -381,6 +392,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                   setShowReasonModal(false);
                   setExchangeReason('');
                   setUploadedFile(null);
+                  logActivity('Approved: Closed Reason modal', 'info');
                 }}
                 className="text-gray-400 hover:text-gray-600 transition"
               >
@@ -447,13 +459,14 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                     setShowReasonModal(false);
                     setExchangeReason('');
                     setUploadedFile(null);
+                    logActivity('Approved: Cancel Reason modal', 'info');
                   }}
                   className="px-5 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 shadow-sm transition-all"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={handleConfirmExchange}
+                  onClick={() => { logActivity('Approved: Confirm Reason for Exchange', 'exchange'); handleConfirmExchange(); }}
                   className="px-5 py-2 bg-blue-600 text-white rounded-lg font-medium shadow-md hover:bg-blue-700 hover:shadow-xl transition-all"
                 >
                   Confirm
@@ -508,6 +521,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                 setTimeout(() => {
                   setShowExchangeConfirmModal(false);
                   setSelectedRow(null);
+                  logActivity('Approved: Sent Exchange Request', 'success');
                   onBack();
                   setActionLoading(false);
                 }, 1000);
@@ -528,7 +542,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
               <h2 className="text-xl font-bold text-blue-600">Approved</h2>
               <button
-                onClick={() => setIsViewAllOpen(false)}
+                onClick={() => { setIsViewAllOpen(false); logActivity('Approved: Closed View All', 'info'); }}
                 className="text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-100 rounded-lg"
               >
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -565,13 +579,13 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
 
             <div className="flex items-center justify-between px-6 py-4 border-t bg-gray-50">
               <div className="flex items-center gap-2">
-                <button onClick={() => setPage(Math.max(1, page - 1))} className="px-3 py-1.5 bg-white border border-gray-300 rounded-md text-sm hover:bg-gray-100" disabled={page === 1}>Prev</button>
+                <button onClick={() => { const next = Math.max(1, page - 1); if (next !== page) logActivity(`Approved: View All page ${next}`, 'info'); setPage(next); }} className="px-3 py-1.5 bg-white border border-gray-300 rounded-md text-sm hover:bg-gray-100" disabled={page === 1}>Prev</button>
                 <span className="text-sm text-gray-700">Page {page} of {totalPages}</span>
-                <button onClick={() => setPage(Math.min(totalPages, page + 1))} className="px-3 py-1.5 bg-white border border-gray-300 rounded-md text-sm hover:bg-gray-100" disabled={page === totalPages}>Next</button>
+                <button onClick={() => { const next = Math.min(totalPages, page + 1); if (next !== page) logActivity(`Approved: View All page ${next}`, 'info'); setPage(next); }} className="px-3 py-1.5 bg-white border border-gray-300 rounded-md text-sm hover:bg-gray-100" disabled={page === totalPages}>Next</button>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-600">Display</span>
-                <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }} className="border border-gray-300 rounded-md px-2 py-1 text-sm">
+                <select value={pageSize} onChange={(e) => { const n = Number(e.target.value); setPageSize(n); setPage(1); logActivity(`Approved: View All page size ${n}`, 'info'); }} className="border border-gray-300 rounded-md px-2 py-1 text-sm">
                   {[5,10,20,50].map(n => (<option key={n} value={n}>{n}</option>))}
                 </select>
               </div>

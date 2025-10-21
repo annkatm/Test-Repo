@@ -19,8 +19,11 @@
         "vite": "^7.0.4"
     },
     "dependencies": {
+        "laravel-echo": "^1.11.2",
+        "pusher-js": "^8.0.0",
         "lucide-react": "^0.542.0",
         "react": "^18.2.0",
         "react-dom": "^18.2.0"
     }
 }
+
