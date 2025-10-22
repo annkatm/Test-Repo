@@ -226,6 +226,28 @@ const EmployeeHome = () => {
     }
   };
 
+  const fetchAllAvailableEquipment = async () => {
+    try {
+      setLoading(true);
+      setSelectedCategory(null);
+      const res = await fetch('/api/equipment?per_page=100&status=available');
+      const data = await res.json();
+      let equipmentData = [];
+      if (Array.isArray(data)) {
+        equipmentData = data;
+      } else if (data && data.data && Array.isArray(data.data.data)) {
+        equipmentData = data.data.data;
+      } else if (Array.isArray(data.data)) {
+        equipmentData = data.data;
+      }
+      setEquipment(filterOutReserved(equipmentData));
+    } catch (e) {
+      setError('Failed to load all equipment');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handlePlusClick = (item) => {
     if (item.status && item.status !== 'available') {
       alert('This equipment is currently unavailable. Please choose another item.');
@@ -597,6 +619,16 @@ const EmployeeHome = () => {
           <div className="p-6 h-full">
             <h2 className="text-lg font-semibold text-gray-900 mb-6">Item Categories</h2>
             <div className="grid grid-cols-2 gap-3">
+              <button
+                key="all"
+                onClick={fetchAllAvailableEquipment}
+                className={`aspect-square bg-gray-100 rounded-lg flex flex-col items-center justify-center hover:shadow-md transition-all cursor-pointer ${
+                  selectedCategory === null ? 'ring-2 ring-blue-500' : ''
+                }`}
+              >
+                <Laptop className="h-8 w-8 text-gray-600 mb-2" />
+                <span className="text-sm font-semibold text-gray-800 text-center px-1 truncate">All</span>
+              </button>
               {categories.map((category) => (
                 <button
                   key={category.id}

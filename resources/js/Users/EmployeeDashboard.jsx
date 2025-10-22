@@ -46,6 +46,18 @@ const EmployeeDashboard = ({
     fetchUserData();
   }, []);
 
+  // Listen for navigation events (e.g., from ApprovedTransactions after return)
+  useEffect(() => {
+    const onNavigate = (e) => {
+      const target = e?.detail?.menu;
+      if (typeof target === 'string') {
+        setActiveMenu(target);
+      }
+    };
+    window.addEventListener('ireply:navigate', onNavigate);
+    return () => window.removeEventListener('ireply:navigate', onNavigate);
+  }, []);
+
   const handleMenuClick = (label) => {
     setActiveMenu(label);
   };
