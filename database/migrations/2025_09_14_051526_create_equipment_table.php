@@ -19,7 +19,7 @@ return new class extends Migration
             $table->text('specifications')->nullable(); // Technical specs
             $table->string('serial_number')->unique()->nullable(); // Unique serial number
             $table->string('asset_tag')->unique()->nullable(); // Company asset tag
-            $table->enum('status', ['available', 'in_use', 'maintenance', 'retired'])->default('available');
+            $table->enum('status', ['available', 'borrowed', 'issued'])->default('available');
             $table->enum('condition', ['excellent', 'good', 'fair', 'poor'])->default('good');
             $table->decimal('purchase_price', 10, 2)->nullable(); // Purchase cost
             $table->date('purchase_date')->nullable(); // When purchased

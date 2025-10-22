@@ -86,29 +86,32 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/archive/{type}/{id}/force-delete', [App\Http\Controllers\ArchiveController::class, 'forceDelete'])->name('archive.force-delete');
     Route::post('/archive/bulk-restore', [App\Http\Controllers\ArchiveController::class, 'bulkRestore'])->name('archive.bulk-restore');
     Route::post('/archive/bulk-delete', [App\Http\Controllers\ArchiveController::class, 'bulkForceDelete'])->name('archive.bulk-delete');
+
+    // Equipment and inventory management
+    Route::get('/equipment', function () {
+        return view('equipment');
+    })->name('equipment');
+
+    Route::get('/addstocks', function () {
+        return view('addstocks');
+    })->name('addstocks');
+
+    Route::get('/additems', function () {
+        return view('addstocks');
+    })->name('additems');
+
+    // User management
+    Route::get('/users', function () {
+        return view('users');
+    })->name('users');
+
+    // Control panel
+    Route::get('/control-panel', function () {
+        return view('control-panel');
+    })->name('control-panel');
+
+    // Reports
+    Route::get('/reports', function () {
+        return view('reports');
+    })->name('reports');
 });
-
-Route::get('/equipment', function () {
-    return view('equipment');
-})->name('equipment');
-
-Route::get('/addstocks', function () {
-    return view('addstocks');
-})->name('addstocks');
-
-Route::get('/additems', function () {
-    return view('addstocks');
-})->name('additems');
-
-
-Route::get('/users', function () {
-    return view('users');
-})->name('users');
-
-Route::get('/control-panel', function () {
-    return view('control-panel');
-})->name('control-panel');
-
-Route::get('/reports', function () {
-    return view('reports');
-})->name('reports');

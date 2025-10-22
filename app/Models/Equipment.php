@@ -92,9 +92,14 @@ class Equipment extends Model
         return $query->where('status', 'available');
     }
 
-    public function scopeInUse($query): mixed
+    public function scopeBorrowed($query): mixed
     {
-        return $query->where('status', 'in_use');
+        return $query->where('status', 'borrowed');
+    }
+
+    public function scopeIssued($query): mixed
+    {
+        return $query->where('status', 'issued');
     }
 
     public function scopeByCategory($query, $categoryId): mixed

@@ -37,13 +37,13 @@ class EmployeeController extends Controller
 
             $employee = Employee::create($validated);
 
-            // Update equipment status to 'in_use' if equipment IDs are provided
+            // Update equipment status to 'issued' if equipment IDs are provided
             if ($request->has('issued_equipment_ids') && is_array($request->issued_equipment_ids)) {
                 foreach ($request->issued_equipment_ids as $equipmentId) {
                     DB::table('equipment')
                         ->where('id', $equipmentId)
                         ->update([
-                            'status' => 'in_use',
+                            'status' => 'issued',
                             'updated_at' => now()
                         ]);
                 }
@@ -124,13 +124,13 @@ class EmployeeController extends Controller
                     ]);
             }
 
-            // Equipment that was added - set to 'in_use'
+            // Equipment that was added - set to 'issued'
             $addedEquipmentIds = array_diff($newEquipmentIds, $oldEquipmentIds);
             foreach ($addedEquipmentIds as $equipmentId) {
                 DB::table('equipment')
                     ->where('id', $equipmentId)
                     ->update([
-                        'status' => 'in_use',
+                        'status' => 'issued',
                         'updated_at' => now()
                     ]);
             }
@@ -209,6 +209,34 @@ class EmployeeController extends Controller
             // Using Employee model to respect soft deletes and include user relationship
             $employees = Employee::with('user')->orderBy('first_name', 'asc')->get();
 
+            // Enhance each employee with issued equipment details
+            $employees->each(function ($employee) {
+                if ($employee->issued_item) {
+                    try {
+                        $issuedData = json_decode($employee->issued_item, true);
+                        if (is_array($issuedData) && count($issuedData) > 0) {
+                            $equipmentIds = array_column($issuedData, 'id');
+                            // Fetch full equipment details
+                            $equipmentDetails = DB::table('equipment')
+                                ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
+                                ->whereIn('equipment.id', $equipmentIds)
+                                ->select(
+                                    'equipment.*',
+                                    'categories.name as category_name'
+                                )
+                                ->get();
+                            $employee->issued_equipment = $equipmentDetails;
+                        } else {
+                            $employee->issued_equipment = [];
+                        }
+                    } catch (\Exception $e) {
+                        $employee->issued_equipment = [];
+                    }
+                } else {
+                    $employee->issued_equipment = [];
+                }
+            });
+
             return response()->json([
                 'success' => true,
                 'data' => $employees,
@@ -228,13 +256,39 @@ class EmployeeController extends Controller
     public function show($id)
     {
         try {
-            $employee = Employee::find($id);
+            $employee = Employee::with('user')->find($id);
             
             if (!$employee) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Employee not found'
                 ], 404);
+            }
+
+            // Enhance with issued equipment details
+            if ($employee->issued_item) {
+                try {
+                    $issuedData = json_decode($employee->issued_item, true);
+                    if (is_array($issuedData) && count($issuedData) > 0) {
+                        $equipmentIds = array_column($issuedData, 'id');
+                        // Fetch full equipment details
+                        $equipmentDetails = DB::table('equipment')
+                            ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
+                            ->whereIn('equipment.id', $equipmentIds)
+                            ->select(
+                                'equipment.*',
+                                'categories.name as category_name'
+                            )
+                            ->get();
+                        $employee->issued_equipment = $equipmentDetails;
+                    } else {
+                        $employee->issued_equipment = [];
+                    }
+                } catch (\Exception $e) {
+                    $employee->issued_equipment = [];
+                }
+            } else {
+                $employee->issued_equipment = [];
             }
 
             return response()->json([

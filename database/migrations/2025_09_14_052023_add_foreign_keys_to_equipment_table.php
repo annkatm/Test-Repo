@@ -21,13 +21,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('equipment', function (Blueprint $table) {
-            // Drop FK only if it exists (handles environments where it was never added)
-            try {
-                $table->dropForeign(['category_id']);
-            } catch (\Throwable $e) {
-                // Ignore if constraint doesn't exist
-            }
-        });
+        // Since up() does nothing (foreign key is defined in equipment table creation),
+        // down() should also do nothing to avoid conflicts
+        // The foreign key will be dropped when the equipment table is dropped
     }
 };

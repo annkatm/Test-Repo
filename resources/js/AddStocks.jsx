@@ -389,9 +389,8 @@ const AddStocks = () => {
                         <td className="py-4 px-6">
                           <span className={`px-3 py-1 rounded-full text-xs font-medium
                             ${item.status === 'available' ? 'bg-green-100 text-green-800' : ''}
-                            ${item.status === 'in_use' ? 'bg-blue-100 text-blue-800' : ''}
-                            ${item.status === 'maintenance' ? 'bg-yellow-100 text-yellow-800' : ''}
-                            ${item.status === 'retired' ? 'bg-gray-100 text-gray-800' : ''}
+                            ${item.status === 'borrowed' ? 'bg-blue-100 text-blue-800' : ''}
+                            ${item.status === 'issued' ? 'bg-orange-100 text-orange-800' : ''}
                           `}>
                             {item.status.replace('_', ' ')}
                           </span>
@@ -496,17 +495,22 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
               // Count how many units exist (dynamic count)
               existing_count: 1,
               available_count: item.status === 'available' ? 1 : 0,
-              in_use_count: item.status === 'in_use' ? 1 : 0,
+              borrowed_count: item.status === 'borrowed' ? 1 : 0,
+              issued_count: item.status === 'issued' ? 1 : 0,
               items: [item] // Keep track of all items
             };
           } else {
             // Increment count for each additional item with same name/brand
             acc[key].existing_count += 1;
+            // Increment status counts
             if (item.status === 'available') {
               acc[key].available_count += 1;
             }
-            if (item.status === 'in_use') {
-              acc[key].in_use_count += 1;
+            if (item.status === 'borrowed') {
+              acc[key].borrowed_count += 1;
+            }
+            if (item.status === 'issued') {
+              acc[key].issued_count += 1;
             }
             acc[key].items.push(item);
           }
@@ -723,8 +727,11 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
                     <div className="text-sm text-gray-500">{product.specifications}</div>
                     <div className="text-xs text-gray-400 mt-1">
                       Available: {product.available_count || 0}/{product.existing_count || 0}
-                      {product.in_use_count > 0 && (
-                        <span className="ml-2 text-orange-600">({product.in_use_count} in use)</span>
+                      {product.borrowed_count > 0 && (
+                        <span className="ml-2 text-blue-600">({product.borrowed_count} borrowed)</span>
+                      )}
+                      {product.issued_count > 0 && (
+                        <span className="ml-2 text-orange-600">({product.issued_count} issued)</span>
                       )}
                     </div>
                   </div>
