@@ -35,6 +35,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
   const [pageSize, setPageSize] = useState(10); // number-only sorting/display count
   const [selectedUnit, setSelectedUnit] = useState(null);
   const [showUnitConfirmModal, setShowUnitConfirmModal] = useState(false);
+  const [displayList, setDisplayList] = useState(() => Array.isArray(approvedTransactions) ? approvedTransactions : []);
   const [chosenUnit, setChosenUnit] = useState(() => {
     try {
       const saved = localStorage.getItem('approved_selected_unit');
@@ -70,14 +71,83 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
     }
   }, [showBrowseLaptopsModal]);
 
-  const totalPages = Math.max(1, Math.ceil((approvedTransactions?.length || 0) / pageSize));
+  useEffect(() => {
+    try { setDisplayList(Array.isArray(approvedTransactions) ? approvedTransactions : []); } catch (_) {}
+  }, [approvedTransactions]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchApproved = async () => {
+      try {
+        if ((displayList && displayList.length) > 0) return;
+        const res = await fetch('/api/transactions/approved', { credentials: 'same-origin' });
+        const json = await res.json().catch(() => ({}));
+        const list = Array.isArray(json) ? json : (json && json.data && Array.isArray(json.data) ? json.data : []);
+        const mapped = (list || []).map((t, i) => ({
+          id: t?.id ?? i + 1,
+          date: t?.created_at ? new Date(t.created_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : (t?.date || ''),
+          item: t?.equipment_name || t?.item || 'Item',
+          status: t?.status || 'Approved',
+          exchangeItems: Array.isArray(t?.exchangeItems) ? t.exchangeItems : [],
+        }));
+        if (!cancelled) setDisplayList(mapped);
+      } catch (_) { }
+    };
+    fetchApproved();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Listen for external changes to approved list and refresh from backend
+  useEffect(() => {
+    const refresh = async () => {
+      try {
+        const res = await fetch('/api/transactions/approved', { credentials: 'same-origin' });
+        const json = await res.json().catch(() => ({}));
+        const list = Array.isArray(json) ? json : (json && json.data && Array.isArray(json.data) ? json.data : []);
+        const mapped = (list || []).map((t, i) => ({
+          id: t?.id ?? i + 1,
+          date: t?.created_at ? new Date(t.created_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : (t?.date || ''),
+          item: t?.equipment_name || t?.item || 'Item',
+          status: t?.status || 'Approved',
+          exchangeItems: Array.isArray(t?.exchangeItems) ? t.exchangeItems : [],
+        }));
+        setDisplayList(mapped);
+      } catch (_) { }
+    };
+    const handler = () => refresh();
+    window.addEventListener('ireply:approved:changed', handler);
+    return () => window.removeEventListener('ireply:approved:changed', handler);
+  }, []);
+
+  const totalPages = Math.max(1, Math.ceil((displayList?.length || 0) / pageSize));
   const paginated = useMemo(() => {
     const start = (page - 1) * pageSize;
     const end = start + pageSize;
-    return (approvedTransactions || []).slice(start, end);
-  }, [approvedTransactions, page, pageSize]);
+    return (displayList || []).slice(start, end);
+  }, [displayList, page, pageSize]);
 
-  const selectedTransactionData = selectedRow !== null ? approvedTransactions[selectedRow] : null;
+  const selectedTransactionData = selectedRow !== null ? displayList[selectedRow] : null;
+
+  const handleMarkReleased = async (tx) => {
+    const txId = tx?.id || selectedTransactionData?.id;
+    if (!txId) return;
+    if (actionLoading) return;
+    setActionLoading(true);
+    try {
+      const res = await fetch(`/api/transactions/${txId}/release`, { method: 'POST', headers: { 'Accept': 'application/json' }, credentials: 'same-origin' });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || `HTTP ${res.status}`);
+      }
+      setDisplayList((prev) => (prev || []).map((t) => (String(t.id) === String(txId) ? { ...t, status: 'Released' } : t)));
+      try { window.dispatchEvent(new CustomEvent('ireply:approved:changed')); } catch (_) {}
+      logActivity('Approved: Marked as Released', 'success');
+    } catch (_) {
+      setDisplayList((prev) => (prev || []).map((t) => (String(t.id) === String(txId) ? { ...t, status: 'Released' } : t)));
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
@@ -334,46 +404,47 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
               {/* Scrollable Table Rows Container */}
               <div className="overflow-y-auto h-[400px] sm:h-[500px] lg:h-[600px] bg-white">
                 <div className="divide-y divide-gray-100">
-                  {(approvedTransactions || []).map((transaction, index) => (
-                    <div
-                      key={index}
-                      onClick={() => { setSelectedRow(index); logActivity(`Approved: Selected row ${index + 1} (${transaction.item})`, 'info'); }}
-                      className={`grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-0 items-start sm:items-center py-4 sm:py-6 px-4 sm:px-6 transition-colors cursor-pointer ${selectedRow === index ? 'border-l-4 border-blue-600' : ''
-                        }`}
-                    >
-                      {/* Mobile layout */}
-                      <div className="sm:hidden space-y-2">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="text-xs text-gray-500 mb-1">Date</p>
-                            <p className="text-gray-800 text-base font-semibold">{transaction.date}</p>
+                  {(paginated || []).map((transaction, index) => {
+                    const globalIndex = (page - 1) * pageSize + index;
+                    return (
+                      <div
+                        key={globalIndex}
+                        onClick={() => { setSelectedRow(globalIndex); logActivity(`Approved: Selected row ${globalIndex + 1} (${transaction.item})`, 'info'); }}
+                        className={`grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-0 items-start sm:items-center py-4 sm:py-6 px-4 sm:px-6 transition-colors cursor-pointer ${selectedRow === globalIndex ? 'border-l-4 border-blue-600' : ''
+                          }`}
+                      >
+                        {/* Mobile layout */}
+                        <div className="sm:hidden space-y-2">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Date</p>
+                              <p className="text-gray-800 text-base font-semibold">{transaction.date}</p>
+                            </div>
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200">
+                              {transaction.status}
+                            </span>
                           </div>
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200">
-                            {transaction.status}
-                          </span>
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Item</p>
+                            <p className="text-gray-800 text-base font-semibold">{transaction.item}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1">Item</p>
-                          <p className="text-gray-800 text-base font-semibold">{transaction.item}</p>
-                        </div>
-                      </div>
-
-                      {/* Desktop layout */}
-                      <div className="hidden sm:contents">
-                        <div className="col-span-3 text-gray-800 text-base font-semibold">
-                          {transaction.date}
-                        </div>
-                        <div className="col-span-6 text-gray-800 text-base font-semibold">
-                          {transaction.item}
-                        </div>
-                        <div className="col-span-3">
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200">
-                            {transaction.status}
-                          </span>
+                        <div className="hidden sm:contents">
+                          <div className="col-span-3 text-gray-800 text-base font-semibold">
+                            {transaction.date}
+                          </div>
+                          <div className="col-span-6 text-gray-800 text-base font-semibold">
+                            {transaction.item}
+                          </div>
+                          <div className="col-span-3">
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200">
+                              {transaction.status}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -494,16 +565,48 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                 Cancel
               </button>
               <button
-                onClick={() => {
+                onClick={async () => {
                   if (actionLoading) return;
                   setActionLoading(true);
-                  setTimeout(() => {
+                  try {
+                    const txId = selectedTransactionData?.id;
+                    if (!txId) throw new Error('Missing transaction id.');
+                    const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+                    const res = await fetch(`/api/transactions/${txId}/return`, {
+                      method: 'POST',
+                      headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrf,
+                      },
+                      credentials: 'same-origin',
+                      body: JSON.stringify({}),
+                    });
+                    if (!res.ok) {
+                      const text = await res.text();
+                      throw new Error(text || `HTTP ${res.status}`);
+                    }
                     setShowReturnModal(false);
                     setSelectedRow(null);
                     logActivity('Approved: Confirmed Return', 'success');
+                    try {
+                      const payload = {
+                        id: selectedTransactionData?.id,
+                        item: selectedTransactionData?.item,
+                        date: new Date().toISOString(),
+                      };
+                      window.dispatchEvent(new CustomEvent('ireply:returned:add', { detail: payload }));
+                    } catch (_) { }
+                    try {
+                      window.dispatchEvent(new CustomEvent('ireply:navigate', { detail: { menu: 'Returned Items' } }));
+                    } catch (_) { }
                     onBack();
+                  } catch (err) {
+                    console.error(err);
+                    alert('Failed to mark item as returned. Please try again.');
+                  } finally {
                     setActionLoading(false);
-                  }, 1000);
+                  }
                 }}
                 disabled={actionLoading}
                 className="px-5 py-2 bg-blue-600 text-white rounded-lg font-medium shadow-md hover:bg-blue-700 hover:shadow-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed"
