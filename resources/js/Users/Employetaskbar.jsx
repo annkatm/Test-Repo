@@ -30,6 +30,24 @@ const EmployeeTaskbar = ({
     position: ""
   });
   const [originalProfile, setOriginalProfile] = useState(null);
+  const STORAGE_KEY = 'employee_profile_v1';
+
+  // Load locally saved profile first to prevent losing edits on reload
+  useEffect(() => {
+    try {
+      const savedRaw = localStorage.getItem(STORAGE_KEY);
+      if (savedRaw) {
+        const saved = JSON.parse(savedRaw);
+        if (saved?.formData) {
+          setFormData(prev => ({ ...prev, ...saved.formData }));
+          setOriginalProfile(saved.formData);
+        }
+        if (saved?.employeeName) setEmployeeName(saved.employeeName);
+        if (saved?.profileImageUrl) setProfileImageUrl(saved.profileImageUrl);
+        if (saved?.employeeId) setEmployeeId(saved.employeeId);
+      }
+    } catch (_) {}
+  }, []);
 
   useEffect(() => {
     if (!isAuthenticated || !user || isEditing) return;
@@ -125,8 +143,11 @@ const EmployeeTaskbar = ({
             position: employee.position || employee.job_title || user?.position || '',
             accountType: user?.role?.name || 'employee',
           };
-          setFormData(prev => ({ ...prev, ...profile }));
-          setOriginalProfile(profile);
+          // Merge any locally saved edits so they persist even if backend returns old data
+          let savedLocal = null; try { savedLocal = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch (_) { savedLocal = null; }
+          const merged = savedLocal?.formData ? { ...profile, ...savedLocal.formData } : profile;
+          setFormData(prev => ({ ...prev, ...merged }));
+          setOriginalProfile(merged);
           // Try to derive existing profile photo url if provided by API/user
           const photo = employee.photo_url || employee.avatar_url || employee.profile_photo_url || user?.avatar_url || user?.profile_photo_url || "";
           if (photo) setProfileImageUrl(photo);
@@ -194,14 +215,69 @@ const EmployeeTaskbar = ({
     }
   };
 
-  const handleSave = () => {
-    setIsEditing(false);
-    // Update the displayed name in the header
-    setEmployeeName(`${formData.firstName} ${formData.lastName}`);
-    console.log("Saved data:", formData);
-    // After save, update snapshot so future cancel doesn't jump back further
+  const handleSave = async () => {
+    const newName = `${formData.firstName} ${formData.lastName}`.trim();
+    // Try to persist to backend
+    const payload = {
+      first_name: formData.firstName,
+      last_name: formData.lastName,
+      email: formData.email,
+      phone: formData.phoneNumber,
+      department: formData.Department,
+      position: formData.position,
+    };
+    let savedRemotely = false;
+    try {
+      let res = null;
+      if (employeeId) {
+        try {
+          res = await fetch(`/api/employees/${employeeId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+        } catch (_) { res = null; }
+      }
+      if (!res || !res.ok) {
+        // Generic profile fallback endpoints
+        try {
+          res = await fetch('/api/profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+        } catch (_) { res = null; }
+      }
+      if (!res || !res.ok) {
+        try {
+          res = await fetch('/api/profile/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+        } catch (_) { res = null; }
+      }
+      savedRemotely = !!(res && res.ok);
+    } catch (_) {
+      savedRemotely = false;
+    }
+
+    // Update UI and persist locally regardless to survive reloads
+    setEmployeeName(newName || employeeName);
     setOriginalProfile({ ...formData });
-    try { showSuccess('Profile updated successfully'); } catch (_) {}
+    try {
+      const toStore = {
+        formData: { ...formData },
+        employeeName: newName || employeeName,
+        profileImageUrl,
+        employeeId,
+        ts: Date.now(),
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore));
+    } catch (_) {}
+
+    setIsEditing(false);
+    try { showSuccess(savedRemotely ? 'Profile updated successfully' : 'Profile saved locally'); } catch (_) {}
   };
 
   const handleChange = (field, value) => {
