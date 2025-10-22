@@ -43,6 +43,9 @@ const EmployeeTransaction = () => {
   // Toasts for upper-right popup notifications
   const [toasts, setToasts] = useState([]);
   const [isBorrowedOpen, setIsBorrowedOpen] = useState(false);
+  const [isOverdueOpen, setIsOverdueOpen] = useState(false);
+  const [borrowedItems, setBorrowedItems] = useState([]);
+  const [overdueItems, setOverdueItems] = useState([]);
 
   const showToast = (message, variant = 'info', ttl = 4500) => {
     const id = Date.now() + Math.random();
@@ -95,6 +98,69 @@ const EmployeeTransaction = () => {
         return next;
       });
       setHistoryData((prev) => [entry, ...prev]);
+    }
+  };
+
+  const fetchBorrowedItems = async () => {
+    try {
+      let list = [];
+      try {
+        const res = await fetch('/api/transactions/borrowed');
+        if (res.ok) {
+          const data = await res.json();
+          list = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
+        }
+      } catch (_) {}
+
+      if (!Array.isArray(list) || list.length === 0) {
+        try {
+          const res2 = await fetch('/api/employees/current-holders');
+          const data2 = await res2.json();
+          list = Array.isArray(data2?.data) ? data2.data : (Array.isArray(data2) ? data2 : []);
+        } catch (_) {}
+      }
+
+      if (!Array.isArray(list) || list.length === 0) {
+        const derived = (transactions || []).filter(t => (t.status || '').toLowerCase() === 'approved' && !t.return_date);
+        list = derived;
+      }
+
+      setBorrowedItems(list);
+      return list;
+    } catch (_) {
+      setBorrowedItems([]);
+      return [];
+    }
+  };
+
+  const fetchOverdueItems = async () => {
+    try {
+      let list = [];
+      try {
+        const res = await fetch('/api/transactions/overdue');
+        if (res.ok) {
+          const data = await res.json();
+          list = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
+        }
+      } catch (_) {}
+
+      if (!Array.isArray(list) || list.length === 0) {
+        const now = Date.now();
+        const derived = (transactions || []).filter(t => {
+          const end = t.expected_end_date || t.return_date;
+          if (!end) return false;
+          const endTs = new Date(end).getTime();
+          const isReturned = Boolean(t.return_date && new Date(t.return_date).getTime());
+          return !isReturned && endTs && endTs < now;
+        });
+        list = derived;
+      }
+
+      setOverdueItems(list);
+      return list;
+    } catch (_) {
+      setOverdueItems([]);
+      return [];
     }
   };
 
@@ -620,7 +686,11 @@ const EmployeeTransaction = () => {
           <h1 className="text-4xl font-bold text-[#2262C6] transition-all duration-300">Home</h1>
         </div>
 
-        <StatsCards transactionStats={transactionStats} onBorrowedClick={() => setIsBorrowedOpen(true)} />
+        <StatsCards 
+          transactionStats={transactionStats} 
+          onBorrowedClick={async () => { await fetchBorrowedItems(); setIsBorrowedOpen(true); }} 
+          onOverdueClick={async () => { await fetchOverdueItems(); setIsOverdueOpen(true); }} 
+        />
 
 
         <div className="bg-gray-100 rounded-lg border border-gray-200 mb-8">
@@ -804,14 +874,66 @@ const EmployeeTransaction = () => {
                 <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center">📦</div>
                 <div>
                   <div className="font-semibold text-gray-900">Currently Borrowed</div>
-                  <div className="text-sm text-gray-600">Total items: {transactionStats?.borrowed || 0}</div>
+                  <div className="text-sm text-gray-600">Total items: {Array.isArray(borrowedItems) ? borrowedItems.length : (transactionStats?.borrowed || 0)}</div>
                 </div>
               </div>
-              <div className="text-sm text-gray-500">This is a summary view. Contact admin for full details.</div>
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {(borrowedItems || []).map((it, i) => (
+                  <div key={it.id || i} className="border border-gray-200 rounded-lg p-3">
+                    <div className="font-semibold text-gray-900">{it.equipment_name || it.item || 'Item'}</div>
+                    <div className="text-sm text-gray-600">Request No.: {it.request_number || '-'}</div>
+                    <div className="text-sm text-gray-600">Start: {it.expected_start_date ? new Date(it.expected_start_date).toLocaleDateString('en-US') : (it.start_date ? new Date(it.start_date).toLocaleDateString('en-US') : '-')}</div>
+                    <div className="text-sm text-gray-600">Due: {it.expected_end_date ? new Date(it.expected_end_date).toLocaleDateString('en-US') : '-'}</div>
+                    <div className="text-xs text-gray-500">Status: {it.status || 'Borrowed'}</div>
+                  </div>
+                ))}
+                {(!borrowedItems || borrowedItems.length === 0) && (
+                  <div className="text-sm text-gray-500">No borrowed items</div>
+                )}
+              </div>
             </div>
             <div className="px-6 py-4 border-t bg-gray-50 text-right">
               <button
                 onClick={() => setIsBorrowedOpen(false)}
+                className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isOverdueOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm">
+          <div className="relative w-full max-w-lg bg-white rounded-xl shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-bold text-gray-900">Overdue Items</h2>
+              <button
+                onClick={() => setIsOverdueOpen(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-100 rounded-lg"
+              >
+                <X size={22} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {(overdueItems || []).map((it, i) => (
+                  <div key={it.id || i} className="border border-gray-200 rounded-lg p-3">
+                    <div className="font-semibold text-gray-900">{it.equipment_name || it.item || 'Item'}</div>
+                    <div className="text-sm text-gray-600">Request No.: {it.request_number || '-'}</div>
+                    <div className="text-sm text-gray-600">Due: {it.expected_end_date ? new Date(it.expected_end_date).toLocaleDateString('en-US') : '-'}</div>
+                    <div className="text-xs text-red-600">Overdue</div>
+                  </div>
+                ))}
+                {(!overdueItems || overdueItems.length === 0) && (
+                  <div className="text-sm text-gray-500">No overdue items</div>
+                )}
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t bg-gray-50 text-right">
+              <button
+                onClick={() => setIsOverdueOpen(false)}
                 className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
               >
                 Close
