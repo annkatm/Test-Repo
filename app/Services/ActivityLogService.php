@@ -106,7 +106,8 @@ class ActivityLogService
         ?string $modelType = null,
         ?int $modelId = null,
         ?int $days = null,
-        int $perPage = 15
+        int $perPage = 15,
+        ?string $type = null
     ) {
         $query = ActivityLog::with('user')
             ->orderBy('created_at', 'desc');
@@ -123,6 +124,11 @@ class ActivityLogService
             $query->recent($days);
         }
 
+        // Add type filtering
+        if ($type && $type !== 'all') {
+            $query->forType($type);
+        }
+
         return $query->paginate($perPage);
     }
 
@@ -134,9 +140,10 @@ class ActivityLogService
         ?string $modelType = null,
         ?int $modelId = null,
         ?int $days = null,
-        int $perPage = 15
+        int $perPage = 15,
+        ?string $type = null
     ) {
-        $logs = self::getActivityLogs($userId, $modelType, $modelId, $days, $perPage);
+        $logs = self::getActivityLogs($userId, $modelType, $modelId, $days, $perPage, $type);
 
         return [
             'success' => true,
