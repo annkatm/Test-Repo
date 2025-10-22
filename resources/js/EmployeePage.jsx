@@ -294,6 +294,8 @@ const EmployeePage = () => {
             phone: e.phone || '',
             address: e.address || '',
             issuedItem: e.issued_item || '',
+            issuedEquipment: e.issued_equipment || [],
+            user: e.user || null,
             badge: (e.first_name?.[0] || '').toUpperCase(),
             color: getBadgeColor(e.first_name)
           }));
@@ -395,6 +397,8 @@ const EmployeePage = () => {
             phone: e.phone || '',
             address: e.address || '',
             issuedItem: e.issued_item || '',
+            issuedEquipment: e.issued_equipment || [],
+            user: e.user || null,
             badge: (e.first_name?.[0] || '').toUpperCase(),
             color: getBadgeColor(e.first_name)
           })));
@@ -778,39 +782,27 @@ const EmployeePage = () => {
                     </div>
                     <div className="max-h-40 overflow-y-auto">
                       <div className="divide-y divide-gray-200">
-                        {(() => {
-                          try {
-                            const items = viewing.issuedItem ? JSON.parse(viewing.issuedItem) : [];
-                            if (!Array.isArray(items) || items.length === 0) {
-                              return (
-                                <div className="px-4 py-3 text-center text-gray-500">
-                                  No items issued
+                        {viewing.issuedEquipment && viewing.issuedEquipment.length > 0 ? (
+                          viewing.issuedEquipment.map((item, index) => (
+                            <div key={index} className="px-4 py-3">
+                              <div className="grid grid-cols-3 gap-4 items-center">
+                                <div className="text-blue-600 underline cursor-pointer font-medium">
+                                  {item.name || 'N/A'}
                                 </div>
-                              );
-                            }
-                            return items.map((item, index) => (
-                              <div key={index} className="px-4 py-3">
-                                <div className="grid grid-cols-3 gap-4 items-center">
-                                  <div className="text-blue-600 underline cursor-pointer font-medium">
-                                    {item.name || 'N/A'}
-                                  </div>
-                                  <div className="text-gray-700 text-sm leading-tight">
-                                    {item.specs || 'N/A'}
-                                  </div>
-                                  <div className="text-gray-700 text-sm">
-                                    {item.serial_number || 'N/A'}
-                                  </div>
+                                <div className="text-gray-700 text-sm leading-tight">
+                                  {item.specifications || item.specs || 'N/A'}
+                                </div>
+                                <div className="text-gray-700 text-sm">
+                                  {item.serial_number || 'N/A'}
                                 </div>
                               </div>
-                            ));
-                          } catch (e) {
-                            return (
-                              <div className="px-4 py-3 text-center text-gray-500">
-                                No items issued
-                              </div>
-                            );
-                          }
-                        })()}
+                            </div>
+                          ))
+                        ) : (
+                          <div className="px-4 py-3 text-center text-gray-500">
+                            No items issued
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

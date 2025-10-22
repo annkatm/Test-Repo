@@ -410,6 +410,9 @@ const ViewApproved = () => {
           
           allItems.push({
             equipment_name: request.equipment_name || tx?.equipment_name || tx?.equipment?.name || 'N/A',
+            category_name: request.category_name || tx?.category_name || 'N/A',
+            brand: request.brand || tx?.brand || 'N/A',
+            model: request.model || tx?.model || 'N/A',
             serial_number: serialNumber || 'N/A',
             date_released: tx?.release_date || tx?.released_at || tx?.created_at || new Date().toISOString(),
             date_returned: tx?.return_date || tx?.returned_at || null
@@ -431,6 +434,9 @@ const ViewApproved = () => {
           
           allItems.push({
             equipment_name: request.equipment_name || 'N/A',
+            category_name: request.category_name || 'N/A',
+            brand: request.brand || 'N/A',
+            model: request.model || 'N/A',
             serial_number: serialNumber || 'N/A',
             date_released: request?.release_date || request?.created_at || new Date().toISOString(),
             date_returned: request?.return_date || request?.returned_at || null

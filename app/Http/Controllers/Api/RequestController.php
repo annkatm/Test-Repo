@@ -463,7 +463,7 @@ class RequestController extends Controller
 
                 // Update equipment status
                 DB::table('equipment')->where('id', $equipmentRequest->equipment_id)->update([
-                    'status' => 'in_use',
+                    'status' => 'borrowed',
                     'updated_at' => now(),
                 ]);
 
@@ -641,9 +641,9 @@ class RequestController extends Controller
                     'updated_at' => now(),
                 ]);
 
-                // Ensure equipment status is in_use
+                // Ensure equipment status is borrowed
                 DB::table('equipment')->where('id', $equipmentRequest->equipment_id)->update([
-                    'status' => 'in_use',
+                    'status' => 'borrowed',
                     'updated_at' => now(),
                 ]);
 

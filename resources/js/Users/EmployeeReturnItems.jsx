@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 
 const ReturnItems = () => {
@@ -6,66 +6,78 @@ const ReturnItems = () => {
   const [itemsPerPage, setItemsPerPage] = useState(5);
   const [sortOption, setSortOption] = useState("date-desc");
   const [searchTerm, setSearchTerm] = useState("");
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   // Sample data
-  const historyData = [
-  { date: "2025-10-01", item: "Laptop", status: "Approved" },
-  { date: "2025-10-02", item: "Projector", status: "Approved" },
-  { date: "2025-10-03", item: "Mouse", status: "Approved" },
-  { date: "2025-10-04", item: "Keyboard", status: "Approved" },
-  { date: "2025-10-05", item: "Monitor", status: "Approved" },
-  { date: "2025-10-06", item: "HDMI Cable", status: "Approved" },
-  { date: "2025-10-07", item: "Speaker", status: "Approved" },
-  { date: "2025-10-08", item: "Tablet", status: "Approved" },
-  { date: "2025-10-09", item: "Charger", status: "Approved" },
-  { date: "2025-10-10", item: "Camera", status: "Approved" },
-  { date: "2025-10-11", item: "Router", status: "Approved" },
-  { date: "2025-10-12", item: "Microphone", status: "Approved" },
-  { date: "2025-10-13", item: "Webcam", status: "Approved" },
-  { date: "2025-10-14", item: "Extension Cord", status: "Approved" },
-  { date: "2025-10-15", item: "USB Hub", status: "Approved" },
-  { date: "2025-10-16", item: "Flash Drive", status: "Approved" },
-  { date: "2025-10-17", item: "Ethernet Cable", status: "Approved" },
-  { date: "2025-10-18", item: "Smartwatch", status: "Approved" },
-  { date: "2025-10-19", item: "Tripod", status: "Approved" },
-  { date: "2025-10-20", item: "Headphones", status: "Approved" },
-  { date: "2025-10-21", item: "Power Bank", status: "Approved" },
-  { date: "2025-10-22", item: "Printer", status: "Approved" },
-  { date: "2025-10-23", item: "Scanner", status: "Approved" },
-  { date: "2025-10-24", item: "Drawing Tablet", status: "Approved" },
-  { date: "2025-10-25", item: "VR Headset", status: "Approved" },
-  { date: "2025-10-26", item: "Game Controller", status: "Approved" },
-  { date: "2025-10-27", item: "Smart TV", status: "Approved" },
-  { date: "2025-10-28", item: "LED Light", status: "Approved" },
-  { date: "2025-10-29", item: "Bluetooth Adapter", status: "Approved" },
-  { date: "2025-10-30", item: "External Hard Drive", status: "Approved" },
-  { date: "2025-10-31", item: "Graphics Card", status: "Approved" },
-  { date: "2025-11-01", item: "SSD", status: "Approved" },
-  { date: "2025-11-02", item: "RAM Module", status: "Approved" },
-  { date: "2025-11-03", item: "Motherboard", status: "Approved" },
-  { date: "2025-11-04", item: "Processor", status: "Approved" },
-  { date: "2025-11-05", item: "Cooling Fan", status: "Approved" },
-  { date: "2025-11-06", item: "Power Supply", status: "Approved" },
-  { date: "2025-11-07", item: "Desktop Case", status: "Approved" },
-  { date: "2025-11-08", item: "Laptop Stand", status: "Approved" },
-  { date: "2025-11-09", item: "Wireless Mouse", status: "Approved" },
-  { date: "2025-11-10", item: "Wireless Keyboard", status: "Approved" },
-  { date: "2025-11-11", item: "HDMI Splitter", status: "Approved" },
-  { date: "2025-11-12", item: "Surge Protector", status: "Approved" },
-  { date: "2025-11-13", item: "Laptop Bag", status: "Approved" },
-  { date: "2025-11-14", item: "Monitor Arm", status: "Approved" },
-  { date: "2025-11-15", item: "Cable Organizer", status: "Approved" },
-  { date: "2025-11-16", item: "Projector Screen", status: "Approved" },
-  { date: "2025-11-17", item: "Smart Plug", status: "Approved" },
-  { date: "2025-11-18", item: "NAS Storage", status: "Approved" },
-  { date: "2025-11-19", item: "Docking Station", status: "Approved" },
-  { date: "2025-11-20", item: "UPS Battery", status: "Approved" },
-  ];
+  const historyData = data;
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchData = async () => {
+      setLoading(true);
+      setError("");
+      try {
+        let url = "/api/transactions/history?status=returned";
+        let res = await fetch(url);
+        let json = await res.json().catch(() => ({}));
+        let list = Array.isArray(json) ? json : (json && json.data && Array.isArray(json.data) ? json.data : []);
+
+        if (!Array.isArray(list) || list.length === 0) {
+          url = "/api/transactions/history";
+          res = await fetch(url);
+          json = await res.json().catch(() => ({}));
+          list = Array.isArray(json) ? json : (json && json.data && Array.isArray(json.data) ? json.data : []);
+        }
+
+        const mapped = (list || []).map((r, idx) => {
+          const dateRaw = r?.return_date || r?.updated_at || r?.created_at || r?.date || null;
+          let dateStr = "";
+          try {
+            dateStr = dateRaw ? new Date(dateRaw).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }) : "";
+          } catch (_) {
+            dateStr = String(dateRaw || "");
+          }
+          return {
+            id: r?.id ?? idx + 1,
+            date: dateStr,
+            item: r?.equipment_name || r?.item || r?.title || "Item",
+            status: r?.status || (r?.return_date ? "Returned" : "Returned"),
+          };
+        });
+
+        if (!cancelled) setData(mapped);
+      } catch (e) {
+        if (!cancelled) setError("Failed to load items");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    fetchData();
+    return () => { cancelled = true; };
+  }, []);
+
+  // React to in-app navigation-triggered returns: add returned item instantly
+  useEffect(() => {
+    const onReturnedAdd = (e) => {
+      const d = e?.detail || {};
+      const entry = {
+        id: d.id || Date.now(),
+        date: d.date || new Date().toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }),
+        item: d.item || "Item",
+        status: "Returned",
+      };
+      setData((prev) => [entry, ...(prev || [])]);
+    };
+    window.addEventListener('ireply:returned:add', onReturnedAdd);
+    return () => window.removeEventListener('ireply:returned:add', onReturnedAdd);
+  }, []);
 
   // 🔍 Filter by search term
   const filteredData = useMemo(() => {
-    return historyData.filter((item) =>
-      item.item.toLowerCase().includes(searchTerm.toLowerCase())
+    return (historyData || []).filter((item) =>
+      String(item?.item || "").toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [historyData, searchTerm]);
 
@@ -141,7 +153,11 @@ const ReturnItems = () => {
 
         {/* Table Rows */}
         <div className="divide-y divide-gray-100">
-          {currentItems.length > 0 ? (
+          {loading ? (
+            <p className="text-center py-6 text-gray-500">Loading...</p>
+          ) : error ? (
+            <p className="text-center py-6 text-red-500">{error}</p>
+          ) : currentItems.length > 0 ? (
             currentItems.map((item, index) => (
               <div key={index} className="grid grid-cols-9 gap-6 py-3 items-center">
                 <div className="col-span-3 text-sm text-gray-900">{item.date}</div>

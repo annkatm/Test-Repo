@@ -315,6 +315,8 @@ const GlobalHeader = ({ title = "", onSearch, hideSearch = false, showTitle = tr
       if (response.ok) {
         // Clear any stored user data
         localStorage.removeItem('user');
+        // Clear any cached employee profile state and avatar blob refs
+        try { localStorage.removeItem('employee_profile_v1'); } catch (_) {}
         // Redirect to login page
         window.location.href = '/';
       } else {
@@ -421,7 +423,7 @@ const GlobalHeader = ({ title = "", onSearch, hideSearch = false, showTitle = tr
         {showTitle && <span className="text-gray-700 font-medium hidden sm:block">{user?.name || "User"}</span>}
         <BubbleProfile 
           name={user?.name || "User"}
-          image={user?.image}
+          image={user?.avatar_url || user?.image || user?.profile_photo_url}
           size={36}
           user={user}
           onEditProfile={handleEditProfile}

@@ -201,6 +201,7 @@ class AuthController extends Controller
                     // Surface linkage so Employee pages can resolve quickly
                     'employee_code' => $user->employee_id,
                     'linked_employee_id' => $linkedEmployeeId,
+                    'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
                 ]
             ]);
         }
@@ -230,7 +231,8 @@ class AuthController extends Controller
                         'use_custom_permissions' => (bool) $userPerm->use_custom_permissions,
                         'permissions' => $userPerm->permissions ?? [],
                     ] : null,
-                    'is_active' => $user->is_active
+                    'is_active' => $user->is_active,
+                    'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
                 ],
                 'redirect' => route('dashboard')
             ]);

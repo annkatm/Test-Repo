@@ -241,14 +241,16 @@ const Equipment = () => {
           const categoriesWithCount = categoriesData.map(cat => {
             const categoryEquipment = assignedEquipment.filter(eq => eq.category_id === cat.id);
             const available = categoryEquipment.filter(eq => eq.status === 'available').length;
-            const inUse = categoryEquipment.filter(eq => eq.status === 'in_use').length;
+            const borrowed = categoryEquipment.filter(eq => eq.status === 'borrowed').length;
+            const issued = categoryEquipment.filter(eq => eq.status === 'issued').length;
             const total = categoryEquipment.length; // Total count of all equipment in this category
             
             return {
               ...cat,
               qty: `${available}/${total}`, // Show available/total format (e.g., "6/9")
               availableCount: available,
-              inUseCount: inUse,
+              borrowedCount: borrowed,
+              issuedCount: issued,
               totalCount: total
             };
           });
@@ -374,12 +376,14 @@ const Equipment = () => {
                                 price: eq.purchase_price || 0
                               };
                             }
-                            if (eq.status === 'available' || eq.status === 'in_use') {
+                            if (eq.status === 'available' || eq.status === 'borrowed' || eq.status === 'issued') {
                               acc[key].total += 1;
                               if (eq.status === 'available') {
                                 acc[key].available += 1;
-                              } else if (eq.status === 'in_use') {
-                                acc[key].inUse += 1;
+                              } else if (eq.status === 'borrowed') {
+                                acc[key].borrowed += 1;
+                              } else if (eq.status === 'issued') {
+                                acc[key].issued += 1;
                               }
                             }
                             return acc;
@@ -433,9 +437,8 @@ const Equipment = () => {
                                                 <div>
                                                   <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                                                     item.status === 'available' ? 'bg-green-100 text-green-800' :
-                                                    item.status === 'in_use' ? 'bg-blue-100 text-blue-800' :
-                                                    item.status === 'borrowed' ? 'bg-orange-100 text-orange-800' :
-                                                    item.status === 'issued' ? 'bg-red-100 text-red-800' :
+                                                    item.status === 'borrowed' ? 'bg-blue-100 text-blue-800' :
+                                                    item.status === 'issued' ? 'bg-orange-100 text-orange-800' :
                                                     'bg-gray-100 text-gray-800'
                                                   }`}>
                                                     {item.status ? item.status.charAt(0).toUpperCase() + item.status.slice(1).replace('_', ' ') : 'Unknown'}
@@ -788,8 +791,8 @@ const Equipment = () => {
                       </div>
                       <span className={`px-3 py-1 text-xs font-semibold rounded-full whitespace-nowrap ${
                         item.status === 'available' ? 'bg-green-100 text-green-800' :
-                        item.status === 'in_use' ? 'bg-blue-100 text-blue-800' :
-                        item.status === 'borrowed' ? 'bg-orange-100 text-orange-800' :
+                        item.status === 'borrowed' ? 'bg-blue-100 text-blue-800' :
+                        item.status === 'issued' ? 'bg-orange-100 text-orange-800' :
                         'bg-gray-100 text-gray-800'
                       }`}>
                         {item.status ? item.status.charAt(0).toUpperCase() + item.status.slice(1).replace('_', ' ') : 'Unknown'}
