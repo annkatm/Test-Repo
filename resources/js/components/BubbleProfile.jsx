@@ -12,8 +12,15 @@ const BubbleProfile = ({
     onLogout 
 }) => {
     const [isOpen, setIsOpen] = useState(false);
+    const [displayImage, setDisplayImage] = useState(image || user?.avatar_url || user?.image || user?.profile_photo_url || null);
     const [showProfileDetails, setShowProfileDetails] = useState(false);
     const dropdownRef = useRef(null);
+
+    // Update display image when props/user change; ignore blob: URLs
+    useEffect(() => {
+        const next = image || user?.avatar_url || user?.image || user?.profile_photo_url || null;
+        setDisplayImage(next && String(next).startsWith('blob:') ? null : next);
+    }, [image, user]);
 
     // Get initials from name
     const getInitials = (name) => {
@@ -95,8 +102,8 @@ const BubbleProfile = ({
                 onClick={toggleDropdown}
                 className="hover:scale-105 active:scale-95"
             >
-                {image ? (
-                    <img src={image} alt={name} style={styles.image} />
+                {displayImage ? (
+                    <img src={displayImage} alt={name} style={styles.image} onError={() => setDisplayImage(null)} />
                 ) : (
                     getInitials(name)
                 )}
@@ -112,8 +119,8 @@ const BubbleProfile = ({
                     <div className="p-6 border-b border-gray-100">
                         <div className="flex items-center space-x-4">
                             <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white text-xl font-bold">
-                                {image ? (
-                                    <img src={image} alt={name} className="w-full h-full object-cover rounded-xl" />
+                                {displayImage ? (
+                                    <img src={displayImage} alt={name} className="w-full h-full object-cover rounded-xl" onError={() => setDisplayImage(null)} />
                                 ) : (
                                     getInitials(name)
                                 )}

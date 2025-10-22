@@ -30,12 +30,21 @@ const EmployeeTaskbar = ({
     position: ""
   });
   const [originalProfile, setOriginalProfile] = useState(null);
-  const STORAGE_KEY = 'employee_profile_v1';
+  const STORAGE_KEY_BASE = 'employee_profile_v1';
+  const getStorageKey = () => {
+    try {
+      const u = user || (JSON.parse(localStorage.getItem('user') || 'null')) || null;
+      const tag = (u && (u.email || u.id)) ? (u.email || u.id) : 'guest';
+      return `${STORAGE_KEY_BASE}:${tag}`;
+    } catch (_) {
+      return `${STORAGE_KEY_BASE}:guest`;
+    }
+  };
 
   // Load locally saved profile first to prevent losing edits on reload
   useEffect(() => {
     try {
-      const savedRaw = localStorage.getItem(STORAGE_KEY);
+      const savedRaw = localStorage.getItem(getStorageKey());
       if (savedRaw) {
         const saved = JSON.parse(savedRaw);
         if (saved?.formData) {
@@ -43,11 +52,30 @@ const EmployeeTaskbar = ({
           setOriginalProfile(saved.formData);
         }
         if (saved?.employeeName) setEmployeeName(saved.employeeName);
-        if (saved?.profileImageUrl) setProfileImageUrl(saved.profileImageUrl);
+        if (saved?.profileImageUrl && !String(saved.profileImageUrl).startsWith('blob:')) {
+          setProfileImageUrl(saved.profileImageUrl);
+        }
         if (saved?.employeeId) setEmployeeId(saved.employeeId);
       }
     } catch (_) {}
   }, []);
+
+  // Once the authenticated user is known, re-check the per-user cache
+  useEffect(() => {
+    if (!isAuthenticated || !user) return;
+    try {
+      const savedRaw = localStorage.getItem(getStorageKey());
+      if (savedRaw) {
+        const saved = JSON.parse(savedRaw);
+        if (saved?.profileImageUrl && !String(saved.profileImageUrl).startsWith('blob:')) {
+          setProfileImageUrl(prev => prev || saved.profileImageUrl);
+        }
+        if (saved?.formData) {
+          setFormData(prev => ({ ...saved.formData, ...prev }));
+        }
+      }
+    } catch (_) {}
+  }, [isAuthenticated, user]);
 
   useEffect(() => {
     if (!isAuthenticated || !user || isEditing) return;
@@ -76,6 +104,14 @@ const EmployeeTaskbar = ({
     };
     setFormData(prev => ({ ...prev, ...updated }));
     setOriginalProfile(prev => prev || updated);
+
+    // Prefer canonical avatar from authenticated user immediately
+    try {
+      const uAvatar = user?.avatar_url || user?.image || user?.profile_photo_url || '';
+      if (uAvatar && !String(uAvatar).startsWith('blob:')) {
+        setProfileImageUrl(prev => prev || uAvatar);
+      }
+    } catch (_) {}
   }, [isAuthenticated, user, isEditing, initialEmployeeName]);
 
   // Load detailed employee profile from backend to reflect accurate info
@@ -144,14 +180,27 @@ const EmployeeTaskbar = ({
             accountType: user?.role?.name || 'employee',
           };
           // Merge any locally saved edits so they persist even if backend returns old data
-          let savedLocal = null; try { savedLocal = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch (_) { savedLocal = null; }
+          let savedLocal = null; try { savedLocal = JSON.parse(localStorage.getItem(getStorageKey()) || 'null'); } catch (_) { savedLocal = null; }
           const merged = savedLocal?.formData ? { ...profile, ...savedLocal.formData } : profile;
           setFormData(prev => ({ ...prev, ...merged }));
           setOriginalProfile(merged);
           // Try to derive existing profile photo url if provided by API/user
           const photo = employee.photo_url || employee.avatar_url || employee.profile_photo_url || user?.avatar_url || user?.profile_photo_url || "";
-          if (photo) setProfileImageUrl(photo);
+          if (photo) {
+            const url = photo.includes('http') || photo.startsWith('/storage/') ? photo : `/storage/${photo}`;
+            setProfileImageUrl(`${url}${url.includes('?') ? '' : `?t=${Date.now()}`}`);
+          }
         }
+
+        // Always try profile endpoint to get canonical avatar_url
+        try {
+          const profRes = await fetch('/api/profile', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
+          if (profRes.ok) {
+            const prof = await profRes.json();
+            const aurl = prof?.data?.avatar_url;
+            if (aurl) setProfileImageUrl(aurl);
+          }
+        } catch (_) {}
       } catch (_) {
         // ignore and keep existing UI defaults
       }
@@ -228,36 +277,37 @@ const EmployeeTaskbar = ({
     };
     let savedRemotely = false;
     try {
-      let res = null;
+      const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+      let ok = false;
+      // Try employee update when we have an ID (expects PUT per REST)
       if (employeeId) {
         try {
-          res = await fetch(`/api/employees/${employeeId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+          const resEmp = await fetch(`/api/employees/${employeeId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf },
+            body: JSON.stringify(payload),
+            credentials: 'same-origin'
           });
-        } catch (_) { res = null; }
+          ok = resEmp.ok;
+        } catch (_) { ok = false; }
       }
-      if (!res || !res.ok) {
-        // Generic profile fallback endpoints
-        try {
-          res = await fetch('/api/profile', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-        } catch (_) { res = null; }
-      }
-      if (!res || !res.ok) {
-        try {
-          res = await fetch('/api/profile/update', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-        } catch (_) { res = null; }
-      }
-      savedRemotely = !!(res && res.ok);
+      // Also update user profile so the user object stays in sync
+      try {
+        const resProf = await fetch('/api/profile', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf },
+          body: JSON.stringify({
+            name: `${payload.first_name || formData.firstName} ${payload.last_name || formData.lastName}`.trim() || employeeName,
+            email: payload.email,
+            phone: payload.phone,
+            department: payload.department,
+            position: payload.position,
+          }),
+          credentials: 'same-origin'
+        });
+        ok = ok || resProf.ok;
+      } catch (_) { /* ignore */ }
+      savedRemotely = ok;
     } catch (_) {
       savedRemotely = false;
     }
@@ -269,11 +319,11 @@ const EmployeeTaskbar = ({
       const toStore = {
         formData: { ...formData },
         employeeName: newName || employeeName,
-        profileImageUrl,
+        profileImageUrl: String(profileImageUrl || '').startsWith('blob:') ? '' : profileImageUrl,
         employeeId,
         ts: Date.now(),
       };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore));
+      localStorage.setItem(getStorageKey(), JSON.stringify(toStore));
     } catch (_) {}
 
     setIsEditing(false);
@@ -308,26 +358,48 @@ const EmployeeTaskbar = ({
     try {
       setUploadingPhoto(true);
       const form = new FormData();
-      form.append('photo', file);
-      // Attempt employee-specific endpoint first if we have an id
-      let res = null;
-      if (employeeId) {
-        try {
-          res = await fetch(`/api/employees/${employeeId}/photo`, { method: 'POST', body: form });
-        } catch (_) { res = null; }
+      // backend expects 'avatar' at /api/profile/avatar
+      form.append('avatar', file);
+      // Always upload to user profile as the canonical store so it persists across logins
+      let resUser = null;
+      try {
+        const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+        resUser = await fetch('/api/profile/avatar', { 
+          method: 'POST', 
+          body: form, 
+          credentials: 'same-origin',
+          headers: { 'X-CSRF-TOKEN': csrf }
+        });
+      } catch (_) { resUser = null; }
+
+      // Choose canonical URL from the user upload if available; else fallback to employee upload response
+      let finalUrl = null;
+      if (resUser && resUser.ok) {
+        let dataUser = null; try { dataUser = await resUser.json(); } catch (_) {}
+        finalUrl = dataUser?.data?.avatar_url || dataUser?.avatar_url || dataUser?.url || dataUser?.photo_url || dataUser?.path || null;
       }
-      if (!res || !res.ok) {
-        // Fallback to a generic profile photo endpoint
-        try {
-          res = await fetch('/api/profile/photo', { method: 'POST', body: form });
-        } catch (_) { res = null; }
-      }
-      if (res && res.ok) {
-        let data = null; try { data = await res.json(); } catch (_) {}
-        const url = data?.url || data?.photo_url || data?.path || profileImageUrl;
+      if (resUser?.ok) {
         // Update UI immediately
-        const localUrl = url || URL.createObjectURL(file);
+        const localUrl = finalUrl || URL.createObjectURL(file);
         setProfileImageUrl(localUrl);
+        // Persist for current user cache so GlobalHeader picks it up
+        try {
+          const storedUserRaw = localStorage.getItem('user');
+          if (storedUserRaw) {
+            const storedUser = JSON.parse(storedUserRaw);
+            storedUser.avatar_url = localUrl;
+            localStorage.setItem('user', JSON.stringify(storedUser));
+          }
+        } catch (_) {}
+        // Persist in employee local profile store (per-user key)
+        try {
+          const key = getStorageKey();
+          const savedRaw = localStorage.getItem(key);
+          const saved = savedRaw ? JSON.parse(savedRaw) : {};
+          saved.profileImageUrl = String(localUrl || '').startsWith('blob:') ? '' : localUrl;
+          saved.ts = Date.now();
+          localStorage.setItem(key, JSON.stringify(saved));
+        } catch (_) {}
         showSuccess('Profile photo updated');
         return true;
       } else {

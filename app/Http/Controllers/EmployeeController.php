@@ -311,7 +311,8 @@ class EmployeeController extends Controller
         try {
             $currentHolders = DB::table('transactions')
                 ->join('employees', 'transactions.employee_id', '=', 'employees.id')
-                ->join('equipments', 'transactions.equipment_id', '=', 'equipments.id')
+                ->join('equipment', 'transactions.equipment_id', '=', 'equipment.id')
+                ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
                 ->where('transactions.status', 'released')
                 ->select(
                     'transactions.id as transaction_id',
@@ -319,8 +320,8 @@ class EmployeeController extends Controller
                     'employees.first_name',
                     'employees.last_name',
                     'employees.position',
-                    'equipments.name as equipment_name',
-                    'equipments.category',
+                    'equipment.name as equipment_name',
+                    'categories.name as category_name',
                     'transactions.request_mode',
                     'transactions.expected_return_date',
                     'transactions.release_date'
@@ -349,7 +350,8 @@ class EmployeeController extends Controller
         try {
             $pendingRequests = DB::table('requests')
                 ->join('employees', 'requests.employee_id', '=', 'employees.id')
-                ->join('equipments', 'requests.equipment_id', '=', 'equipments.id')
+                ->join('equipment', 'requests.equipment_id', '=', 'equipment.id')
+                ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
                 ->where('requests.status', 'pending')
                 ->select(
                     'requests.id as request_id',
@@ -357,8 +359,8 @@ class EmployeeController extends Controller
                     'employees.first_name',
                     'employees.last_name',
                     'employees.position',
-                    'equipments.name as equipment_name',
-                    'equipments.category',
+                    'equipment.name as equipment_name',
+                    'categories.name as category_name',
                     'requests.request_mode',
                     'requests.reason',
                     'requests.requested_date'
@@ -387,7 +389,8 @@ class EmployeeController extends Controller
         try {
             $verifyReturns = DB::table('transactions')
                 ->join('employees', 'transactions.employee_id', '=', 'employees.id')
-                ->join('equipments', 'transactions.equipment_id', '=', 'equipments.id')
+                ->join('equipment', 'transactions.equipment_id', '=', 'equipment.id')
+                ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
                 ->where('transactions.status', 'returned')
                 ->select(
                     'transactions.id as transaction_id',
@@ -395,8 +398,8 @@ class EmployeeController extends Controller
                     'employees.first_name',
                     'employees.last_name',
                     'employees.position',
-                    'equipments.name as equipment_name',
-                    'equipments.category',
+                    'equipment.name as equipment_name',
+                    'categories.name as category_name',
                     'transactions.return_date',
                     'transactions.expected_return_date',
                     'transactions.return_condition'
