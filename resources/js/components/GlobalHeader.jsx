@@ -251,7 +251,7 @@ const GlobalHeader = ({ title = "", onSearch, hideSearch = false, showTitle = tr
               const parsedUser = JSON.parse(storedUser);
               setUser(parsedUser);
             } catch (e) {
-              console.error('Failed to parse stored user data:', e);
+              console.error('Failed to p890798arse stored user data:', e);
               setUser({
                 name: "Not Authenticated",
                 role: "Please login",
