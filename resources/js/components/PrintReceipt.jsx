@@ -94,95 +94,100 @@ In the event that I am unable to return any of the company-issued equipment upon
   console.log('PrintReceipt - Items to print:', items);
 
   const handlePrint = () => {
-    // Get the logo as absolute URL
+    // Get the logo as absolute URL - use full path to ensure it loads
     const logoUrl = window.location.origin + '/images/Frame_89-removebg-preview.png';
     
-    const printWindow = window.open('', '_blank');
-    const printContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Accountability Form Agreement</title>
-          <style>
-            body { 
-              font-family: Arial, sans-serif; 
-              margin: 20px; 
-              line-height: 1.4;
-            }
-            .header { 
-              text-align: center; 
-              margin-bottom: 30px; 
-            }
-            .logo { 
-              width: 120px; 
-              height: auto; 
-              margin: 0 auto 20px auto; 
-              display: block; 
-            }
-            .title { 
-              text-align: center; 
-              font-size: 18px; 
-              font-weight: bold; 
-              margin: 20px 0; 
-            }
-            .employee-info { 
-              margin: 20px 0; 
-            }
-            .employee-info div { 
-              margin: 5px 0; 
-            }
-            .agreement-text { 
-              margin: 20px 0; 
-              text-align: justify; 
-            }
-            .agreement-text p { 
-              margin: 10px 0; 
-            }
-            .equipment-table { 
-              width: 100%; 
-              border-collapse: collapse; 
-              margin: 20px 0; 
-            }
-            .equipment-table th, 
-            .equipment-table td { 
-              border: 1px solid #000; 
-              padding: 8px; 
-              text-align: left; 
-            }
-            .equipment-table th { 
-              background-color: #f5f5f5; 
-              font-weight: bold; 
-            }
-            .signature-section { 
-              margin-top: 40px; 
-              display: flex; 
-              justify-content: space-between; 
-            }
-            .signature-box { 
-              text-align: center; 
-              width: 200px; 
-            }
-            .signature-line { 
-              border-bottom: 1px solid #000; 
-              margin-bottom: 5px; 
-              height: 40px; 
-            }
-            .signature-label { 
-              font-size: 12px; 
-              margin-top: 5px; 
-            }
-            .others-row { 
-              font-style: italic; 
-            }
-            @media print { 
-              body { margin: 0; } 
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <img src="${logoUrl}" alt="iREPLY Logo" class="logo" onerror="this.style.display='none'" />
-          </div>
+    // Preload the image to ensure it's available for printing
+    const img = new Image();
+    img.src = logoUrl;
+    
+    img.onload = () => {
+      const printWindow = window.open('', '_blank');
+      const printContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Accountability Form Agreement</title>
+            <style>
+              body { 
+                font-family: Arial, sans-serif; 
+                margin: 20px; 
+                line-height: 1.4;
+              }
+              .header { 
+                text-align: center; 
+                margin-bottom: 20px; 
+              }
+              .logo { 
+                width: 150px; 
+                height: auto; 
+                margin: 0 auto 15px auto; 
+                display: block; 
+              }
+              .title { 
+                text-align: center; 
+                font-size: 18px; 
+                font-weight: bold; 
+                margin: 20px 0; 
+              }
+              .employee-info { 
+                margin: 20px 0; 
+              }
+              .employee-info div { 
+                margin: 5px 0; 
+              }
+              .agreement-text { 
+                margin: 20px 0; 
+                text-align: justify; 
+              }
+              .agreement-text p { 
+                margin: 10px 0; 
+              }
+              .equipment-table { 
+                width: 100%; 
+                border-collapse: collapse; 
+                margin: 20px 0; 
+              }
+              .equipment-table th, 
+              .equipment-table td { 
+                border: 1px solid #000; 
+                padding: 8px; 
+                text-align: left; 
+              }
+              .equipment-table th { 
+                background-color: #f5f5f5; 
+                font-weight: bold; 
+              }
+              .signature-section { 
+                margin-top: 40px; 
+                display: flex; 
+                justify-content: space-between; 
+              }
+              .signature-box { 
+                text-align: center; 
+                width: 200px; 
+              }
+              .signature-line { 
+                border-bottom: 1px solid #000; 
+                margin-bottom: 5px; 
+                height: 40px; 
+              }
+              .signature-label { 
+                font-size: 12px; 
+                margin-top: 5px; 
+              }
+              .others-row { 
+                font-style: italic; 
+              }
+              @media print { 
+                body { margin: 0; } 
+              }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <img src="${logoUrl}" alt="iREPLY Logo" class="logo" />
+            </div>
 
           <div class="title">ACCOUNTABILITY FORM AGREEMENT</div>
 
@@ -207,23 +212,21 @@ In the event that I am unable to return any of the company-issued equipment upon
               </tr>
             </thead>
             <tbody>
-              ${[
-                { item: 'Laptop', description: items.find(i => i.equipment_name?.toLowerCase().includes('laptop'))?.equipment_name || 'HP ProBook 450 G3', serial: items.find(i => i.equipment_name?.toLowerCase().includes('laptop'))?.serial_number || 'JPH8137LN7', date_released: items.find(i => i.equipment_name?.toLowerCase().includes('laptop'))?.date_released },
-                { item: 'Monitor', description: 'N/A', serial: 'N/A', date_released: null },
-                { item: 'Mouse', description: items.find(i => i.equipment_name?.toLowerCase().includes('mouse'))?.equipment_name || 'A4Tech', serial: items.find(i => i.equipment_name?.toLowerCase().includes('mouse'))?.serial_number || '24LIU01', date_released: items.find(i => i.equipment_name?.toLowerCase().includes('mouse'))?.date_released },
-                { item: 'Keyboard', description: items.find(i => i.equipment_name?.toLowerCase().includes('keyboard'))?.equipment_name || 'A4Tech', serial: items.find(i => i.equipment_name?.toLowerCase().includes('keyboard'))?.serial_number || '24LIU00', date_released: items.find(i => i.equipment_name?.toLowerCase().includes('keyboard'))?.date_released },
-                { item: 'Headset', description: items.find(i => i.equipment_name?.toLowerCase().includes('headset'))?.equipment_name || 'Plantronics', serial: items.find(i => i.equipment_name?.toLowerCase().includes('headset'))?.serial_number || 'G0JB0Y', date_released: items.find(i => i.equipment_name?.toLowerCase().includes('headset'))?.date_released },
-                { item: 'UPS', description: '', serial: '', date_released: null },
-                { item: 'Internet Broadband', description: '', serial: '', date_released: null }
-              ].map((row) => {
-                const dateReleased = row.date_released ? new Date(row.date_released).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : 'N/A';
+              ${items.map((item, index) => {
+                const dateReleased = item.date_released ? new Date(item.date_released).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : 'N/A';
+                const dateReturned = item.date_returned ? new Date(item.date_returned).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '';
+                
+                // Use category_name for Item column, brand name for Description
+                const category = item.category_name || 'N/A';
+                const brandName = item.brand || item.model || item.equipment_name || 'N/A';
+                
                 return `
                   <tr>
-                    <td>${row.item}</td>
-                    <td>${row.description}</td>
-                    <td>${row.serial}</td>
+                    <td>${category}</td>
+                    <td>${brandName}</td>
+                    <td>${item.serial_number || 'N/A'}</td>
                     <td>${dateReleased}</td>
-                    <td></td>
+                    <td>${dateReturned}</td>
                   </tr>
                 `;
               }).join('')}
@@ -256,17 +259,181 @@ In the event that I am unable to return any of the company-issued equipment upon
           </div>
         </body>
       </html>
-    `;
+      `;
+      
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      
+      // Wait a bit for image to render then print
+      setTimeout(() => {
+        printWindow.focus();
+        printWindow.print();
+        printWindow.close();
+      }, 500);
+      
+      if (onPrint) {
+        onPrint();
+      }
+    };
     
-    printWindow.document.write(printContent);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
-    printWindow.close();
-    
-    if (onPrint) {
-      onPrint();
-    }
+    // If image fails to load, print anyway
+    img.onerror = () => {
+      alert('Logo image could not be loaded. Printing without logo.');
+      const printWindow = window.open('', '_blank');
+      const printContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Accountability Form Agreement</title>
+            <style>
+              body { 
+                font-family: Arial, sans-serif; 
+                margin: 20px; 
+                line-height: 1.4;
+              }
+              .title { 
+                text-align: center; 
+                font-size: 18px; 
+                font-weight: bold; 
+                margin: 20px 0; 
+              }
+              .employee-info { 
+                margin: 20px 0; 
+              }
+              .employee-info div { 
+                margin: 5px 0; 
+              }
+              .agreement-text { 
+                margin: 20px 0; 
+                text-align: justify; 
+              }
+              .agreement-text p { 
+                margin: 10px 0; 
+              }
+              .equipment-table { 
+                width: 100%; 
+                border-collapse: collapse; 
+                margin: 20px 0; 
+              }
+              .equipment-table th, 
+              .equipment-table td { 
+                border: 1px solid #000; 
+                padding: 8px; 
+                text-align: left; 
+              }
+              .equipment-table th { 
+                background-color: #f5f5f5; 
+                font-weight: bold; 
+              }
+              .signature-section { 
+                margin-top: 40px; 
+                display: flex; 
+                justify-content: space-between; 
+              }
+              .signature-box { 
+                text-align: center; 
+                width: 200px; 
+              }
+              .signature-line { 
+                border-bottom: 1px solid #000; 
+                margin-bottom: 5px; 
+                height: 40px; 
+              }
+              .signature-label { 
+                font-size: 12px; 
+                margin-top: 5px; 
+              }
+              .others-row { 
+                font-style: italic; 
+              }
+              @media print { 
+                body { margin: 0; } 
+              }
+            </style>
+          </head>
+          <body>
+            <div class="title">ACCOUNTABILITY FORM AGREEMENT</div>
+
+            <div class="employee-info">
+              <div><strong>Employee Name:</strong> ${editableData.full_name}</div>
+              <div><strong>Position:</strong> ${editableData.position}</div>
+              <div><strong>Department:</strong> ${editableData.department}</div>
+            </div>
+
+            <div class="agreement-text">
+              <p>${editableData.agreement_text}</p>
+            </div>
+
+            <table class="equipment-table">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Description</th>
+                  <th>Serial Number</th>
+                  <th>Date Released</th>
+                  <th>Date Returned</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${items.map((item, index) => {
+                  const dateReleased = item.date_released ? new Date(item.date_released).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : 'N/A';
+                  const dateReturned = item.date_returned ? new Date(item.date_returned).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '';
+                  
+                  // Use category_name for Item column, brand name for Description
+                  const category = item.category_name || 'N/A';
+                  const brandName = item.brand || item.model || item.equipment_name || 'N/A';
+                  
+                  return `
+                    <tr>
+                      <td>${category}</td>
+                      <td>${brandName}</td>
+                      <td>${item.serial_number || 'N/A'}</td>
+                      <td>${dateReleased}</td>
+                      <td>${dateReturned}</td>
+                    </tr>
+                  `;
+                }).join('')}
+                <tr class="others-row">
+                  <td colspan="2">Others:</td>
+                  <td colspan="3">${transactionData.notes || 'New Hire'}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="signature-section">
+              <div class="signature-box">
+                <div class="signature-label" style="margin-bottom: 10px; font-weight: bold;">Understood and Agreed by:</div>
+                <div class="signature-line"></div>
+                <div class="signature-label">${editableData.full_name}</div>
+                <div class="signature-label">Employee's Signature over Printed Name</div>
+              </div>
+              <div class="signature-box">
+                <div class="signature-label" style="margin-bottom: 10px; font-weight: bold;">Released by:</div>
+                <div class="signature-line"></div>
+                <div class="signature-label">${editableData.it_admin}</div>
+                <div class="signature-label">${editableData.it_admin_title}</div>
+              </div>
+              <div class="signature-box">
+                <div class="signature-label" style="margin-bottom: 10px; font-weight: bold;">Noted by:</div>
+                <div class="signature-line"></div>
+                <div class="signature-label">${editableData.hr_lead}</div>
+                <div class="signature-label">${editableData.hr_lead_title}</div>
+              </div>
+            </div>
+          </body>
+        </html>
+      `;
+      
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.print();
+      printWindow.close();
+      
+      if (onPrint) {
+        onPrint();
+      }
+    };
   };
 
   return (
