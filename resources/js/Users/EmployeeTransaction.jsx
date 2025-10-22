@@ -3,6 +3,9 @@ import Echo from '../echo';
 import { Laptop, X, RefreshCcw, ClipboardList, Mouse, FilePlus2 } from 'lucide-react';
 import OnProcessTransactions from './OnProcessTransactions';
 import ApprovedTransactions from './ApprovedTransactions';
+import StatsCards from './StatsCards';
+import RecentActivities from './RecentActivities';
+import HistoryView from './HistoryView';
 
 const EmployeeTransaction = () => {
   const [showExchangeConfirmModal, setShowExchangeConfirmModal] = useState(false);
@@ -39,6 +42,7 @@ const EmployeeTransaction = () => {
   const [activities, setActivities] = useState([]);
   // Toasts for upper-right popup notifications
   const [toasts, setToasts] = useState([]);
+  const [isBorrowedOpen, setIsBorrowedOpen] = useState(false);
 
   const showToast = (message, variant = 'info', ttl = 4500) => {
     const id = Date.now() + Math.random();
@@ -63,14 +67,14 @@ const EmployeeTransaction = () => {
     try {
       const saved = JSON.parse(localStorage.getItem('employee_activities') || '[]');
       if (Array.isArray(saved)) setActivities(saved);
-    } catch (_) {}
+    } catch (_) { }
   }, []);
 
   const logActivity = (message, variant = 'info') => {
     const entry = { id: Date.now(), message, variant, time: new Date().toISOString() };
     setActivities((prev) => {
       const next = [entry, ...prev].slice(0, 50);
-      try { localStorage.setItem('employee_activities', JSON.stringify(next)); } catch (_) {}
+      try { localStorage.setItem('employee_activities', JSON.stringify(next)); } catch (_) { }
       return next;
     });
   };
@@ -79,7 +83,7 @@ const EmployeeTransaction = () => {
   const incrementNotification = (count = 1, entry = null) => {
     setNotificationCount((prev) => {
       const next = prev + count;
-      try { localStorage.setItem('employee_history_unseen', String(next)); } catch (_) {}
+      try { localStorage.setItem('employee_history_unseen', String(next)); } catch (_) { }
       return next;
     });
 
@@ -87,7 +91,7 @@ const EmployeeTransaction = () => {
       // Prepend to activities and historyData locally so UI reflects it immediately
       setActivities((prev) => {
         const next = [entry, ...prev].slice(0, 50);
-        try { localStorage.setItem('employee_activities', JSON.stringify(next)); } catch (_) {}
+        try { localStorage.setItem('employee_activities', JSON.stringify(next)); } catch (_) { }
         return next;
       });
       setHistoryData((prev) => [entry, ...prev]);
@@ -104,18 +108,18 @@ const EmployeeTransaction = () => {
         // dispatch a specific history event for other listeners
         try {
           window.dispatchEvent(new CustomEvent('ireply:history', { detail: entry }));
-        } catch (_) {}
+        } catch (_) { }
       } else {
         incrementNotification(1, null);
       }
       // keep a log in activities
       setActivities((prev) => {
         const next = [entry, ...prev].slice(0, 50);
-        try { localStorage.setItem('employee_activities', JSON.stringify(next)); } catch (_) {}
+        try { localStorage.setItem('employee_activities', JSON.stringify(next)); } catch (_) { }
         return next;
       });
       // show toast popup for the notification
-      try { showToast(typeof message === 'string' ? message : (entry.message || 'Notification'), variant); } catch (_) {}
+      try { showToast(typeof message === 'string' ? message : (entry.message || 'Notification'), variant); } catch (_) { }
     };
 
     const notifyHandler = (e) => {
@@ -148,7 +152,7 @@ const EmployeeTransaction = () => {
     window.addEventListener('ireply:history', historyHandler);
 
     return () => {
-      try { delete window.IReplyNotify; } catch (_) {}
+      try { delete window.IReplyNotify; } catch (_) { }
       window.removeEventListener('ireply:notify', notifyHandler);
       window.removeEventListener('ireply:history', historyHandler);
     };
@@ -176,9 +180,9 @@ const EmployeeTransaction = () => {
     try {
       const res = await fetch('/api/requests?status=denied');
       const data = await res.json();
-      
+
       console.log('Denied requests response:', data); // Debug log
-      
+
       if (data.success && Array.isArray(data.data)) {
         const mapped = data.data.map((r, idx) => ({
           id: r.id ?? idx + 1,
@@ -333,7 +337,7 @@ const EmployeeTransaction = () => {
           });
 
           const merged = [...localOnly, ...server];
-          try { prevHistoryLenRef.current = Array.isArray(merged) ? merged.length : 0; } catch (_) {}
+          try { prevHistoryLenRef.current = Array.isArray(merged) ? merged.length : 0; } catch (_) { }
           return merged;
         });
         return data.data;
@@ -427,7 +431,7 @@ const EmployeeTransaction = () => {
               const found = list.find(emp => emp.email && emp.email.toLowerCase() === userData.user.email.toLowerCase());
               if (found) employeeId = found.id;
             }
-          } catch (_) {}
+          } catch (_) { }
         }
 
         if (employeeId && Echo) {
@@ -476,7 +480,7 @@ const EmployeeTransaction = () => {
       clearInterval(deniedRequestsInterval);
       try {
         if (subscribedChannel && Echo) subscribedChannel.stopListening();
-      } catch (_) {}
+      } catch (_) { }
     };
   }, []);
 
@@ -527,175 +531,18 @@ const EmployeeTransaction = () => {
   // ===== HISTORY VIEW =====
   if (showHistory) {
     return (
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-[#2262C6]">History</h1>
-          <button
-            onClick={() => {
-              logActivity('Closed History', 'info');
-              setShowHistory(false);
-            }}
-            className="flex items-center gap-2 bg-white text-blue-600 font-medium px-4 py-2 rounded-lg shadow hover:shadow-md hover:bg-blue-50 transition-all"
-          >
-            <span className="text-xl">←</span>
-            Back
-          </button>
-        </div>
-
-        {/* Search bar */}
-        <div className="flex justify-between items-center">
-          <input
-            type="text"
-            placeholder="Search by item name..."
-            value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value);
-              logActivity(`History search: ${e.target.value}`, 'info');
-            }}
-            className="px-4 py-2 w-64 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
-          />
-        </div>
-
-        {/* Table */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          {/* Table Header */}
-          <div className="grid grid-cols-12 py-3 px-6 bg-gray-50 border-b border-gray-200 font-semibold text-gray-700 text-sm">
-            <div className="col-span-3">Date</div>
-            <div className="col-span-3">Item</div>
-            <div className="col-span-3">Status</div>
-            <div className="col-span-3">Return Date</div>
-          </div>
-
-        </div>
-
-        {/* Pagination Section */}
-        <div className="flex flex-col sm:flex-row items-center justify-between mt-6">
-          {/* Centered Pagination */}
-          <div className="flex items-center justify-center gap-2">
-            {/* Previous Button */}
-            <button
-              onClick={() => {
-                setCurrentPage((prev) => {
-                  const next = Math.max(prev - 1, 1);
-                  if (next !== prev) logActivity(`History page changed to ${next}`, 'info');
-                  return next;
-                });
-              }}
-              disabled={currentPage === 1}
-              className="w-10 h-10 flex items-center justify-center border border-gray-300 rounded-lg bg-white text-gray-700 text-sm hover:bg-blue-50 hover:border-blue-400 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              ←
-            </button>
-
-            {/* Page Numbers with Dots */}
-            {(() => {
-              const visiblePages = 3;
-              let startPage = Math.max(1, currentPage - Math.floor(visiblePages / 2));
-              let endPage = startPage + visiblePages - 1;
-
-              if (endPage > totalPages) {
-                endPage = totalPages;
-                startPage = Math.max(1, endPage - visiblePages + 1);
-              }
-
-              const pages = [];
-
-              // First page
-              if (startPage > 1) {
-                pages.push(
-                  <button
-                    onClick={() => { setCurrentPage(1); logActivity('History page changed to 1', 'info'); }}
-                    className="w-10 h-10 flex items-center justify-center border border-gray-300 rounded-lg bg-white text-gray-700 text-sm hover:bg-blue-50 hover:border-blue-400"
-                  >
-                    1
-                  </button>
-                );
-                if (startPage > 2) {
-                  pages.push(
-                    <span key="dots1" className="px-2 text-gray-500">
-                      ...
-                    </span>
-                  );
-                }
-              }
-
-              // Visible middle pages
-              for (let i = startPage; i <= endPage; i++) {
-                pages.push(
-                  <button
-                    key={i}
-                    onClick={() => { setCurrentPage(i); logActivity(`History page changed to ${i}`, 'info'); }}
-                    className={`w-10 h-10 flex items-center justify-center border rounded-lg text-sm font-medium transition-all ${currentPage === i
-                      ? "bg-blue-600 text-white border-blue-600 shadow-md"
-                      : "bg-white text-gray-700 border-gray-300 hover:bg-blue-50 hover:border-blue-400"
-                      }`}
-                  >
-                    {i}
-                  </button>
-                );
-              }
-
-              // Last page
-              if (endPage < totalPages) {
-                if (endPage < totalPages - 1) {
-                  pages.push(
-                    <span key="dots2" className="px-2 text-gray-500">
-                      ...
-                    </span>
-                  );
-                }
-                pages.push(
-                  <button
-                    key={totalPages}
-                    onClick={() => { setCurrentPage(totalPages); logActivity(`History page changed to ${totalPages}`, 'info'); }}
-                    className="w-10 h-10 flex items-center justify-center border border-gray-300 rounded-lg bg-white text-gray-700 text-sm hover:bg-blue-50 hover:border-blue-400"
-                  >
-                    {totalPages}
-                  </button>
-                );
-              }
-
-              return pages;
-            })()}
-
-            {/* Next Button */}
-            <button
-              onClick={() => {
-                setCurrentPage((prev) => {
-                  const next = Math.min(prev + 1, totalPages);
-                  if (next !== prev) logActivity(`History page changed to ${next}`, 'info');
-                  return next;
-                });
-              }}
-              disabled={currentPage === totalPages}
-              className="w-10 h-10 flex items-center justify-center border border-gray-300 rounded-lg bg-white text-gray-700 text-sm hover:bg-blue-50 hover:border-blue-400 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              →
-            </button>
-          </div>
-
-          {/* Items per page (right side) */}
-          <div className="flex items-center gap-2 mt-4 sm:mt-0">
-            <span className="text-sm text-gray-700">Items per page:</span>
-            <select
-              value={itemsPerPage}
-              onChange={(e) => {
-                setItemsPerPage(Number(e.target.value));
-                setCurrentPage(1);
-                logActivity(`History items per page set to ${Number(e.target.value)}`, 'info');
-              }}
-              className="border border-gray-300 rounded-lg px-2 py-1 text-sm text-gray-700 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            >
-              {[5, 10, 20, 30, 40, 50].map((num) => (
-                <option key={num} value={num}>
-                  {num}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </div>
+      <HistoryView
+        onBack={() => setShowHistory(false)}
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        itemsPerPage={itemsPerPage}
+        setItemsPerPage={setItemsPerPage}
+        currentPage={currentPage}
+        setCurrentPage={setCurrentPage}
+        totalPages={totalPages}
+        sortedData={currentItems}
+        logActivity={logActivity}
+      />
     );
   }
 
@@ -739,7 +586,7 @@ const EmployeeTransaction = () => {
       id: transaction.id || index + 1,
       date: transaction.created_at ? new Date(transaction.created_at).toLocaleDateString("en-US", {
         month: "2-digit",
-        day: "2-digit", 
+        day: "2-digit",
         year: "numeric",
       }) : "09/23/2025",
       item: transaction.equipment_name || transaction.item || "Laptop, Projector, etc",
@@ -773,31 +620,7 @@ const EmployeeTransaction = () => {
           <h1 className="text-4xl font-bold text-[#2262C6] transition-all duration-300">Home</h1>
         </div>
 
-        <div className="grid grid-cols-2 gap-5 mb-8">
-          {/* Item Currently Borrowed */}
-          <div className="rounded-2xl bg-blue-600 text-white p-6 shadow-[0_8px_20px_rgba(0,0,0,0.25)] transform transition-transform hover:scale-[1.02]">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-medium opacity-90 mb-1">Item Currently Borrowed</h3>
-                <div className="text-4xl font-bold">{transactionStats.borrowed}</div>
-              </div>
-              <div className="w-12 h-12 bg-white/25 rounded-full flex items-center justify-center shadow-inner">
-                📦
-              </div>
-            </div>
-          </div>
-
-          {/* Overdue Items */}
-          <div className="rounded-2xl bg-white border border-gray-100 p-6 shadow-[0_6px_15px_rgba(0,0,0,0.15)] transform transition-transform hover:scale-[1.02]">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-medium text-gray-600 mb-1">Overdue Items</h3>
-                <div className="text-4xl font-bold text-gray-900">{transactionStats.overdue}</div>
-              </div>
-              <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center shadow-inner"></div>
-            </div>
-          </div>
-        </div>
+        <StatsCards transactionStats={transactionStats} onBorrowedClick={() => setIsBorrowedOpen(true)} />
 
 
         <div className="bg-gray-100 rounded-lg border border-gray-200 mb-8">
@@ -817,11 +640,11 @@ const EmployeeTransaction = () => {
           </div>
 
           <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-            <div className="grid grid-cols-15 gap-5 text-sm font-medium text-gray-700">
-              <div className="col-span-2">Item</div>
-              <div className="col-span-2">Start Date</div>
-              <div className="col-span-2">Return Date</div>
-              <div className="col-span-2">details</div>
+            <div className="grid grid-cols-12 gap-6 text-sm font-medium text-gray-700">
+              <div className="col-span-3">Item</div>
+              <div className="col-span-3">Start Date</div>
+              <div className="col-span-3">Return Date</div>
+              <div className="col-span-3">Status</div>
             </div>
           </div>
 
@@ -832,13 +655,13 @@ const EmployeeTransaction = () => {
                 className="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer"
                 onClick={() => logActivity(`Clicked pending row: ${transaction.equipment_name || transaction.item || 'Item'} (${transaction.id || index})`, 'info')}
               >
-                <div className="grid grid-cols-12 gap-4 items-center">
-                  <div className="col-span-2">
+                <div className="grid grid-cols-12 gap-6 items-center">
+                  <div className="col-span-3">
                     <span className="text-sm text-gray-900">
                       {transaction.equipment_name || transaction.item || "Laptop, Projector, etc"}
                     </span>
                   </div>
-                  <div className="col-span-2">
+                  <div className="col-span-3">
                     <span className="text-sm text-gray-900">
                       {transaction.expected_start_date
                         ? new Date(transaction.expected_start_date).toLocaleDateString("en-US", {
@@ -849,7 +672,7 @@ const EmployeeTransaction = () => {
                         : "09/24/2025"}
                     </span>
                   </div>
-                  <div className="col-span-2">
+                  <div className="col-span-3">
                     <span className="text-sm text-gray-900">
                       {transaction.expected_end_date
                         ? new Date(transaction.expected_end_date).toLocaleDateString("en-US", {
@@ -860,18 +683,7 @@ const EmployeeTransaction = () => {
                         : "09/24/2025"}
                     </span>
                   </div>
-                  <div className="col-span-2">
-                    <span className="text-sm text-gray-900">
-                      {transaction.created_at
-                        ? new Date(transaction.created_at).toLocaleDateString("en-US", {
-                          month: "2-digit",
-                          day: "2-digit",
-                          year: "numeric",
-                        })
-                        : "09/23/2025"}
-                    </span>
-                  </div>
-                  <div className="col-span-2">
+                  <div className="col-span-3">
                     <span className="text-sm text-gray-900">
                       {transaction.status || "Pending"}
                     </span>
@@ -902,12 +714,11 @@ const EmployeeTransaction = () => {
           </div>
 
           <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-            <div className="grid grid-cols-12 gap-4 text-sm font-medium text-gray-700">
-              <div className="col-span-2">Item</div>
-              <div className="col-span-2">Start Date</div>
-              <div className="col-span-2">Return Date</div>
-              <div className="col-span-2">Date</div>
-              <div className="col-span-2">Status</div>
+            <div className="grid grid-cols-12 gap-6 text-sm font-medium text-gray-700">
+              <div className="col-span-3">Item</div>
+              <div className="col-span-3">Start Date</div>
+              <div className="col-span-3">Return Date</div>
+              <div className="col-span-3">Status</div>
             </div>
           </div>
 
@@ -918,25 +729,28 @@ const EmployeeTransaction = () => {
                 className="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer"
                 onClick={() => logActivity(`Clicked approved row: ${transaction.equipment_name || 'Item'} (${transaction.id || index})`, 'info')}
               >
-                <div className="grid grid-cols-12 gap-4 items-center">
+                <div className="grid grid-cols-12 gap-6 items-center">
                   <div className="col-span-3">
-                    <span className="text-sm text-gray-900">
-                      {transaction.created_at
-                        ? new Date(transaction.created_at).toLocaleDateString("en-US", {
-                          month: "2-digit",
-                          day: "2-digit",
-                          year: "numeric",
-                        })
-                        : "09/23/2025"}
-                    </span>
-                  </div>
-                  <div className="col-span-6">
                     <span className="text-sm text-gray-900">
                       {transaction.equipment_name || "Laptop, Projector, etc"}
                     </span>
                   </div>
                   <div className="col-span-3">
-                    <span className="text-sm text-gray-900">Pending</span>
+                    <span className="text-sm text-gray-900">
+                      {transaction.expected_start_date || transaction.start_date
+                        ? new Date(transaction.expected_start_date || transaction.start_date).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" })
+                        : "-"}
+                    </span>
+                  </div>
+                  <div className="col-span-3">
+                    <span className="text-sm text-gray-900">
+                      {transaction.expected_end_date || transaction.return_date
+                        ? new Date(transaction.expected_end_date || transaction.return_date).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" })
+                        : "-"}
+                    </span>
+                  </div>
+                  <div className="col-span-3">
+                    <span className="text-sm text-gray-900">{transaction.status || "Approved"}</span>
                   </div>
                 </div>
               </div>
@@ -949,12 +763,12 @@ const EmployeeTransaction = () => {
       </div>
 
       <div className="col-span-4 space-y-6">
-        <div className="flex justify-end">
+        <div className="flex justify-end mt-8">
           <button
             onClick={() => {
               logActivity('Opened History', 'info');
               // Reset unseen counter when user opens history
-              try { localStorage.setItem('employee_history_unseen', '0'); } catch (_) {}
+              try { localStorage.setItem('employee_history_unseen', '0'); } catch (_) { }
               setNotificationCount(0);
               // Force refetch history to show latest
               fetchTransactionHistory();
@@ -971,44 +785,44 @@ const EmployeeTransaction = () => {
           </button>
         </div>
 
-        <div className="p-6">
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-            {/* Header */}
-            <div className="p-4 bg-blue-500 rounded-t-xl">
-              <h3 className="text-lg font-semibold text-white text-center">
-                Recent Activities
-              </h3>
+        <RecentActivities activities={activities} iconFor={iconFor} timeAgo={timeAgo} />
+      </div>
+      {isBorrowedOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm">
+          <div className="relative w-full max-w-lg bg-white rounded-xl shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-bold text-gray-900">Borrowed Item Details</h2>
+              <button
+                onClick={() => setIsBorrowedOpen(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-100 rounded-lg"
+              >
+                <X size={22} />
+              </button>
             </div>
-
-            {/* Activity List */}
-            <div className="p-6 space-y-5">
-              <div className="p-4 text-gray-700">
-                <ul className="space-y-3">
-                  {getRecentActivities(10).map((a) => {
-                    const { Icon, bg, text } = iconFor(a.variant);
-                    return (
-                      <li key={a.id} className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className={`${bg} p-2 rounded-lg flex-shrink-0`}>
-                            <Icon className={`h-5 w-5 ${text}`} />
-                          </div>
-                          <span className="text-sm text-gray-800 truncate">{a.message}</span>
-                        </div>
-                        <span className="text-xs text-gray-500 flex-shrink-0 ml-3">{timeAgo(a.time)}</span>
-                      </li>
-                    );
-                  })}
-                  {getRecentActivities(10).length === 0 && (
-                    <li className="text-sm text-gray-500">No recent activity</li>
-                  )}
-                </ul>
+            <div className="p-6 space-y-4">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center">📦</div>
+                <div>
+                  <div className="font-semibold text-gray-900">Currently Borrowed</div>
+                  <div className="text-sm text-gray-600">Total items: {transactionStats?.borrowed || 0}</div>
+                </div>
               </div>
+              <div className="text-sm text-gray-500">This is a summary view. Contact admin for full details.</div>
+            </div>
+            <div className="px-6 py-4 border-t bg-gray-50 text-right">
+              <button
+                onClick={() => setIsBorrowedOpen(false)}
+                className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
+
 
 export default EmployeeTransaction;

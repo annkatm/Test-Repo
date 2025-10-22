@@ -12,6 +12,46 @@ const EmployeeHome = () => {
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [returnDate, setReturnDate] = useState(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
 
+  const logActivity = (message, variant = 'info') => {
+    try {
+      const prev = JSON.parse(localStorage.getItem('employee_activities') || '[]');
+      const entry = { id: Date.now(), message, variant, time: new Date().toISOString() };
+      const next = [entry, ...(Array.isArray(prev) ? prev : [])].slice(0, 50);
+      localStorage.setItem('employee_activities', JSON.stringify(next));
+    } catch (_) {}
+  };
+
+  // Keep a per-user local list of reserved equipment IDs so they stay hidden after request submission
+  const getReservedIds = () => {
+    try {
+      const raw = localStorage.getItem('employee_reserved_equipment_ids') || '[]';
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? new Set(arr.map(String)) : new Set();
+    } catch (_) { return new Set(); }
+  };
+  const addReservedIds = (ids) => {
+    try {
+      const cur = getReservedIds();
+      for (const id of ids) cur.add(String(id));
+      localStorage.setItem('employee_reserved_equipment_ids', JSON.stringify(Array.from(cur)));
+    } catch (_) {}
+  };
+  const removeReservedId = (id) => {
+    try {
+      const cur = getReservedIds();
+      cur.delete(String(id));
+      localStorage.setItem('employee_reserved_equipment_ids', JSON.stringify(Array.from(cur)));
+    } catch (_) {}
+  };
+  const filterOutReserved = (list) => {
+    try {
+      const cur = getReservedIds();
+      return (Array.isArray(list) ? list : []).filter((eq) => !cur.has(String(eq.id)));
+    } catch (_) {
+      return Array.isArray(list) ? list : [];
+    }
+  };
+
   // Load data on component mount
   useEffect(() => {
     const controller = new AbortController();
@@ -65,7 +105,7 @@ const EmployeeHome = () => {
           })));
         }
         
-        setEquipment(equipmentData);
+        setEquipment(filterOutReserved(equipmentData));
       } catch (e) {
         if (e.name !== 'AbortError') setError('Failed to load data');
       } finally {
@@ -75,6 +115,47 @@ const EmployeeHome = () => {
 
     loadData();
     return () => controller.abort();
+  }, []);
+
+  // Listen for restore events from other parts of the app (e.g., EmployeeTransaction)
+  useEffect(() => {
+    const handler = async (e) => {
+      try {
+        const eqId = e?.detail?.equipment_id;
+        if (eqId) {
+          // Allow this unit to reappear by removing it from reserved list
+          try { removeReservedId(eqId); } catch (_) {}
+          // Try to fetch a single equipment unit and add it back if available
+          try {
+            const res = await fetch(`/api/equipment/${eqId}`);
+            const data = await res.json();
+            const item = data?.data || data;
+            if (item && (!item.status || item.status === 'available')) {
+              setEquipment((prev) => {
+                if (Array.isArray(prev) && prev.some((x) => String(x.id) === String(item.id))) return prev;
+                return [item, ...(Array.isArray(prev) ? prev : [])];
+              });
+            }
+          } catch (_err) {
+            // If single fetch fails, fall back to refreshing available list
+            const res = await fetch('/api/equipment?per_page=100&status=available');
+            const data = await res.json();
+            let equipmentData = [];
+            if (Array.isArray(data)) equipmentData = data; else if (data?.data?.data) equipmentData = data.data.data; else if (Array.isArray(data?.data)) equipmentData = data.data;
+            setEquipment(equipmentData || []);
+          }
+        } else {
+          // No id provided: refresh available equipment
+          const res = await fetch('/api/equipment?per_page=100&status=available');
+          const data = await res.json();
+          let equipmentData = [];
+          if (Array.isArray(data)) equipmentData = data; else if (data?.data?.data) equipmentData = data.data.data; else if (Array.isArray(data?.data)) equipmentData = data.data;
+          setEquipment(equipmentData || []);
+        }
+      } catch (_e) { /* ignore */ }
+    };
+    window.addEventListener('ireply:equipment:restore', handler);
+    return () => window.removeEventListener('ireply:equipment:restore', handler);
   }, []);
 
   // Group equipment units into products (same brand/name/specs)
@@ -137,7 +218,7 @@ const EmployeeHome = () => {
         })));
       }
       
-      setEquipment(equipmentData);
+      setEquipment(filterOutReserved(equipmentData));
     } catch (e) {
       setError('Failed to load equipment for category');
     } finally {
@@ -178,6 +259,8 @@ const EmployeeHome = () => {
     // This reflects that this specific unit is now taken/reserved in the cart
     setEquipment(prev => prev.filter(eq => eq.id !== item.id));
 
+    logActivity(`Added to cart: ${(item.name || item.brand || 'Item')} (${item.id})`, 'success');
+
     const itemsSection = document.getElementById('items-section');
     if (itemsSection) {
       itemsSection.scrollIntoView({ 
@@ -197,6 +280,7 @@ const EmployeeHome = () => {
         const toAdd = group.units.filter(u => !existingIds.has(u.id));
         return [...toAdd, ...prev];
       });
+      logActivity(`Removed from cart: ${group.name} (x${group.quantity})`, 'warning');
     }
     setCartItems(cartItems.filter(ci => ci.groupKey !== groupKey));
   };
@@ -212,11 +296,15 @@ const EmployeeHome = () => {
       // Decrement: return one unit to equipment
       const unit = group.units[group.units.length - 1];
       if (unit) {
-        setEquipment(prev => prev.some(eq => eq.id === unit.id) ? prev : [unit, ...prev]);
+        setEquipment(prev => {
+          if (getReservedIds().has(String(unit.id))) return prev; // keep hidden if reserved
+          return prev.some(eq => eq.id === unit.id) ? prev : [unit, ...prev];
+        });
       }
       setCartItems(cartItems.map(ci => 
         ci.groupKey === groupKey ? { ...ci, quantity: newQuantity, units: ci.units.slice(0, -1) } : ci
       ));
+      logActivity(`Decreased quantity: ${group.name} to x${newQuantity}`, 'info');
     } else if (newQuantity > group.quantity) {
       // Increment: try to take one matching available unit from equipment
       const matchIndex = equipment.findIndex(eq => (
@@ -228,6 +316,7 @@ const EmployeeHome = () => {
       setCartItems(cartItems.map(ci => 
         ci.groupKey === groupKey ? { ...ci, quantity: newQuantity, units: [...ci.units, unit] } : ci
       ));
+      logActivity(`Increased quantity: ${group.name} to x${newQuantity}`, 'info');
     }
   };
 
@@ -236,11 +325,12 @@ const EmployeeHome = () => {
       setEquipment(prev => {
         // Add back any unit from all groups that's not already present in the equipment list
         const existingIds = new Set(prev.map(eq => eq.id));
-        const toAdd = cartItems.flatMap(ci => ci.units || []).filter(u => !existingIds.has(u.id));
+        const toAdd = cartItems.flatMap(ci => ci.units || []).filter(u => !existingIds.has(u.id) && !getReservedIds().has(String(u.id)));
         return [...toAdd, ...prev];
       });
     }
     setCartItems([]);
+    logActivity('Canceled cart and reset selection', 'warning');
     // Reset selection and reload default available equipment
     setSelectedCategory(null);
     (async () => {
@@ -276,6 +366,7 @@ const EmployeeHome = () => {
 
     try {
       setLoading(true);
+      logActivity(`Submitting request for ${cartItems.reduce((s, i) => s + i.quantity, 0)} item(s)`, 'info');
       
       // Get the current user/employee ID from check-auth endpoint
       const userResponse = await fetch('/check-auth', {
@@ -375,6 +466,7 @@ const EmployeeHome = () => {
         for (const unit of group.units) {
           if (unit.status && unit.status !== 'available') {
             results.push({ success: false, data: { message: 'Item unavailable' } });
+            logActivity(`Request skipped (unavailable): ${group.name} (${unit.id})`, 'warning');
             continue;
           }
           if (seen.has(unit.id)) continue; // avoid duplicate requests for same equipment
@@ -416,62 +508,63 @@ const EmployeeHome = () => {
           }
           console.log('Response status:', response.status, 'Response data:', data);
           const ok = response.ok && (data?.success === true || data?.status === 'success');
-          results.push({ success: ok, status: response.status, data });
+          results.push({ success: ok, status: response.status, data, unitId: unit.id, unit, groupKey: group.groupKey });
 
-          // Always dispatch a local history event so user sees the attempt in their history
-          try {
-            const historyEntry = {
-              id: data?.data?.id || `local-${Date.now()}-${unit.id}`,
-              item: group.name || group.brand || 'Equipment',
-              message: `Requested ${group.name || group.brand} (unit ${unit.id})`,
-              variant: ok ? 'success' : 'warning',
-              date: new Date().toISOString(),
-              time: new Date().toISOString(),
-              local: true
-            };
-            if (window.IReplyNotify) window.IReplyNotify(historyEntry.message, historyEntry.variant, true, historyEntry);
-            else window.dispatchEvent(new CustomEvent('ireply:history', { detail: historyEntry }));
-          } catch (_e) {}
+          if (ok) {
+            logActivity(`Request submitted: ${group.name} (${unit.id})`, 'success');
+          } else {
+            const msg = data?.message || data?.error || `HTTP ${response.status}`;
+            logActivity(`Request failed: ${group.name} (${unit.id}) - ${msg}`, 'warning');
+          }
         }
       }
 
-      // Check if all requests succeeded
+      // Check outcomes
       const successCount = results.filter(r => r.success).length;
       const failedCount = results.length - successCount;
+      const successIds = new Set(results.filter(r => r.success).map(r => r.unitId));
 
       if (successCount > 0) {
+        // Optimistically remove successful units from the Equipment Types list so they vanish immediately
+        // Persistently hide these units for this user
+        addReservedIds(Array.from(successIds));
+        setEquipment(prev => prev.filter(eq => !successIds.has(eq.id)));
+
         if (failedCount === 0) {
           alert(`✓ All ${successCount} request(s) submitted successfully!\n\nYour requests have been sent to the Super Admin for approval.`);
-          setCartItems([]); // Clear cart
-          // Notify the EmployeeTransaction component (if present) so history/notifications update
+          setCartItems([]); // Clear cart when everything succeeded
           try {
             const msg = `${successCount} request(s) submitted`;
             if (window.IReplyNotify) window.IReplyNotify(msg, 'success', true);
-            // Also dispatch a global event for other listeners
             window.dispatchEvent(new CustomEvent('ireply:notify', { detail: { message: `You submitted ${successCount} request(s)`, variant: 'success' } }));
           } catch (_) {}
-          // Refresh the page to show updated pending requests
-          window.location.reload();
         } else {
           alert(`${successCount} request(s) submitted successfully, but ${failedCount} failed.\n\nSuccessful requests have been sent to the Super Admin.`);
-          // Remove successful items from cart
-          // Keep groups that had failures; for simplicity, clear on success and keep cart as-is on failure
-          // You can enhance this to remove only successful units if needed
+          // Remove only successful units from the cart; keep failed ones
+          const nextCart = cartItems
+            .map(ci => {
+              const remainingUnits = (ci.units || []).filter(u => !successIds.has(u.id));
+              const nextQty = Math.max(0, remainingUnits.length);
+              return nextQty > 0 ? { ...ci, units: remainingUnits, quantity: nextQty } : null;
+            })
+            .filter(Boolean);
+          setCartItems(nextCart);
           try {
             const msg = `${successCount} request(s) submitted (some failed)`;
             if (window.IReplyNotify) window.IReplyNotify(msg, 'warning', true);
             window.dispatchEvent(new CustomEvent('ireply:notify', { detail: { message: msg, variant: 'warning' } }));
           } catch (_) {}
-          setCartItems(cartItems);
         }
       } else {
         const firstFailure = results[0] || {};
         const msg = firstFailure?.data?.message || firstFailure?.data?.error || `HTTP ${firstFailure?.status || 'unknown'}`;
         alert(`All requests failed. Please check your inputs and try again.\n\nDetails: ${msg}`);
+        logActivity(`All requests failed - ${msg}`, 'warning');
       }
     } catch (error) {
       console.error('Failed to submit request:', error);
       alert('Failed to submit request. Please try again.\n\nError: ' + error.message);
+      logActivity(`Submit request error: ${error.message}`, 'warning');
     } finally {
       setLoading(false);
     }
@@ -674,8 +767,6 @@ const EmployeeHome = () => {
               </div>
             </div>
 
-{/* Date Pickers Section - Fixed, compact */}
-          {/* Date Pickers Section - Fixed, compact */}
           {cartItems.length > 0 && (
               <div className="px-6 pt-2 pb-2 border-t border-gray-200 flex-shrink-0">
                 <div className="flex gap-2">

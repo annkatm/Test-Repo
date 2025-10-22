@@ -84,7 +84,8 @@ const AddStocks = () => {
   const fetchEquipment = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/equipment');
+      // Request all equipment without status filter and with high per_page to show all items
+      const response = await fetch('/api/equipment?per_page=1000');
       const data = await response.json();
       
       if (data.success) {
@@ -236,7 +237,12 @@ const AddStocks = () => {
         <GlobalHeader title="Add Stocks" />
 
         <main className="flex-1 px-10 py-6 overflow-y-auto">
-          <h2 className="text-3xl font-bold text-blue-600">Equipment</h2>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-3xl font-bold text-blue-600">Equipment History</h2>
+              <p className="text-sm text-gray-600 mt-1">Complete history of all equipment with status and dates</p>
+            </div>
+          </div>
 
           <div className="mt-6 flex items-center justify-between">
             <div className="flex-1 max-w-2xl flex items-center space-x-4">
@@ -344,6 +350,7 @@ const AddStocks = () => {
                           )}
                         </div>
                       </th>
+                      <th className="text-left py-4 px-6 font-semibold text-gray-700">Date Added</th>
                       <th className="text-left py-4 px-6 font-semibold text-gray-700">Actions</th>
                     </tr>
                   </thead>
@@ -394,6 +401,13 @@ const AddStocks = () => {
                             minimumFractionDigits: 2,
                             maximumFractionDigits: 2
                           })}
+                        </td>
+                        <td className="py-4 px-6 text-gray-700 text-sm">
+                          {item.created_at ? new Date(item.created_at).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                          }) : 'N/A'}
                         </td>
                         <td className="py-4 px-6">
                           <button 
@@ -461,14 +475,16 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
   const fetchProducts = async (categoryId) => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/equipment?category_id=${categoryId}`);
+      // Fetch all equipment for the category without pagination limits
+      const response = await fetch(`/api/equipment?category_id=${categoryId}&per_page=1000`);
       const data = await response.json();
       
       if (data.success) {
         // Group equipment by name/brand to show only item types, not individual units
         const equipmentItems = data.data.data || [];
         const groupedItems = equipmentItems.reduce((acc, item) => {
-          const key = `${item.name || item.brand}`;
+          // Create unique key based on name and brand for grouping
+          const key = `${item.name || 'Unknown'}_${item.brand || 'Unknown'}`;
           if (!acc[key]) {
             acc[key] = {
               id: item.id, // Use the first item's ID as the group ID
@@ -477,11 +493,22 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
               specifications: item.specifications,
               item_image: item.item_image,
               category_id: item.category_id,
-              // Count how many units exist
-              existing_count: 1
+              // Count how many units exist (dynamic count)
+              existing_count: 1,
+              available_count: item.status === 'available' ? 1 : 0,
+              in_use_count: item.status === 'in_use' ? 1 : 0,
+              items: [item] // Keep track of all items
             };
           } else {
+            // Increment count for each additional item with same name/brand
             acc[key].existing_count += 1;
+            if (item.status === 'available') {
+              acc[key].available_count += 1;
+            }
+            if (item.status === 'in_use') {
+              acc[key].in_use_count += 1;
+            }
+            acc[key].items.push(item);
           }
           return acc;
         }, {});
@@ -499,6 +526,7 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
 
   const handleCategorySelect = (category) => {
     setSelectedCategory(category);
+    fetchProducts(category.id); // Fetch products when category is selected
     setCurrentMode('product');
     setErrors({});
   };
@@ -574,8 +602,16 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
         throw new Error(data.message || 'Error adding stocks');
       }
 
+      // Trigger equipment update event for dynamic refresh
+      window.dispatchEvent(new Event('equipment:updated'));
+      
       if (onSuccess) onSuccess();
       onClose();
+      
+      // Refresh the products list to show updated counts
+      if (selectedCategory) {
+        await fetchProducts(selectedCategory.id);
+      }
     } catch (error) {
       setErrors({ submit: error.message });
     } finally {
@@ -686,7 +722,10 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
                     <div className="font-medium text-gray-900">{product.brand}</div>
                     <div className="text-sm text-gray-500">{product.specifications}</div>
                     <div className="text-xs text-gray-400 mt-1">
-                      Existing units: {product.existing_count || 0}
+                      Available: {product.available_count || 0}/{product.existing_count || 0}
+                      {product.in_use_count > 0 && (
+                        <span className="ml-2 text-orange-600">({product.in_use_count} in use)</span>
+                      )}
                     </div>
                   </div>
                 ))
@@ -979,6 +1018,9 @@ const AddItemModal = ({ onClose, categories = [], onSuccess }) => {
         throw new Error(data.message || 'Error adding equipment');
       }
 
+      // Trigger equipment update event for dynamic refresh
+      window.dispatchEvent(new Event('equipment:updated'));
+      
       // Show success message
       setShowSuccess(true);
       

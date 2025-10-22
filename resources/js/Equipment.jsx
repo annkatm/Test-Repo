@@ -231,7 +231,8 @@ const Equipment = () => {
         const categoriesData = catRes.data.data;
         setCategories(categoriesData);
         
-        const eqRes = await api.get('/equipment');
+        // Fetch all equipment without pagination limits
+        const eqRes = await api.get('/equipment?per_page=1000');
         if (eqRes?.data?.success && eqRes.data.data && Array.isArray(eqRes.data.data.data)) {
           const equipmentData = eqRes.data.data.data;
           
@@ -241,10 +242,11 @@ const Equipment = () => {
             const categoryEquipment = assignedEquipment.filter(eq => eq.category_id === cat.id);
             const available = categoryEquipment.filter(eq => eq.status === 'available').length;
             const inUse = categoryEquipment.filter(eq => eq.status === 'in_use').length;
-            const total = available + inUse;
+            const total = categoryEquipment.length; // Total count of all equipment in this category
+            
             return {
               ...cat,
-              qty: `${available}/${total}`,
+              qty: `${available}/${total}`, // Show available/total format (e.g., "6/9")
               availableCount: available,
               inUseCount: inUse,
               totalCount: total

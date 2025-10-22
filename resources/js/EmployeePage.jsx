@@ -1141,26 +1141,62 @@ const EmployeePage = () => {
                         <div>Serial no.</div>
                       </div>
                     </div>
-                    <div className="max-h-40 overflow-y-auto">
+                    <div className="max-h-60 overflow-y-auto">
                       <div className="divide-y divide-gray-200">
-                        <div className="px-4 py-3">
-                          <div className="grid grid-cols-3 gap-4 items-center">
-                            <div className="text-blue-600 underline cursor-pointer font-medium">Laptop</div>
-                            <div className="text-gray-700 text-sm leading-tight">23.8" IPS panel, 1920x1080</div>
-                            <div className="text-gray-700 text-sm">JS23434</div>
+                        {issuedEquipment.length === 0 ? (
+                          <div className="px-4 py-6 text-center text-gray-400 text-sm">
+                            No equipment issued yet. Click "Add New" to assign equipment.
                           </div>
-                        </div>
-                        <div className="px-4 py-3">
-                          <div className="grid grid-cols-3 gap-4 items-center">
-                            <div className="text-blue-600 underline cursor-pointer font-medium">Mouse</div>
-                            <div className="text-gray-700 text-sm leading-tight">Logitech G Pro X Superlight 2</div>
-                            <div className="text-gray-700 text-sm">YT56456</div>
-                          </div>
-                        </div>
+                        ) : (
+                          issuedEquipment.map((equipment) => (
+                            <div key={equipment.id} className="px-4 py-3 hover:bg-gray-50 transition-colors">
+                              <div className="flex items-start space-x-3">
+                                {/* Equipment Image */}
+                                {equipment.item_image ? (
+                                  <img 
+                                    src={`/storage/${equipment.item_image}`} 
+                                    alt={equipment.name}
+                                    className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
+                                  />
+                                ) : (
+                                  <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                    <span className="text-gray-400 text-xs">No img</span>
+                                  </div>
+                                )}
+                                
+                                {/* Equipment Details */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1 min-w-0">
+                                      <h5 className="text-blue-600 font-medium text-sm truncate">
+                                        {equipment.name || equipment.brand}
+                                      </h5>
+                                      <p className="text-gray-600 text-xs mt-0.5 line-clamp-1">
+                                        {equipment.specifications || equipment.brand || 'No specifications'}
+                                      </p>
+                                      <p className="text-gray-500 text-xs mt-0.5">
+                                        Serial: {equipment.serial_number || 'N/A'}
+                                      </p>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => removeEquipmentFromIssued(equipment.id)}
+                                      className="ml-2 text-red-500 hover:text-red-700 text-xs font-medium flex-shrink-0"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        )}
                       </div>
                     </div>
                     <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
-                      <button 
+                      <button
+                        type="button"
+                        onClick={openEquipmentModal}
                         className="px-4 py-2 bg-blue-500 border border-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
                         tabIndex={10}
                       >
