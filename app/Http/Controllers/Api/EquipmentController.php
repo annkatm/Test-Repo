@@ -183,7 +183,7 @@ class EquipmentController extends Controller
                 'specifications' => 'nullable|string',
                 'serial_number' => 'nullable|string|max:255|unique:equipment,serial_number,' . $id,
                 'asset_tag' => 'nullable|string|max:255|unique:equipment,asset_tag,' . $id,
-                'status' => 'sometimes|required|in:available,in_use,maintenance,retired',
+                'status' => 'sometimes|required|in:available,borrowed,issued',
                 'condition' => 'sometimes|required|in:excellent,good,fair,poor',
                 'purchase_price' => 'nullable|numeric|min:0',
                 'purchase_date' => 'nullable|date',
@@ -373,9 +373,8 @@ class EquipmentController extends Controller
             $stats = [
                 'total' => Equipment::count(),
                 'available' => Equipment::where('status', 'available')->count(),
-                'in_use' => Equipment::where('status', 'in_use')->count(),
-                'maintenance' => Equipment::where('status', 'maintenance')->count(),
-                'retired' => Equipment::where('status', 'retired')->count(),
+                'borrowed' => Equipment::where('status', 'borrowed')->count(),
+                'issued' => Equipment::where('status', 'issued')->count(),
                 'by_condition' => Equipment::selectRaw('condition, COUNT(*) as count')
                                       ->groupBy('condition')
                                       ->pluck('count', 'condition'),

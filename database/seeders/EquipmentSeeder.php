@@ -39,7 +39,7 @@ class EquipmentSeeder extends Seeder
                 'specifications' => '3600 lumens, XGA',
                 'serial_number' => 'SN654321',
                 'asset_tag' => 'AT-1002',
-                'status' => 'in_use',
+                'status' => 'borrowed',
                 'condition' => 'good',
                 'purchase_price' => 500.00,
                 'purchase_date' => '2022-05-20',
