@@ -14,154 +14,93 @@ const Reports = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // API data state
+  // Sample data for comprehensive analytics
   const [summary, setSummary] = useState({ 
-    total_items: 0, 
-    available_stock: 0, 
-    low_stock: 0, 
-    out_of_stock: 0,
-    total_requests: 0,
-    approved_requests: 0,
-    pending_requests: 0,
-    total_users: 0
+    total_items: 89, 
+    available_stock: 45, 
+    low_stock: 8, 
+    out_of_stock: 3,
+    total_requests: 156,
+    approved_requests: 142,
+    pending_requests: 12,
+    total_users: 84
   });
 
-  const [equipmentData, setEquipmentData] = useState([]);
-  const [monthlyRequests, setMonthlyRequests] = useState([]);
-  const [topBorrowed, setTopBorrowed] = useState([]);
-  const [expensiveEquipment, setExpensiveEquipment] = useState([]);
-  const [userActivity, setUserActivity] = useState([]);
-  const [returnCompliance, setReturnCompliance] = useState([]);
-  const [adminActivity, setAdminActivity] = useState([]);
-  const [transactions, setTransactions] = useState([]);
-  const [categories, setCategories] = useState([]);
+  // Equipment inventory data
+  const [equipmentData] = useState([
+    { category: "Laptop", total: 45, borrowed: 32, available: 13, maintenance: 0 },
+    { category: "Printer", total: 12, borrowed: 5, available: 7, maintenance: 0 },
+    { category: "Router", total: 8, borrowed: 4, available: 4, maintenance: 0 },
+    { category: "Projector", total: 10, borrowed: 7, available: 3, maintenance: 0 },
+    { category: "Switch", total: 14, borrowed: 8, available: 6, maintenance: 0 },
+  ]);
 
-  // Fetch categories on component mount
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const response = await fetch('/api/categories');
-        const result = await response.json();
-        if (result.success && Array.isArray(result.data)) {
-          setCategories(result.data);
-        }
-      } catch (err) {
-        console.error('Error fetching categories:', err);
-      }
-    };
-    fetchCategories();
-  }, []);
+  // Monthly requests data
+  const [monthlyRequests] = useState([
+    { month: "2024-06", requests: 45, approved: 35, denied: 5, returned: 30 },
+    { month: "2024-07", requests: 60, approved: 50, denied: 4, returned: 47 },
+    { month: "2024-08", requests: 55, approved: 42, denied: 6, returned: 40 },
+    { month: "2024-09", requests: 70, approved: 65, denied: 3, returned: 58 },
+    { month: "2024-10", requests: 62, approved: 54, denied: 5, returned: 46 },
+  ]);
 
-  // Fetch data from API
-  useEffect(() => {
-    const fetchReportsData = async () => {
-      setLoading(true);
-      setError('');
-      
-      try {
-        const params = new URLSearchParams();
-        if (startDate) params.append('start_date', startDate);
-        if (endDate) params.append('end_date', endDate);
-        if (searchTerm) params.append('search', searchTerm);
+  // Top borrowed items
+  const [topBorrowed] = useState([
+    { item: "HP ProBook 440", borrowed: 22, category: "Laptop" },
+    { item: "Lenovo ThinkPad E14", borrowed: 18, category: "Laptop" },
+    { item: "MacBook Air M2", borrowed: 16, category: "Laptop" },
+    { item: "Epson L3150", borrowed: 15, category: "Printer" },
+    { item: "Canon PIXMA", borrowed: 12, category: "Printer" },
+    { item: "TP-Link Archer C6", borrowed: 12, category: "Networking" },
+    { item: "BenQ MX532", borrowed: 9, category: "Projector" },
+    { item: "Epson WorkForce", borrowed: 8, category: "Printer" },
+    { item: "Cisco Router", borrowed: 7, category: "Networking" },
+    { item: "Dell Monitor", borrowed: 6, category: "Peripherals" },
+  ]);
 
-        const response = await fetch(`/api/reports/overview?${params.toString()}`);
-        const result = await response.json();
+  // Most expensive equipment
+  const [expensiveEquipment] = useState([
+    { item: "Dell Precision Workstation", value: 25000, category: "Laptop" },
+    { item: "MacBook Pro M3 Max", value: 22000, category: "Laptop" },
+    { item: "Cisco Catalyst Switch", value: 15000, category: "Networking" },
+    { item: "Epson Large Format Printer", value: 12000, category: "Printer" },
+    { item: "Sony 4K Projector", value: 8000, category: "Projector" },
+    { item: "HP Enterprise Router", value: 5000, category: "Networking" },
+    { item: "Canon Professional Camera", value: 4000, category: "Peripherals" },
+    { item: "Logitech Conference Camera", value: 3000, category: "Peripherals" },
+    { item: "Dell UltraSharp Monitor", value: 2000, category: "Peripherals" },
+    { item: "Microsoft Surface Hub", value: 1500, category: "Peripherals" },
+  ]);
 
-        if (result.success && result.data) {
-          const data = result.data;
-          
-          // Update summary
-          setSummary({
-            total_items: data.summary?.total_items || 0,
-            available_stock: data.summary?.available_stock || 0,
-            low_stock: data.summary?.low_stock || 0,
-            out_of_stock: data.summary?.out_of_stock || 0,
-            total_requests: 0,
-            approved_requests: 0,
-            pending_requests: 0,
-            total_users: 0
-          });
+  // User activity data
+  const [userActivity] = useState([
+    { user: "Admin A", role: "Admin", logins: 32, lastLogin: "2024-10-20" },
+    { user: "Admin B", role: "Admin", logins: 28, lastLogin: "2024-10-21" },
+    { user: "Emp_01", role: "Employee", logins: 21, lastLogin: "2024-10-21" },
+    { user: "Emp_02", role: "Employee", logins: 20, lastLogin: "2024-10-20" },
+  ]);
 
-          // Update monthly trend
-          const trendData = (data.trend || []).map(t => ({
-            month: t.month,
-            requests: t.requests || 0,
-            approved: t.completed || 0,
-            denied: 0,
-            returned: t.completed || 0
-          }));
-          console.log('Monthly Trend Data:', trendData);
-          setMonthlyRequests(trendData);
+  // Return compliance data
+  const [returnCompliance] = useState([
+    { user: "Emp_01", borrowed: 5, returned: 5, late: 0, avgDelayDays: 0 },
+    { user: "Emp_02", borrowed: 8, returned: 7, late: 1, avgDelayDays: 2 },
+    { user: "Emp_03", borrowed: 6, returned: 4, late: 2, avgDelayDays: 3 },
+  ]);
 
-          // Update transactions
-          setTransactions((data.transactions || []).map(t => ({
-            date: t.date,
-            employee: t.employee || 'Unknown',
-            item: t.item || 'Unknown',
-            status: t.status || 'Unknown',
-            qty: t.qty || 1,
-            approvedBy: t.approvedBy || '-'
-          })));
+  // Admin activity data
+  const [adminActivity] = useState([
+    { admin: "Admin A", approvals: 28, rejections: 3, stockAdds: 10, logins: 15 },
+    { admin: "Admin B", approvals: 35, rejections: 1, stockAdds: 7, logins: 17 },
+    { admin: "Admin C", approvals: 22, rejections: 2, stockAdds: 5, logins: 11 },
+  ]);
 
-          // Update top borrowed items from API
-          const borrowedItems = (data.topBorrowed || []).map(item => ({
-            item: `${item.brand || ''} ${item.item || ''}`.trim() || 'Unknown',
-            borrowed: parseInt(item.borrowed_count) || 0,
-            category: item.category || 'Uncategorized'
-          }));
-          console.log('Top Borrowed Items:', borrowedItems);
-          setTopBorrowed(borrowedItems);
-
-          // Update expensive equipment from API
-          setExpensiveEquipment((data.expensiveEquipment || []).map(item => ({
-            item: `${item.brand || ''} ${item.item || ''}`.trim() || 'Unknown',
-            value: parseFloat(item.value) || 0,
-            category: item.category || 'Uncategorized'
-          })));
-
-          // Keep sample data for other sections (can be updated when endpoints are available)
-          setEquipmentData([
-            { category: "Laptop", total: 45, borrowed: 32, available: 13, maintenance: 0 },
-            { category: "Printer", total: 12, borrowed: 5, available: 7, maintenance: 0 },
-            { category: "Router", total: 8, borrowed: 4, available: 4, maintenance: 0 },
-            { category: "Projector", total: 10, borrowed: 7, available: 3, maintenance: 0 },
-            { category: "Switch", total: 14, borrowed: 8, available: 6, maintenance: 0 },
-          ]);
-
-          // Update return compliance from API
-          const complianceData = (data.returnCompliance || []).map(item => ({
-            user: item.user || 'Unknown',
-            borrowed: parseInt(item.borrowed) || 0,
-            returned: parseInt(item.returned) || 0,
-            late: parseInt(item.late) || 0,
-            avgDelayDays: parseInt(item.avgDelayDays) || 0
-          }));
-          console.log('Return Compliance Data:', complianceData);
-          setReturnCompliance(complianceData);
-
-          // Keep sample data for user activity
-          setUserActivity([
-            { user: "Admin A", role: "Admin", logins: 32, lastLogin: "2024-10-20" },
-            { user: "Admin B", role: "Admin", logins: 28, lastLogin: "2024-10-21" },
-          ]);
-
-          setAdminActivity([
-            { admin: "Admin A", approvals: 28, rejections: 3, stockAdds: 10, logins: 15 },
-            { admin: "Admin B", approvals: 35, rejections: 1, stockAdds: 7, logins: 17 },
-          ]);
-        } else {
-          setError(result.message || 'Failed to fetch reports data');
-        }
-      } catch (err) {
-        console.error('Error fetching reports:', err);
-        setError('Failed to load reports data');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchReportsData();
-  }, [startDate, endDate, searchTerm]);
+  // Recent transactions
+  const [transactions] = useState([
+    { date: "2024-10-21", employee: "John Doe", item: "HP Laptop", status: "Completed", qty: 1, approvedBy: "Admin A" },
+    { date: "2024-10-20", employee: "Jane Smith", item: "Epson Printer", status: "Pending", qty: 1, approvedBy: "-" },
+    { date: "2024-10-19", employee: "Mike Johnson", item: "Router", status: "Completed", qty: 1, approvedBy: "Admin B" },
+    { date: "2024-10-18", employee: "Sarah Wilson", item: "Projector", status: "Declined", qty: 1, approvedBy: "Admin C" },
+  ]);
 
   // Helper functions
   const getStatusColor = (status) => {
@@ -179,8 +118,6 @@ const Reports = () => {
 
   // Filter data based on search and category
   const filteredData = useMemo(() => {
-    console.log('Filtering - Borrowed Category:', borrowedCategory, 'Equipment Category:', equipmentCategory);
-    
     let filtered = {
       equipment: equipmentData,
       monthlyRequests: monthlyRequests,
@@ -195,9 +132,6 @@ const Reports = () => {
       adminActivity: adminActivity,
       transactions: transactions
     };
-    
-    console.log('Filtered Top Borrowed:', filtered.topBorrowed.length, 'items');
-    console.log('Filtered Expensive Equipment:', filtered.expensiveEquipment.length, 'items');
 
     // Apply search filter
     if (searchTerm) {
@@ -209,16 +143,21 @@ const Reports = () => {
     }
 
     return filtered;
-  }, [searchTerm, equipmentData, monthlyRequests, topBorrowed, expensiveEquipment, userActivity, returnCompliance, adminActivity, transactions, borrowedCategory, equipmentCategory]);
+  }, [searchTerm, equipmentData, monthlyRequests, topBorrowed, userActivity, returnCompliance, adminActivity, transactions]);
 
-  // Export functionality using API endpoint
+  // Export functionality
   const handleExport = () => {
-    const params = new URLSearchParams();
-    if (startDate) params.append('start_date', startDate);
-    if (endDate) params.append('end_date', endDate);
-    if (searchTerm) params.append('search', searchTerm);
+    const csvContent = "data:text/csv;charset=utf-8," + 
+      "Date,Employee,Item,Status,Quantity,Approved By\n" +
+      transactions.map(t => `${t.date},${t.employee},${t.item},${t.status},${t.qty},${t.approvedBy}`).join("\n");
     
-    window.location.href = `/api/reports/export?${params.toString()}`;
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "reports-data.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
@@ -293,25 +232,7 @@ const Reports = () => {
 
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto p-6 space-y-8">
-          {/* Loading State */}
-          {loading && (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#2262C6]"></div>
-              <span className="ml-3 text-gray-600">Loading reports data...</span>
-            </div>
-          )}
-
-          {/* Error State */}
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
-              <p className="font-medium">Error loading reports</p>
-              <p className="text-sm mt-1">{error}</p>
-            </div>
-          )}
-
           {/* Summary Cards */}
-          {!loading && !error && (
-            <>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
               <div className="flex items-center gap-3">
@@ -402,22 +323,17 @@ const Reports = () => {
                         className="px-3 py-1 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-[#2262C6] focus:border-transparent bg-white min-w-[120px]"
                       >
                         <option value="All">All</option>
-                        {categories.map((cat) => (
-                          <option key={cat.id} value={cat.name}>
-                            {cat.name}
-                          </option>
-                        ))}
+                        <option value="Laptop">Laptop</option>
+                        <option value="Networking">Networking</option>
+                        <option value="Printer">Printer</option>
+                        <option value="Projector">Projector</option>
+                        <option value="Peripherals">Peripherals</option>
                       </select>
                     </div>
                   </div>
               <div className="h-64 flex items-end justify-between gap-2">
-                    {filteredData.expensiveEquipment.length === 0 ? (
-                      <div className="w-full h-full flex items-center justify-center text-gray-400">
-                        <p>No equipment data available</p>
-                      </div>
-                    ) : (
-                      filteredData.expensiveEquipment.map((item, index) => {
-                      const maxValue = Math.max(...filteredData.expensiveEquipment.map(e => e.value), 1);
+                    {filteredData.expensiveEquipment.map((item, index) => {
+                      const maxValue = Math.max(...filteredData.expensiveEquipment.map(e => e.value));
                       const height = (item.value / maxValue) * 200;
                       const getColorClass = (value) => {
                         if (value >= 20000) return "bg-red-500";
@@ -431,32 +347,31 @@ const Reports = () => {
                     <div
                             className={`${getColorClass(item.value)} rounded-t w-full mb-2 transition-all duration-500 hover:opacity-80`}
                             style={{ height: `${height}px` }}
-                            title={`₱${item.value.toLocaleString()}`}
+                            title={`$${item.value.toLocaleString()}`}
                     ></div>
                           <span className="text-xs text-gray-600 text-center leading-tight">{item.item}</span>
-                          <span className="text-xs font-semibold text-[#2262C6]">₱{(item.value / 1000).toFixed(0)}k</span>
+                          <span className="text-xs font-semibold text-[#2262C6]">${(item.value / 1000).toFixed(0)}k</span>
                         </div>
                       );
-                    })
-                    )}
+                    })}
                   </div>
                   <div className="mt-4 flex justify-center">
                     <div className="flex items-center gap-4 text-xs">
                       <div className="flex items-center gap-1">
                         <div className="w-3 h-3 bg-red-500 rounded"></div>
-                        <span className="text-gray-600">₱20k+</span>
+                        <span className="text-gray-600">$20k+</span>
                       </div>
                       <div className="flex items-center gap-1">
                         <div className="w-3 h-3 bg-orange-500 rounded"></div>
-                        <span className="text-gray-600">₱10k-20k</span>
+                        <span className="text-gray-600">$10k-20k</span>
                       </div>
                       <div className="flex items-center gap-1">
                         <div className="w-3 h-3 bg-yellow-500 rounded"></div>
-                        <span className="text-gray-600">₱5k-10k</span>
+                        <span className="text-gray-600">$5k-10k</span>
                       </div>
                       <div className="flex items-center gap-1">
                         <div className="w-3 h-3 bg-[#2262C6] rounded"></div>
-                        <span className="text-gray-600">Under ₱5k</span>
+                        <span className="text-gray-600">Under $5k</span>
               </div>
                 </div>
               </div>
@@ -474,21 +389,15 @@ const Reports = () => {
                         className="px-3 py-1 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-[#2262C6] focus:border-transparent bg-white min-w-[120px]"
                       >
                         <option value="All">All</option>
-                        {categories.map((cat) => (
-                          <option key={cat.id} value={cat.name}>
-                            {cat.name}
-                          </option>
-                        ))}
+                        <option value="Laptop">Laptop</option>
+                        <option value="Networking">Networking</option>
+                        <option value="Printer">Printer</option>
+                        <option value="Projector">Projector</option>
+                        <option value="Peripherals">Peripherals</option>
                       </select>
                     </div>
                   </div>
               <div className="flex items-center justify-center h-64">
-                {filteredData.topBorrowed.length === 0 ? (
-                  <div className="text-center text-gray-400">
-                    <p>No borrowed items data available</p>
-                    <p className="text-sm mt-2">Transactions will appear here once equipment is borrowed</p>
-                  </div>
-                ) : (
                 <div className="relative w-48 h-48">
                   <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
                     <circle
@@ -534,7 +443,6 @@ const Reports = () => {
                     </div>
                   </div>
                 </div>
-                )}
               </div>
                   <div className="mt-4 max-h-40 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
                     <div className="space-y-2 pr-2">
@@ -579,44 +487,28 @@ const Reports = () => {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                   <h3 className="text-lg font-semibold mb-4 text-gray-800">Return Compliance</h3>
                   <div className="space-y-3">
-                    {filteredData.returnCompliance.length === 0 ? (
-                      <div className="text-center py-8 text-gray-400">
-                        <p>No return compliance data available</p>
-                        <p className="text-sm mt-2">Data will appear once employees borrow and return equipment</p>
-                      </div>
-                    ) : (
-                      filteredData.returnCompliance.map((user, index) => (
-                        <div key={index} className="p-3 bg-gray-50 rounded-lg">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="font-medium text-gray-800">{user.user}</span>
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              user.late === 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                            }`}>
-                              {user.late === 0 ? 'Compliant' : `${user.late} late`}
-                            </span>
-                          </div>
-                          <div className="text-sm text-gray-600">
-                            Borrowed: {user.borrowed} | Returned: {user.returned} | Avg Delay: {user.avgDelayDays} days
-                          </div>
+                    {filteredData.returnCompliance.map((user, index) => (
+                      <div key={index} className="p-3 bg-gray-50 rounded-lg">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-medium text-gray-800">{user.user}</span>
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            user.late === 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                          }`}>
+                            {user.late === 0 ? 'Compliant' : `${user.late} late`}
+                          </span>
                         </div>
-                      ))
-                    )}
+                        <div className="text-sm text-gray-600">
+                          Borrowed: {user.borrowed} | Returned: {user.returned} | Avg Delay: {user.avgDelayDays} days
+                        </div>
                   </div>
+                ))}
+              </div>
             </div>
 
                 {/* Monthly Trends */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                   <h3 className="text-lg font-semibold mb-4 text-gray-800">Monthly Request Trends</h3>
               <div className="h-64 relative">
-                {filteredData.monthlyRequests.length === 0 ? (
-                  <div className="w-full h-full flex items-center justify-center text-gray-400">
-                    <div className="text-center">
-                      <p>No monthly trend data available</p>
-                      <p className="text-sm mt-2">Trends will appear as requests are made</p>
-                    </div>
-                  </div>
-                ) : (
-                  <>
                 <svg className="w-full h-full" viewBox="0 0 400 200">
                   <defs>
                     <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
@@ -644,29 +536,10 @@ const Reports = () => {
                           `${index * 60 + 30},${200 - (point.approved / Math.max(1, Math.max(...filteredData.monthlyRequests.map(p => p.approved)))) * 180}`
                     ).join(' ')}
                       />
-                      
-                  {/* Data point markers */}
-                  {filteredData.monthlyRequests.map((point, index) => {
-                    const maxRequests = Math.max(1, Math.max(...filteredData.monthlyRequests.map(p => p.requests)));
-                    const maxApproved = Math.max(1, Math.max(...filteredData.monthlyRequests.map(p => p.approved)));
-                    const requestY = 200 - (point.requests / maxRequests) * 180;
-                    const approvedY = 200 - (point.approved / maxApproved) * 180;
-                    const x = index * 60 + 30;
-                    
-                    return (
-                      <g key={index}>
-                        <circle cx={x} cy={requestY} r="4" fill="#2262C6" />
-                        <circle cx={x} cy={approvedY} r="4" fill="#10b981" />
-                        <text x={x} y="195" fontSize="10" fill="#6b7280" textAnchor="middle">
-                          {point.month ? new Date(point.month + '-01').toLocaleDateString('en-US', { month: 'short' }) : ''}
-                        </text>
-                      </g>
-                    );
-                  })}
                 </svg>
               
               {/* Legend */}
-                    <div className="absolute top-0 right-0 flex gap-4 bg-white/80 backdrop-blur-sm px-3 py-2 rounded-lg">
+                    <div className="absolute bottom-0 left-0 flex gap-4">
                 <div className="flex items-center gap-2">
                         <div className="w-3 h-0.5 bg-[#2262C6]"></div>
                         <span className="text-xs text-gray-600">Requests</span>
@@ -676,8 +549,6 @@ const Reports = () => {
                         <span className="text-xs text-gray-600">Approved</span>
                       </div>
                 </div>
-                </>
-                )}
               </div>
             </div>
           </div>
@@ -724,8 +595,6 @@ const Reports = () => {
             </div>
           </div>
           </section>
-          </>
-          )}
         </main>
       </div>
     </div>
