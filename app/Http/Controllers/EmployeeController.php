@@ -201,13 +201,40 @@ class EmployeeController extends Controller
         }
     }
     /**
-     * Get all employees (excluding soft-deleted)
+     * Get all employees (excluding soft-deleted) with optional filtering
      */
-    public function index()
+    public function index(Request $request)
     {
         try {
-            // Using Employee model to respect soft deletes and include user relationship
-            $employees = Employee::with('user')->orderBy('first_name', 'asc')->get();
+            $query = Employee::with('user');
+
+            // Apply filters
+            if ($request->has('employee_type') && $request->employee_type !== 'all') {
+                $query->where('employee_type', $request->employee_type);
+            }
+
+            if ($request->has('department') && $request->department !== 'all') {
+                $query->where('department', $request->department);
+            }
+
+            if ($request->has('client') && $request->client !== 'all') {
+                $query->where('client', $request->client);
+            }
+
+
+            if ($request->has('search') && !empty($request->search)) {
+                $searchTerm = $request->search;
+                $query->where(function($q) use ($searchTerm) {
+                    $q->where('first_name', 'like', "%{$searchTerm}%")
+                      ->orWhere('last_name', 'like', "%{$searchTerm}%")
+                      ->orWhere('email', 'like', "%{$searchTerm}%")
+                      ->orWhere('position', 'like', "%{$searchTerm}%")
+                      ->orWhere('department', 'like', "%{$searchTerm}%")
+                      ->orWhere('client', 'like', "%{$searchTerm}%");
+                });
+            }
+
+            $employees = $query->orderBy('first_name', 'asc')->get();
 
             // Enhance each employee with issued equipment details
             $employees->each(function ($employee) {
