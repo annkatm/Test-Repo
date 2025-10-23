@@ -489,7 +489,7 @@ const EmployeeTaskbar = ({
               <span className="hidden md:block text-sm font-medium text-gray-700">
                 {employeeName}
               </span>
-              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-semibold overflow-hidden">
+              <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-semibold overflow-hidden">
                 {profileImageUrl ? (
                   <img src={profileImageUrl} alt="profile" className="w-full h-full object-cover" />
                 ) : (
