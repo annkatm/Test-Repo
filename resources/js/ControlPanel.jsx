@@ -15,7 +15,6 @@ const ControlPanel = () => {
     { id: 3, title: 'Department', subtitle: 'Manage', icon: UserCog },
     { id: 4, title: 'Client', subtitle: 'Manage', icon: UserCog },
     { id: 5, title: 'Employee Type', subtitle: 'Manage', icon: UserCog },
-    { id: 6, title: 'Account Type', subtitle: 'Manage', icon: UserCog },
   ];
 
   const [showCategoryModal, setShowCategoryModal] = React.useState(false);
@@ -34,8 +33,7 @@ const ControlPanel = () => {
     positions: [],
     departments: [],
     clients: [],
-    employeeTypes: [],
-    accountTypes: []
+    employeeTypes: []
   });
   const [newItemName, setNewItemName] = React.useState('');
   const [itemError, setItemError] = React.useState('');
@@ -83,8 +81,7 @@ const ControlPanel = () => {
       'position': '/positions',
       'department': '/departments', 
       'client': '/clients',
-      'employeetype': '/employee-types',
-      'accounttype': '/account-types'
+      'employeetype': '/employee-types'
     };
     return endpoints[type] || '/items';
   };

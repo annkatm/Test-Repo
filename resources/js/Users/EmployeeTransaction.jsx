@@ -658,7 +658,13 @@ const EmployeeTransaction = () => {
 
   if (currentView === 'approved') {
     // Convert approved transactions to the format expected by ApprovedTransactions
-    const approvedData = transactions.map((transaction, index) => ({
+    const approvedData = [...transactions]
+      .sort((a, b) => {
+        const aDate = new Date(a.created_at || a.expected_start_date || a.start_date || 0).getTime();
+        const bDate = new Date(b.created_at || b.expected_start_date || b.start_date || 0).getTime();
+        return bDate - aDate; // newest first
+      })
+      .map((transaction, index) => ({
       date: transaction.created_at ? new Date(transaction.created_at).toLocaleDateString("en-US", {
         month: "2-digit",
         day: "2-digit",
@@ -762,7 +768,14 @@ const EmployeeTransaction = () => {
           </div>
 
           <div className="divide-y divide-gray-100">
-            {pendingTransactions.length > 0 ? pendingTransactions.slice(0, 3).map((transaction, index) => (
+            {pendingTransactions.length > 0 ? [...pendingTransactions]
+              .sort((a, b) => {
+                const aDate = new Date(a.created_at || a.expected_start_date || 0).getTime();
+                const bDate = new Date(b.created_at || b.expected_start_date || 0).getTime();
+                return bDate - aDate; // newest first
+              })
+              .slice(0, 3)
+              .map((transaction, index) => (
               <div
                 key={transaction.id || index}
                 className="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer"
@@ -836,7 +849,14 @@ const EmployeeTransaction = () => {
           </div>
 
           <div className="divide-y divide-gray-100">
-            {transactions.length > 0 ? transactions.map((transaction, index) => (
+            {transactions.length > 0 ? [...transactions]
+              .sort((a, b) => {
+                const aDate = new Date(a.created_at || a.expected_start_date || a.start_date || 0).getTime();
+                const bDate = new Date(b.created_at || b.expected_start_date || b.start_date || 0).getTime();
+                return bDate - aDate; // newest first
+              })
+              .slice(0, 3)
+              .map((transaction, index) => (
               <div
                 key={transaction.id}
                 className="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer"
@@ -850,16 +870,16 @@ const EmployeeTransaction = () => {
                   </div>
                   <div className="col-span-3">
                     <span className="text-sm text-gray-900">
-                      {transaction.expected_start_date || transaction.start_date
+                      {(transaction.expected_start_date || transaction.start_date)
                         ? new Date(transaction.expected_start_date || transaction.start_date).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" })
-                        : "-"}
+                        : "09/24/2025"}
                     </span>
                   </div>
                   <div className="col-span-3">
                     <span className="text-sm text-gray-900">
-                      {transaction.expected_end_date || transaction.return_date
+                      {(transaction.expected_end_date || transaction.return_date)
                         ? new Date(transaction.expected_end_date || transaction.return_date).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" })
-                        : "-"}
+                        : "09/24/2025"}
                     </span>
                   </div>
                   <div className="col-span-3">
@@ -876,7 +896,7 @@ const EmployeeTransaction = () => {
       </div>
 
       <div className="col-span-4 space-y-6">
-        <div className="flex justify-end mt-8">
+        <div className="flex justify-end">
           <button
             onClick={() => {
               logActivity('Opened History', 'info');

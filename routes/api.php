@@ -80,10 +80,6 @@ Route::apiResource('clients', ClientController::class);
 use App\Http\Controllers\Api\EmployeeTypeController;
 Route::apiResource('employee-types', EmployeeTypeController::class);
 
-// Account Type API routes
-use App\Http\Controllers\Api\AccountTypeController;
-Route::apiResource('account-types', AccountTypeController::class);
-
 // User management API routes
 use App\Http\Controllers\Api\UserController;
 Route::apiResource('users', UserController::class);
