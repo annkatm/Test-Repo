@@ -9,6 +9,8 @@ const Reports = () => {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [category, setCategory] = useState("All");
+  const [equipmentCategory, setEquipmentCategory] = useState("All");
+  const [borrowedCategory, setBorrowedCategory] = useState("All");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -44,11 +46,30 @@ const Reports = () => {
 
   // Top borrowed items
   const [topBorrowed] = useState([
-    { item: "HP ProBook 440", borrowed: 22 },
-    { item: "Lenovo ThinkPad E14", borrowed: 18 },
-    { item: "Epson L3150", borrowed: 15 },
-    { item: "TP-Link Archer C6", borrowed: 12 },
-    { item: "BenQ MX532", borrowed: 9 },
+    { item: "HP ProBook 440", borrowed: 22, category: "Laptop" },
+    { item: "Lenovo ThinkPad E14", borrowed: 18, category: "Laptop" },
+    { item: "MacBook Air M2", borrowed: 16, category: "Laptop" },
+    { item: "Epson L3150", borrowed: 15, category: "Printer" },
+    { item: "Canon PIXMA", borrowed: 12, category: "Printer" },
+    { item: "TP-Link Archer C6", borrowed: 12, category: "Networking" },
+    { item: "BenQ MX532", borrowed: 9, category: "Projector" },
+    { item: "Epson WorkForce", borrowed: 8, category: "Printer" },
+    { item: "Cisco Router", borrowed: 7, category: "Networking" },
+    { item: "Dell Monitor", borrowed: 6, category: "Peripherals" },
+  ]);
+
+  // Most expensive equipment
+  const [expensiveEquipment] = useState([
+    { item: "Dell Precision Workstation", value: 25000, category: "Laptop" },
+    { item: "MacBook Pro M3 Max", value: 22000, category: "Laptop" },
+    { item: "Cisco Catalyst Switch", value: 15000, category: "Networking" },
+    { item: "Epson Large Format Printer", value: 12000, category: "Printer" },
+    { item: "Sony 4K Projector", value: 8000, category: "Projector" },
+    { item: "HP Enterprise Router", value: 5000, category: "Networking" },
+    { item: "Canon Professional Camera", value: 4000, category: "Peripherals" },
+    { item: "Logitech Conference Camera", value: 3000, category: "Peripherals" },
+    { item: "Dell UltraSharp Monitor", value: 2000, category: "Peripherals" },
+    { item: "Microsoft Surface Hub", value: 1500, category: "Peripherals" },
   ]);
 
   // User activity data
@@ -100,7 +121,12 @@ const Reports = () => {
     let filtered = {
       equipment: equipmentData,
       monthlyRequests: monthlyRequests,
-      topBorrowed: topBorrowed,
+      topBorrowed: borrowedCategory === "All" 
+        ? topBorrowed 
+        : topBorrowed.filter(item => item.category === borrowedCategory),
+      expensiveEquipment: equipmentCategory === "All" 
+        ? expensiveEquipment 
+        : expensiveEquipment.filter(item => item.category === equipmentCategory),
       userActivity: userActivity,
       returnCompliance: returnCompliance,
       adminActivity: adminActivity,
@@ -153,35 +179,35 @@ const Reports = () => {
             
             {/* Filters */}
             <div className="flex flex-wrap gap-3 items-center">
-              <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-gray-500" />
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
                   className="px-3 py-2 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-[#2262C6] focus:border-transparent"
-                />
-              </div>
-              <div className="flex items-center gap-2">
+              />
+            </div>
+            <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-gray-500" />
-                <input
-                  type="date"
-                  value={endDate}
-                  min={startDate || undefined}
-                  onChange={(e) => setEndDate(e.target.value)}
+              <input
+                type="date"
+                value={endDate}
+                min={startDate || undefined}
+                onChange={(e) => setEndDate(e.target.value)}
                   className="px-3 py-2 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-[#2262C6] focus:border-transparent"
-                />
-              </div>
+              />
+            </div>
               <div className="flex items-center gap-2">
                 <Search className="h-4 w-4 text-gray-500" />
-                <input
-                  type="text"
+              <input
+                type="text"
                   placeholder="Search..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
                   className="px-3 py-2 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-[#2262C6] focus:border-transparent"
-                />
-              </div>
+              />
+            </div>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
@@ -197,10 +223,10 @@ const Reports = () => {
                 onClick={handleExport}
                 className="flex items-center gap-2 px-4 py-2 bg-[#2262C6] text-white rounded-lg hover:bg-[#1e40af] transition-colors text-sm font-medium"
               >
-                <Download className="h-4 w-4" />
-                Export CSV
-              </button>
-            </div>
+              <Download className="h-4 w-4" />
+              Export CSV
+            </button>
+          </div>
           </div>
         </header>
 
@@ -285,72 +311,178 @@ const Reports = () => {
               </h2>
               
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Equipment Usage Chart */}
+                {/* Most Expensive Equipment Chart */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                  <h3 className="text-lg font-semibold mb-4 text-gray-800">Equipment Usage by Category</h3>
-                  <div className="h-64 flex items-end justify-between gap-2">
-                    {filteredData.equipment.map((item, index) => (
-                      <div key={index} className="flex flex-col items-center flex-1">
-                        <div
-                          className="bg-[#2262C6] rounded-t w-full mb-2 transition-all duration-500 hover:bg-[#1e40af]"
-                          style={{ height: `${(item.borrowed / Math.max(1, Math.max(...filteredData.equipment.map(e => e.borrowed)))) * 200}px` }}
-                        ></div>
-                        <span className="text-xs text-gray-600 text-center">{item.category}</span>
-                        <span className="text-xs font-semibold">{item.borrowed}</span>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                    <h3 className="text-lg font-semibold text-gray-800">Most Expensive Equipment</h3>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-600">Category:</span>
+                      <select
+                        value={equipmentCategory}
+                        onChange={(e) => setEquipmentCategory(e.target.value)}
+                        className="px-3 py-1 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-[#2262C6] focus:border-transparent bg-white min-w-[120px]"
+                      >
+                        <option value="All">All</option>
+                        <option value="Laptop">Laptop</option>
+                        <option value="Networking">Networking</option>
+                        <option value="Printer">Printer</option>
+                        <option value="Projector">Projector</option>
+                        <option value="Peripherals">Peripherals</option>
+                      </select>
+                    </div>
+                  </div>
+              <div className="h-64 flex items-end justify-between gap-2">
+                    {filteredData.expensiveEquipment.map((item, index) => {
+                      const maxValue = Math.max(...filteredData.expensiveEquipment.map(e => e.value));
+                      const height = (item.value / maxValue) * 200;
+                      const getColorClass = (value) => {
+                        if (value >= 20000) return "bg-red-500";
+                        if (value >= 10000) return "bg-orange-500";
+                        if (value >= 5000) return "bg-yellow-500";
+                        return "bg-[#2262C6]";
+                      };
+                      
+                      return (
+                  <div key={index} className="flex flex-col items-center flex-1">
+                    <div
+                            className={`${getColorClass(item.value)} rounded-t w-full mb-2 transition-all duration-500 hover:opacity-80`}
+                            style={{ height: `${height}px` }}
+                            title={`$${item.value.toLocaleString()}`}
+                    ></div>
+                          <span className="text-xs text-gray-600 text-center leading-tight">{item.item}</span>
+                          <span className="text-xs font-semibold text-[#2262C6]">${(item.value / 1000).toFixed(0)}k</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-4 flex justify-center">
+                    <div className="flex items-center gap-4 text-xs">
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 bg-red-500 rounded"></div>
+                        <span className="text-gray-600">$20k+</span>
                       </div>
-                    ))}
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 bg-orange-500 rounded"></div>
+                        <span className="text-gray-600">$10k-20k</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 bg-yellow-500 rounded"></div>
+                        <span className="text-gray-600">$5k-10k</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 bg-[#2262C6] rounded"></div>
+                        <span className="text-gray-600">Under $5k</span>
+              </div>
+                </div>
+              </div>
+            </div>
+
+                {/* Top Borrowed Items Pie Chart */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                    <h3 className="text-lg font-semibold text-gray-800">Top Borrowed Items</h3>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-600">Category:</span>
+                      <select
+                        value={borrowedCategory}
+                        onChange={(e) => setBorrowedCategory(e.target.value)}
+                        className="px-3 py-1 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-[#2262C6] focus:border-transparent bg-white min-w-[120px]"
+                      >
+                        <option value="All">All</option>
+                        <option value="Laptop">Laptop</option>
+                        <option value="Networking">Networking</option>
+                        <option value="Printer">Printer</option>
+                        <option value="Projector">Projector</option>
+                        <option value="Peripherals">Peripherals</option>
+                      </select>
+                    </div>
+                  </div>
+              <div className="flex items-center justify-center h-64">
+                <div className="relative w-48 h-48">
+                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                    <circle
+                      cx="50"
+                      cy="50"
+                      r="40"
+                      fill="none"
+                      stroke="#e5e7eb"
+                      strokeWidth="8"
+                    />
+                    {(() => {
+                          const total = filteredData.topBorrowed.reduce((sum, item) => sum + item.borrowed, 0) || 1;
+                      let offset = 0;
+                          const colors = ['#2262C6', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe'];
+                          
+                          return filteredData.topBorrowed.map((item, idx) => {
+                            const percentage = Math.round((item.borrowed / total) * 100);
+                        const dash = `${percentage * 2.51} ${100 * 2.51}`;
+                        const circle = (
+                          <circle
+                            key={idx}
+                            cx="50"
+                            cy="50"
+                            r="40"
+                            fill="none"
+                                stroke={colors[idx % colors.length]}
+                            strokeWidth="8"
+                            strokeDasharray={dash}
+                            strokeDashoffset={`-${offset}`}
+                          />
+                        );
+                        offset += percentage * 2.51;
+                        return circle;
+                      });
+                    })()}
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="text-center">
+                          <div className="text-2xl font-bold text-gray-900">
+                            {filteredData.topBorrowed.reduce((s, i) => s + i.borrowed, 0)}
+                          </div>
+                          <div className="text-xs text-gray-500">Total Borrowed</div>
+                    </div>
                   </div>
                 </div>
-
-                {/* Top Borrowed Items */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                  <h3 className="text-lg font-semibold mb-4 text-gray-800">Top Borrowed Items</h3>
-                  <div className="space-y-3">
-                    {filteredData.topBorrowed.map((item, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-[#2262C6] text-white rounded-full flex items-center justify-center text-sm font-semibold">
-                            {index + 1}
+              </div>
+                  <div className="mt-4 max-h-40 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+                    <div className="space-y-2 pr-2">
+                      {filteredData.topBorrowed.map((item, index) => {
+                        const colors = ['#2262C6', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe'];
+                        const total = filteredData.topBorrowed.reduce((sum, i) => sum + i.borrowed, 0);
+                        const percentage = Math.round((item.borrowed / total) * 100);
+                        
+                        return (
+                          <div key={index} className="flex items-center justify-between py-1">
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="w-3 h-3 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: colors[index % colors.length] }}
+                    ></div>
+                              <span className="text-sm text-gray-600 truncate">{item.item}</span>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <span className="text-sm font-semibold text-gray-800">{item.borrowed}</span>
+                              <span className="text-xs text-gray-500 ml-1">({percentage}%)</span>
+                            </div>
                           </div>
-                          <span className="font-medium text-gray-800">{item.item}</span>
-                        </div>
-                        <span className="text-[#2262C6] font-semibold">{item.borrowed}</span>
-                      </div>
-                    ))}
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>
             </section>
           )}
 
-          {/* Users & Activity Section */}
-          {(category === "All" || category === "Users") && (
+          {/* System Trends & Compliance Section */}
+          {(category === "All" || category === "Users" || category === "Requests") && (
             <section className="space-y-6">
               <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
-                <Users className="h-5 w-5 text-[#2262C6]" />
-                Users & Activity
+                <TrendingUp className="h-5 w-5 text-[#2262C6]" />
+                System Trends & Compliance
               </h2>
               
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* User Activity */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                  <h3 className="text-lg font-semibold mb-4 text-gray-800">User Login Activity</h3>
-                  <div className="space-y-3">
-                    {filteredData.userActivity.map((user, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div>
-                          <div className="font-medium text-gray-800">{user.user}</div>
-                          <div className="text-sm text-gray-500">{user.role}</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-[#2262C6] font-semibold">{user.logins} logins</div>
-                          <div className="text-xs text-gray-500">{user.lastLogin}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
                 {/* Return Compliance */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                   <h3 className="text-lg font-semibold mb-4 text-gray-800">Return Compliance</h3>
@@ -368,100 +500,58 @@ const Reports = () => {
                         <div className="text-sm text-gray-600">
                           Borrowed: {user.borrowed} | Returned: {user.returned} | Avg Delay: {user.avgDelayDays} days
                         </div>
-                      </div>
-                    ))}
                   </div>
-                </div>
+                ))}
               </div>
-            </section>
-          )}
+            </div>
 
-          {/* Requests & Trends Section */}
-          {(category === "All" || category === "Requests") && (
-            <section className="space-y-6">
-              <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-[#2262C6]" />
-                Requests & Trends
-              </h2>
-              
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Monthly Trends */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                   <h3 className="text-lg font-semibold mb-4 text-gray-800">Monthly Request Trends</h3>
-                  <div className="h-64 relative">
-                    <svg className="w-full h-full" viewBox="0 0 400 200">
-                      <defs>
-                        <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                          <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#f3f4f6" strokeWidth="1"/>
-                        </pattern>
-                      </defs>
-                      <rect width="100%" height="100%" fill="url(#grid)" />
-                      
+              <div className="h-64 relative">
+                <svg className="w-full h-full" viewBox="0 0 400 200">
+                  <defs>
+                    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#f3f4f6" strokeWidth="1"/>
+                    </pattern>
+                  </defs>
+                  <rect width="100%" height="100%" fill="url(#grid)" />
+                  
                       {/* Requests line */}
-                      <polyline
-                        fill="none"
+                  <polyline
+                    fill="none"
                         stroke="#2262C6"
-                        strokeWidth="3"
+                    strokeWidth="3"
                         points={filteredData.monthlyRequests.map((point, index) => 
                           `${index * 60 + 30},${200 - (point.requests / Math.max(1, Math.max(...filteredData.monthlyRequests.map(p => p.requests)))) * 180}`
-                        ).join(' ')}
-                      />
-                      
+                    ).join(' ')}
+                  />
+                  
                       {/* Approved line */}
-                      <polyline
-                        fill="none"
+                  <polyline
+                    fill="none"
                         stroke="#10b981"
-                        strokeWidth="3"
+                    strokeWidth="3"
                         points={filteredData.monthlyRequests.map((point, index) => 
                           `${index * 60 + 30},${200 - (point.approved / Math.max(1, Math.max(...filteredData.monthlyRequests.map(p => p.approved)))) * 180}`
-                        ).join(' ')}
+                    ).join(' ')}
                       />
-                    </svg>
-                    
-                    {/* Legend */}
+                </svg>
+              
+              {/* Legend */}
                     <div className="absolute bottom-0 left-0 flex gap-4">
-                      <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
                         <div className="w-3 h-0.5 bg-[#2262C6]"></div>
                         <span className="text-xs text-gray-600">Requests</span>
-                      </div>
-                      <div className="flex items-center gap-2">
+                </div>
+                <div className="flex items-center gap-2">
                         <div className="w-3 h-0.5 bg-green-500"></div>
                         <span className="text-xs text-gray-600">Approved</span>
                       </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Admin Activity */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                  <h3 className="text-lg font-semibold mb-4 text-gray-800">Admin Activity</h3>
-                  <div className="space-y-3">
-                    {filteredData.adminActivity.map((admin, index) => (
-                      <div key={index} className="p-3 bg-gray-50 rounded-lg">
-                        <div className="font-medium text-gray-800 mb-2">{admin.admin}</div>
-                        <div className="grid grid-cols-2 gap-2 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Approvals:</span>
-                            <span className="text-green-600 font-semibold">{admin.approvals}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Rejections:</span>
-                            <span className="text-red-600 font-semibold">{admin.rejections}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Stock Adds:</span>
-                            <span className="text-blue-600 font-semibold">{admin.stockAdds}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Logins:</span>
-                            <span className="text-gray-800 font-semibold">{admin.logins}</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
                 </div>
               </div>
+            </div>
+          </div>
             </section>
           )}
 
@@ -473,8 +563,8 @@ const Reports = () => {
             </h2>
             
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
                       <th className="text-left py-3 px-4 font-medium text-gray-600">Date</th>
@@ -483,8 +573,8 @@ const Reports = () => {
                       <th className="text-left py-3 px-4 font-medium text-gray-600">Status</th>
                       <th className="text-left py-3 px-4 font-medium text-gray-600">Qty</th>
                       <th className="text-left py-3 px-4 font-medium text-gray-600">Approved By</th>
-                    </tr>
-                  </thead>
+                  </tr>
+                </thead>
                   <tbody className="divide-y divide-gray-200">
                     {filteredData.transactions.map((transaction, index) => (
                       <tr key={index} className="hover:bg-gray-50">
@@ -492,18 +582,18 @@ const Reports = () => {
                         <td className="py-3 px-4 text-gray-900">{transaction.employee}</td>
                         <td className="py-3 px-4 text-gray-900">{transaction.item}</td>
                         <td className="py-3 px-4">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(transaction.status)}`}>
-                            {transaction.status}
-                          </span>
-                        </td>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(transaction.status)}`}>
+                          {transaction.status}
+                        </span>
+                      </td>
                         <td className="py-3 px-4 text-gray-900">{transaction.qty}</td>
                         <td className="py-3 px-4 text-gray-900">{transaction.approvedBy}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
+          </div>
           </section>
         </main>
       </div>
