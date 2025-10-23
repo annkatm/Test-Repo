@@ -1,16 +1,46 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { getCurrentUserEmployeeId } from '../utils/userUtils';
 
 // Props now accept dynamic data instead of hardcoded examples
 // - approvedTransactions: [{ date, item, status, exchangeItems?: [...] }]
 // - transactionStats: { borrowed: number }
 // - borrowedDetails: { items: [{name, specs}], borrowDate, returnDate }
 const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions = [], borrowedDetails = null }) => {
+  const [currentUserId, setCurrentUserId] = useState(null);
+
+  // Get current user
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      try {
+        const userResponse = await fetch('/check-auth', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          credentials: 'same-origin'
+        });
+        
+        const userData = await userResponse.json();
+        if (userData.authenticated && userData.user) {
+          setCurrentUserId(userData.user.id);
+        }
+      } catch (error) {
+        console.error('Failed to get current user:', error);
+      }
+    };
+    
+    getCurrentUser();
+  }, []);
+
   const logActivity = (message, variant = 'info') => {
     try {
-      const prev = JSON.parse(localStorage.getItem('employee_activities') || '[]');
+      const prev = JSON.parse(localStorage.getItem(`employee_activities_${currentUserId || 'default'}`) || '[]');
       const entry = { id: Date.now(), message, variant, time: new Date().toISOString() };
       const next = [entry, ...(Array.isArray(prev) ? prev : [])].slice(0, 50);
-      localStorage.setItem('employee_activities', JSON.stringify(next));
+      if (currentUserId) {
+        localStorage.setItem(`employee_activities_${currentUserId}`, JSON.stringify(next));
+      }
     } catch (_) { }
   };
   const [selectedRow, setSelectedRow] = useState(null);
@@ -38,7 +68,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
   const [displayList, setDisplayList] = useState(() => Array.isArray(approvedTransactions) ? approvedTransactions : []);
   const [chosenUnit, setChosenUnit] = useState(() => {
     try {
-      const saved = localStorage.getItem('approved_selected_unit');
+      const saved = localStorage.getItem(`approved_selected_unit_${currentUserId || 'default'}`);
       return saved ? JSON.parse(saved) : null;
     } catch (_) { return null; }
   });
@@ -46,7 +76,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
   // Keep chosenUnit in sync if changed by another tab/process
   useEffect(() => {
     const onStorage = (e) => {
-      if (e.key === 'approved_selected_unit') {
+      if (e.key === `approved_selected_unit_${currentUserId}`) {
         try {
           const val = e.newValue ? JSON.parse(e.newValue) : null;
           setChosenUnit(val);
@@ -57,19 +87,19 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
-  }, []);
+  }, [currentUserId]);
 
   // Refresh selection whenever Browse Laptops reopens
   useEffect(() => {
     if (showBrowseLaptopsModal) {
       try {
-        const saved = localStorage.getItem('approved_selected_unit');
+        const saved = localStorage.getItem(`approved_selected_unit_${currentUserId || 'default'}`);
         setChosenUnit(saved ? JSON.parse(saved) : null);
       } catch (_) {
         setChosenUnit(null);
       }
     }
-  }, [showBrowseLaptopsModal]);
+  }, [showBrowseLaptopsModal, currentUserId]);
 
   useEffect(() => {
     try { setDisplayList(Array.isArray(approvedTransactions) ? approvedTransactions : []); } catch (_) {}
@@ -360,7 +390,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
               </button>
               <button
                 onClick={() => {
-                  try { localStorage.setItem('approved_selected_unit', JSON.stringify(selectedUnit)); } catch (_) { }
+                  try { localStorage.setItem(`approved_selected_unit_${currentUserId}`, JSON.stringify(selectedUnit)); } catch (_) { }
                   setChosenUnit(selectedUnit);
                   logActivity(`Approved: Selected unit ${selectedUnit.name}`, 'success');
                   setShowUnitConfirmModal(false);
@@ -674,7 +704,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                     <span className="font-semibold text-blue-700">Selected:</span> {chosenUnit.brand} — {chosenUnit.name}
                   </div>
                   <button
-                    onClick={() => { setChosenUnit(null); try { localStorage.removeItem('approved_selected_unit'); } catch (_) { }; }}
+                    onClick={() => { setChosenUnit(null); try { localStorage.removeItem(`approved_selected_unit_${currentUserId}`); } catch (_) { }; }}
                     className="text-xs px-2 py-1 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700"
                   >
                     Clear

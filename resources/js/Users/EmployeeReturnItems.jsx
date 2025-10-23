@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { getCurrentUserEmployeeId } from '../utils/userUtils';
 
 const ReturnItems = () => {
   const [currentPage, setCurrentPage] = useState(1);
@@ -19,13 +20,19 @@ const ReturnItems = () => {
       setLoading(true);
       setError("");
       try {
-        let url = "/api/transactions/history?status=returned";
+        const employeeId = await getCurrentUserEmployeeId();
+        if (!employeeId) {
+          setData([]);
+          return;
+        }
+
+        let url = `/api/transactions/history?status=returned&employee_id=${employeeId}`;
         let res = await fetch(url);
         let json = await res.json().catch(() => ({}));
         let list = Array.isArray(json) ? json : (json && json.data && Array.isArray(json.data) ? json.data : []);
 
         if (!Array.isArray(list) || list.length === 0) {
-          url = "/api/transactions/history";
+          url = `/api/transactions/history?employee_id=${employeeId}`;
           res = await fetch(url);
           json = await res.json().catch(() => ({}));
           list = Array.isArray(json) ? json : (json && json.data && Array.isArray(json.data) ? json.data : []);
