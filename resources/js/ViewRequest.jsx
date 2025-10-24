@@ -7,6 +7,7 @@ import SimpleConfirmModal from './components/SimpleConfirmModal.jsx';
 import SuccessModal from './components/SuccessModal';
 import ViewTransactionModal from './components/ViewTransactionModal';
 import EditTransactionModal from './components/EditTransactionModal';
+import VerifyReturnModal from './components/VerifyReturnModal';
 import { useRequestData } from './hooks/useRequestData';
 import { activityLogService } from './services/activityLogService';
 import api from './services/api';
@@ -85,6 +86,11 @@ const ViewRequest = () => {
   const [viewHolderModal, setViewHolderModal] = useState({
     isOpen: false,
     holderData: null
+  });
+
+  const [viewReturnModal, setViewReturnModal] = useState({
+    isOpen: false,
+    returnData: null
   });
 
   const handleSelect = (next) => {
@@ -411,6 +417,23 @@ const ViewRequest = () => {
     setViewHolderModal({
       isOpen: false,
       holderData: null
+    });
+  };
+
+  const handleViewReturn = (returnId) => {
+    const returnItem = verifyReturns.find(r => r.id === returnId);
+    if (returnItem) {
+      setViewReturnModal({
+        isOpen: true,
+        returnData: returnItem
+      });
+    }
+  };
+
+  const handleCloseViewReturnModal = () => {
+    setViewReturnModal({
+      isOpen: false,
+      returnData: null
     });
   };
 
@@ -1134,7 +1157,11 @@ const ViewRequest = () => {
                 </tr>
               ) : (
                 groupedVerifyReturns.map((group) => (
-                  <tr key={group.id} className="border-b border-gray-100 last:border-0 hover:bg-blue-50 cursor-pointer transition-colors duration-200">
+                  <tr 
+                    key={group.id} 
+                    onClick={() => handleViewReturn(group.returns[0]?.id || group.id)}
+                    className="border-b border-gray-100 last:border-0 hover:bg-blue-50 cursor-pointer transition-colors duration-200"
+                  >
                     <td className="py-4 px-6 text-sm font-medium text-gray-900">
                       {group.full_name}
                     </td>
@@ -1303,6 +1330,13 @@ const ViewRequest = () => {
         isOpen={viewHolderModal.isOpen}
         onClose={handleCloseViewHolderModal}
         transactionData={viewHolderModal.holderData}
+      />
+
+      {/* View Return Modal */}
+      <VerifyReturnModal
+        isOpen={viewReturnModal.isOpen}
+        onClose={handleCloseViewReturnModal}
+        returnData={viewReturnModal.returnData}
       />
     </div>
   );

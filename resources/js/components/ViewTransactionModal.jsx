@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Calendar, User, Package, MapPin, FileText, Clock } from 'lucide-react';
+import { X, Calendar, User, Package, MapPin, FileText, Clock, CheckCircle } from 'lucide-react';
 
 const ViewTransactionModal = ({ isOpen, onClose, transactionData }) => {
   if (!isOpen || !transactionData) return null;
@@ -23,11 +23,17 @@ const ViewTransactionModal = ({ isOpen, onClose, transactionData }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto" style={{ boxShadow: '0 25px 50px -12px rgba(0, 100, 255, 0.4), 0 0 0 1px rgba(0, 100, 255, 0.1)' }}>
+    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+      <div className="relative bg-white rounded-2xl shadow-2xl w-[460px] max-w-[95vw] border border-blue-100" style={{ boxShadow: '0 8px 32px rgba(29, 78, 216, 0.35)' }}>
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-2xl font-bold text-gray-900">Transaction Details</h2>
+          <div className="flex items-center space-x-3">
+            <CheckCircle className="h-6 w-6 text-green-600" />
+            <div>
+              <h3 className="text-lg font-bold text-gray-900">Current Holder Details</h3>
+              <p className="text-sm text-gray-600">Please review the details below</p>
+            </div>
+          </div>
           <button
             onClick={onClose}
             className="p-2 hover:bg-gray-100 rounded-full transition-colors"
@@ -36,203 +42,119 @@ const ViewTransactionModal = ({ isOpen, onClose, transactionData }) => {
           </button>
         </div>
 
+        {/* Employee Info Header - Blue Section */}
+        <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                <User className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h4 className="text-lg font-bold text-white">
+                  {transactionData.full_name || transactionData.name || 'N/A'}
+                </h4>
+                <p className="text-sm text-white/90">Employee</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <span className="text-sm text-white font-medium">
+                {transactionData.position || 'Regular'}
+              </span>
+            </div>
+          </div>
+        </div>
+
         {/* Content */}
-        <div className="p-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Left Column - Employee & Equipment Info */}
-            <div className="space-y-6">
-              {/* Employee Information */}
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="flex items-center mb-3">
-                  <User className="h-5 w-5 text-blue-600 mr-2" />
-                  <h3 className="text-lg font-semibold text-gray-900">Employee Information</h3>
-                </div>
-                <div className="space-y-2">
-                  <div>
-                    <span className="text-sm font-medium text-gray-600">Name:</span>
-                    <p className="text-gray-900">{transactionData.name}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-600">Position:</span>
-                    <p className="text-gray-900">{transactionData.position}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Equipment Information */}
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="flex items-center mb-3">
-                  <Package className="h-5 w-5 text-green-600 mr-2" />
-                  <h3 className="text-lg font-semibold text-gray-900">Equipment Information</h3>
-                </div>
-                <div className="space-y-2">
-                  <div>
-                    <span className="text-sm font-medium text-gray-600">Item:</span>
-                    <p className="text-gray-900">{transactionData.item}</p>
-                  </div>
-                  {transactionData.brand && (
-                    <div>
-                      <span className="text-sm font-medium text-gray-600">Brand:</span>
-                      <p className="text-gray-900">{transactionData.brand}</p>
-                    </div>
-                  )}
-                  {transactionData.model && (
-                    <div>
-                      <span className="text-sm font-medium text-gray-600">Model:</span>
-                      <p className="text-gray-900">{transactionData.model}</p>
-                    </div>
-                  )}
-                  {transactionData.categoryName && (
-                    <div>
-                      <span className="text-sm font-medium text-gray-600">Category:</span>
-                      <p className="text-gray-900">{transactionData.categoryName}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Request Information */}
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="flex items-center mb-3">
-                  <MapPin className="h-5 w-5 text-purple-600 mr-2" />
-                  <h3 className="text-lg font-semibold text-gray-900">Request Information</h3>
-                </div>
-                <div className="space-y-2">
-                  <div>
-                    <span className="text-sm font-medium text-gray-600">Request Mode:</span>
-                    <p className="text-gray-900">{formatRequestMode(transactionData.requestMode)}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-600">Request Date:</span>
-                    <p className="text-gray-900">{formatDate(transactionData.requestDate)}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-600">Transaction Number:</span>
-                    <p className="text-gray-900 font-mono">{transactionData.transactionNumber || 'N/A'}</p>
-                  </div>
+        <div className="p-6 space-y-4">
+          {/* Date Fields - Side by Side */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* Request Date */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Request Date</label>
+              <div className="relative">
+                <div className="w-full px-3 py-2 rounded-md bg-gray-100 text-gray-900 flex items-center justify-between">
+                  <span>{formatDate(transactionData.request_date || transactionData.created_at)}</span>
+                  <Calendar className="h-4 w-4 text-gray-500" />
                 </div>
               </div>
             </div>
 
-            {/* Right Column - Transaction Timeline & Status */}
-            <div className="space-y-6">
-              {/* Transaction Timeline */}
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="flex items-center mb-3">
-                  <Clock className="h-5 w-5 text-orange-600 mr-2" />
-                  <h3 className="text-lg font-semibold text-gray-900">Transaction Timeline</h3>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex items-center">
-                    <div className="w-3 h-3 bg-blue-500 rounded-full mr-3"></div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Request Submitted</p>
-                      <p className="text-xs text-gray-600">{formatDate(transactionData.requestDate)}</p>
-                    </div>
-                  </div>
-                  
-                  {transactionData.releaseDate && (
-                    <div className="flex items-center">
-                      <div className="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">Equipment Released</p>
-                        <p className="text-xs text-gray-600">{formatDate(transactionData.releaseDate)}</p>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {transactionData.expectedReturnDate && (
-                    <div className="flex items-center">
-                      <div className="w-3 h-3 bg-yellow-500 rounded-full mr-3"></div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">Expected Return</p>
-                        <p className="text-xs text-gray-600">{formatDate(transactionData.expectedReturnDate)}</p>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {transactionData.returnDate && (
-                    <div className="flex items-center">
-                      <div className="w-3 h-3 bg-red-500 rounded-full mr-3"></div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">Equipment Returned</p>
-                        <p className="text-xs text-gray-600">{formatDate(transactionData.returnDate)}</p>
-                      </div>
-                    </div>
-                  )}
+            {/* Return Date */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Return Date</label>
+              <div className="relative">
+                <div className="w-full px-3 py-2 rounded-md bg-gray-100 text-gray-900 flex items-center justify-between">
+                  <span>{formatDate(transactionData.return_date || transactionData.expected_return_date) || 'N/A'}</span>
+                  <Calendar className="h-4 w-4 text-gray-500" />
                 </div>
               </div>
+            </div>
+          </div>
 
-              {/* Equipment Condition */}
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="flex items-center mb-3">
-                  <FileText className="h-5 w-5 text-indigo-600 mr-2" />
-                  <h3 className="text-lg font-semibold text-gray-900">Equipment Condition</h3>
-                </div>
-                <div className="space-y-2">
-                  <div>
-                    <span className="text-sm font-medium text-gray-600">Release Condition:</span>
-                    <p className="text-gray-900">{formatCondition(transactionData.releaseCondition)}</p>
-                  </div>
-                  {transactionData.returnCondition && (
-                    <div>
-                      <span className="text-sm font-medium text-gray-600">Return Condition:</span>
-                      <p className="text-gray-900">{formatCondition(transactionData.returnCondition)}</p>
+          {/* Items Section */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Items</label>
+            <div className="space-y-2">
+              {transactionData.items && transactionData.items.length > 0 ? (
+                transactionData.items.map((item, index) => (
+                  <div key={index} className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg bg-gray-50">
+                    <Package className="h-5 w-5 text-blue-600" />
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900">{item.equipment_name || item.name}</p>
+                      <p className="text-sm text-gray-600">{item.specifications || item.specs || 'Equipment'}</p>
                     </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Notes */}
-              {(transactionData.releaseNotes || transactionData.returnNotes) && (
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <div className="flex items-center mb-3">
-                    <FileText className="h-5 w-5 text-gray-600 mr-2" />
-                    <h3 className="text-lg font-semibold text-gray-900">Notes</h3>
                   </div>
-                  <div className="space-y-2">
-                    {transactionData.releaseNotes && (
-                      <div>
-                        <span className="text-sm font-medium text-gray-600">Release Notes:</span>
-                        <p className="text-gray-900 text-sm mt-1">{transactionData.releaseNotes}</p>
-                      </div>
-                    )}
-                    {transactionData.returnNotes && (
-                      <div>
-                        <span className="text-sm font-medium text-gray-600">Return Notes:</span>
-                        <p className="text-gray-900 text-sm mt-1">{transactionData.returnNotes}</p>
-                      </div>
-                    )}
+                ))
+              ) : (
+                <div className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg bg-gray-50">
+                  <Package className="h-5 w-5 text-blue-600" />
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-900">{transactionData.equipment_name || transactionData.item || 'Equipment'}</p>
+                    <p className="text-sm text-gray-600">Equipment Item</p>
                   </div>
                 </div>
               )}
+            </div>
+          </div>
 
-              {/* Status Badge */}
-              <div className="bg-gray-50 rounded-lg p-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-600">Current Status:</span>
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                    transactionData.status === 'released' 
-                      ? 'bg-green-100 text-green-800' 
-                      : transactionData.status === 'returned'
-                      ? 'bg-blue-100 text-blue-800'
-                      : transactionData.status === 'pending'
-                      ? 'bg-yellow-100 text-yellow-800'
-                      : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {transactionData.status?.charAt(0).toUpperCase() + transactionData.status?.slice(1)}
-                  </span>
-                </div>
-              </div>
+          {/* Request Mode */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Request Mode</label>
+            <div className="w-full px-3 py-2 rounded-md bg-gray-100 text-gray-900">
+              {formatRequestMode(transactionData.request_mode || transactionData.requestMode)}
+            </div>
+          </div>
+
+          {/* Status */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+            <div className="w-full px-3 py-2 rounded-md bg-gray-100 text-gray-900">
+              <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                transactionData.status === 'released' 
+                  ? 'bg-green-100 text-green-800' 
+                  : transactionData.status === 'returned'
+                  ? 'bg-blue-100 text-blue-800'
+                  : transactionData.status === 'pending'
+                  ? 'bg-yellow-100 text-yellow-800'
+                  : 'bg-gray-100 text-gray-800'
+              }`}>
+                {transactionData.status?.charAt(0).toUpperCase() + transactionData.status?.slice(1) || 'Active'}
+              </span>
             </div>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end p-6 border-t border-gray-200">
+        <div className="flex justify-end p-6 border-t border-gray-200 space-x-3">
           <button
             onClick={onClose}
-            className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+            className="px-4 py-2 rounded-md border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onClose}
+            className="px-6 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors"
           >
             Close
           </button>
