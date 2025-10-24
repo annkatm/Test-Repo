@@ -81,9 +81,19 @@ const ControlPanel = () => {
       'position': '/positions',
       'department': '/departments', 
       'client': '/clients',
-      'employeetype': '/employee-types'
+      'employee type': '/employee-types'
     };
     return endpoints[type] || '/items';
+  };
+
+  const getDisplayName = (type) => {
+    const displayNames = {
+      'position': 'Position',
+      'department': 'Department', 
+      'client': 'Client',
+      'employee type': 'Employee Type'
+    };
+    return displayNames[type] || type;
   };
 
   const addNewItem = async () => {
@@ -318,18 +328,18 @@ const ControlPanel = () => {
             <div className="fixed inset-0 z-50 flex items-center justify-center">
               <div className="absolute inset-0 bg-black/30" onClick={closeGenericModal} />
               <div className="relative bg-white rounded-2xl shadow-2xl w-[460px] max-w-[95vw] p-8 border border-blue-100" style={{ boxShadow: '0 8px 32px rgba(29, 78, 216, 0.35)' }}>
-                <h3 className="text-lg font-bold text-blue-600 text-center mb-6">Manage {activeModal.charAt(0).toUpperCase() + activeModal.slice(1)}</h3>
+                <h3 className="text-lg font-bold text-blue-600 text-center mb-6">Manage {getDisplayName(activeModal)}</h3>
                 
                 {/* Add new item */}
                 <div className="mb-4">
-                  <label className="block text-[12px] text-gray-600 mb-1">Add New {activeModal.charAt(0).toUpperCase() + activeModal.slice(1)}</label>
+                  <label className="block text-[12px] text-gray-600 mb-1">Add New {getDisplayName(activeModal)}</label>
                   <div className="flex space-x-2">
                     <input
                       type="text"
                       value={newItemName}
                       onChange={(e) => setNewItemName(e.target.value)}
                       className="flex-1 px-3 py-2 rounded-md bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder={`Enter ${activeModal} name`}
+                      placeholder={`Enter ${getDisplayName(activeModal).toLowerCase()} name`}
                     />
                     <button
                       type="button"
@@ -344,7 +354,7 @@ const ControlPanel = () => {
 
                 {/* Existing items list */}
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="block text-[12px] text-gray-600">Existing {activeModal.charAt(0).toUpperCase() + activeModal.slice(1)}</span>
+                  <span className="block text-[12px] text-gray-600">Existing {getDisplayName(activeModal)}</span>
                 </div>
                 
                 <div className="mb-5">

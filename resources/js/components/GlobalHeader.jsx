@@ -196,6 +196,7 @@ const GlobalHeader = ({ title = "", onSearch, hideSearch = false, showTitle = tr
             const loginData = await response.json();
             if (loginData.success) {
               setUser(loginData.user);
+              try { localStorage.setItem('user', JSON.stringify(loginData.user)); } catch (e) {}
               setLoading(false);
               return;
             }
@@ -204,7 +205,31 @@ const GlobalHeader = ({ title = "", onSearch, hideSearch = false, showTitle = tr
           console.log('Login-data endpoint failed, trying profile endpoint:', error);
         }
         
-        // If login-data failed, try the profile endpoint
+        // Next, try session-based check-auth which returns the authenticated user
+        try {
+          const checkAuthRes = await fetch('/check-auth', {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+              'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+            },
+            credentials: 'same-origin',
+          });
+          if (checkAuthRes.ok) {
+            const checkData = await checkAuthRes.json();
+            if (checkData?.authenticated && checkData?.user) {
+              setUser(checkData.user);
+              try { localStorage.setItem('user', JSON.stringify(checkData.user)); } catch (e) {}
+              setLoading(false);
+              return;
+            }
+          }
+        } catch (e) {
+          console.log('check-auth endpoint failed, trying profile endpoint:', e);
+        }
+
+        // If both above did not return user, try the profile endpoint
         response = await fetch('/api/profile', {
           method: 'GET',
           headers: {

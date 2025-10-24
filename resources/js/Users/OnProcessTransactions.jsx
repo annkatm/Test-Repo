@@ -1,6 +1,5 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { X } from 'lucide-react';
-import { getCurrentUserEmployeeId } from '../utils/userUtils';
 
 // Props now accept dynamic data instead of hardcoded examples
 // - requests: array of on-process requests [{ id, date, item, status, details: [{icon,name,description}] }]
@@ -18,53 +17,22 @@ const OnProcessTransactions = ({
   const [actionLoading, setActionLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10); // acts as the "sorting" (how many to display)
-  const [userRequests, setUserRequests] = useState([]);
 
-  // Filter requests to only show current user's requests
-  useEffect(() => {
-    const filterUserRequests = async () => {
-      try {
-        const employeeId = await getCurrentUserEmployeeId();
-        if (!employeeId) {
-          setUserRequests([]);
-          return;
-        }
-
-        // Filter requests to only include current user's requests
-        const filteredRequests = requests.filter(request => {
-          // If request has employee_id, filter by it
-          if (request.employee_id) {
-            return request.employee_id === employeeId;
-          }
-          // If no employee_id, we can't determine ownership, so exclude it
-          return false;
-        });
-
-        setUserRequests(filteredRequests);
-      } catch (error) {
-        console.error('Failed to filter user requests:', error);
-        setUserRequests([]);
-      }
-    };
-
-    filterUserRequests();
-  }, [requests]);
-
-  const totalPages = Math.max(1, Math.ceil((userRequests?.length || 0) / pageSize));
+  const totalPages = Math.max(1, Math.ceil((requests?.length || 0) / pageSize));
   const paginatedRequests = useMemo(() => {
     const start = (page - 1) * pageSize;
     const end = start + pageSize;
-    return (userRequests || []).slice(start, end);
-  }, [userRequests, page, pageSize]);
+    return (requests || []).slice(start, end);
+  }, [requests, page, pageSize]);
 
-  const selectedRequestData = (userRequests || []).find(req => req.id === selectedRequest);
+  const selectedRequestData = (requests || []).find(req => req.id === selectedRequest);
 
   const handleRowClick = (request) => {
     setSelectedRequest(request.id);
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
+    <div className="h-full min-h-0 bg-gray-50 p-4 sm:p-6 lg:p-8">
       {actionLoading && (
         <div className="fixed inset-0 z-[100] grid place-items-center bg-black/30">
           <div className="h-12 w-12 border-4 border-white/60 border-t-blue-600 rounded-full animate-spin"></div>
@@ -99,7 +67,7 @@ const OnProcessTransactions = ({
               {/* Scrollable Table Rows Container */}
               <div className="overflow-y-auto h-[400px] sm:h-[500px] lg:h-[600px] bg-white">
                 <div className="divide-y divide-gray-100">
-                  {(userRequests || []).map((row, i) => (
+                  {(requests || []).map((row, i) => (
                     <div
                       key={i}
                       onClick={() => handleRowClick(row)}
