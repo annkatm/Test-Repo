@@ -16,7 +16,7 @@ const OnProcessTransactions = ({
   const [isViewAllOpen, setIsViewAllOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10); // acts as the "sorting" (how many to display)
+  const [pageSize, setPageSize] = useState(10); // page size not used for the main scroll list
 
   const totalPages = Math.max(1, Math.ceil((requests?.length || 0) / pageSize));
   const paginatedRequests = useMemo(() => {
@@ -33,6 +33,13 @@ const OnProcessTransactions = ({
 
   return (
     <div className="h-full min-h-0 bg-gray-50 p-4 sm:p-6 lg:p-8">
+      {/* Hide scrollbars but keep scroll behavior */}
+      <style>
+        {`
+          .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+          .no-scrollbar::-webkit-scrollbar { display: none; }
+        `}
+      </style>
       {actionLoading && (
         <div className="fixed inset-0 z-[100] grid place-items-center bg-black/30">
           <div className="h-12 w-12 border-4 border-white/60 border-t-blue-600 rounded-full animate-spin"></div>
@@ -65,7 +72,7 @@ const OnProcessTransactions = ({
               </div>
 
               {/* Scrollable Table Rows Container */}
-              <div className="overflow-y-auto h-[400px] sm:h-[500px] lg:h-[600px] bg-white">
+              <div className="max-h-[60vh] overflow-y-auto no-scrollbar">
                 <div className="divide-y divide-gray-100">
                   {(requests || []).map((row, i) => (
                     <div
@@ -305,10 +312,10 @@ const OnProcessTransactions = ({
 
             <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
               {/* Table Section */}
-              <div className="flex-1 p-6 overflow-y-auto">
-                <table className="w-full border-collapse">
+              <div className="overflow-x-auto max-h-[50vh] overflow-y-auto no-scrollbar">
+                <table className="w-full min-w-[480px]">
                   <thead>
-                    <tr className="border-b-2 border-gray-200">
+                    <tr className="border-b border-gray-200 bg-gray-50">
                       <th className="text-left p-3 text-base font-semibold text-gray-800">Date</th>
                       <th className="text-left p-3 text-base font-semibold text-gray-800">Item</th>
                       <th className="text-left p-3 text-base font-semibold text-gray-800">Status</th>
