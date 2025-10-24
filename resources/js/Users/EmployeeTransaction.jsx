@@ -6,7 +6,6 @@ import ApprovedTransactions from './ApprovedTransactions';
 import StatsCards from './StatsCards';
 import RecentActivities from './RecentActivities';
 import HistoryView from './HistoryView';
-import { getCurrentUserEmployeeId } from '../utils/userUtils';
 
 const EmployeeTransaction = () => {
   const [showExchangeConfirmModal, setShowExchangeConfirmModal] = useState(false);
@@ -57,51 +56,28 @@ const EmployeeTransaction = () => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, ttl);
   };
-  const [notificationCount, setNotificationCount] = useState(0);
-  const [currentUserId, setCurrentUserId] = useState(null);
+  const [notificationCount, setNotificationCount] = useState(() => {
+    try {
+      const v = Number(localStorage.getItem('employee_history_unseen') || '0');
+      return Number.isNaN(v) ? 0 : v;
+    } catch (_e) {
+      return 0;
+    }
+  });
   const prevHistoryLenRef = useRef(0);
 
-  // Get current user and set up user-specific localStorage
   useEffect(() => {
-    const getCurrentUser = async () => {
-      try {
-        const userResponse = await fetch('/check-auth', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
-          },
-          credentials: 'same-origin'
-        });
-        
-        const userData = await userResponse.json();
-        if (userData.authenticated && userData.user) {
-          const userId = userData.user.id;
-          setCurrentUserId(userId);
-          
-          // Load user-specific activities
-          const saved = JSON.parse(localStorage.getItem(`employee_activities_${userId}`) || '[]');
-          if (Array.isArray(saved)) setActivities(saved);
-          
-          // Load user-specific notification count
-          const count = Number(localStorage.getItem(`employee_history_unseen_${userId}`) || '0');
-          setNotificationCount(Number.isNaN(count) ? 0 : count);
-        }
-      } catch (error) {
-        console.error('Failed to get current user:', error);
-      }
-    };
-    
-    getCurrentUser();
+    try {
+      const saved = JSON.parse(localStorage.getItem('employee_activities') || '[]');
+      if (Array.isArray(saved)) setActivities(saved);
+    } catch (_) { }
   }, []);
 
   const logActivity = (message, variant = 'info') => {
     const entry = { id: Date.now(), message, variant, time: new Date().toISOString() };
     setActivities((prev) => {
       const next = [entry, ...prev].slice(0, 50);
-      if (currentUserId) {
-        try { localStorage.setItem(`employee_activities_${currentUserId}`, JSON.stringify(next)); } catch (_) { }
-      }
+      try { localStorage.setItem('employee_activities', JSON.stringify(next)); } catch (_) { }
       return next;
     });
   };
@@ -110,9 +86,7 @@ const EmployeeTransaction = () => {
   const incrementNotification = (count = 1, entry = null) => {
     setNotificationCount((prev) => {
       const next = prev + count;
-      if (currentUserId) {
-        try { localStorage.setItem(`employee_history_unseen_${currentUserId}`, String(next)); } catch (_) { }
-      }
+      try { localStorage.setItem('employee_history_unseen', String(next)); } catch (_) { }
       return next;
     });
 
@@ -120,9 +94,7 @@ const EmployeeTransaction = () => {
       // Prepend to activities and historyData locally so UI reflects it immediately
       setActivities((prev) => {
         const next = [entry, ...prev].slice(0, 50);
-        if (currentUserId) {
-          try { localStorage.setItem(`employee_activities_${currentUserId}`, JSON.stringify(next)); } catch (_) { }
-        }
+        try { localStorage.setItem('employee_activities', JSON.stringify(next)); } catch (_) { }
         return next;
       });
       setHistoryData((prev) => [entry, ...prev]);
@@ -209,9 +181,7 @@ const EmployeeTransaction = () => {
       // keep a log in activities
       setActivities((prev) => {
         const next = [entry, ...prev].slice(0, 50);
-        if (currentUserId) {
-          try { localStorage.setItem(`employee_activities_${currentUserId}`, JSON.stringify(next)); } catch (_) { }
-        }
+        try { localStorage.setItem('employee_activities', JSON.stringify(next)); } catch (_) { }
         return next;
       });
       // show toast popup for the notification
@@ -274,13 +244,7 @@ const EmployeeTransaction = () => {
   // Fetch denied requests
   const fetchDeniedRequests = async () => {
     try {
-      const employeeId = await getCurrentUserEmployeeId();
-      if (!employeeId) {
-        setDeniedRequests([]);
-        return [];
-      }
-
-      const res = await fetch(`/api/requests?status=denied&employee_id=${employeeId}`);
+      const res = await fetch('/api/requests?status=denied');
       const data = await res.json();
 
       console.log('Denied requests response:', data); // Debug log
@@ -389,13 +353,7 @@ const EmployeeTransaction = () => {
 
   const fetchPendingTransactions = async () => {
     try {
-      const employeeId = await getCurrentUserEmployeeId();
-      if (!employeeId) {
-        setPendingTransactions([]);
-        return;
-      }
-
-      const response = await fetch(`/api/requests?status=pending&employee_id=${employeeId}`);
+      const response = await fetch('/api/requests?status=pending');
       const data = await response.json();
 
       if (data.success && Array.isArray(data.data)) {
@@ -698,7 +656,6 @@ const EmployeeTransaction = () => {
     // Convert pending transactions to the format expected by OnProcessTransactions
     const requestsData = pendingTransactions.map((transaction, index) => ({
       id: transaction.id || index + 1,
-      employee_id: transaction.employee_id, // Preserve employee_id for filtering
       date: transaction.created_at ? new Date(transaction.created_at).toLocaleDateString("en-US", {
         month: "2-digit",
         day: "2-digit",
@@ -901,9 +858,7 @@ const EmployeeTransaction = () => {
             onClick={() => {
               logActivity('Opened History', 'info');
               // Reset unseen counter when user opens history
-              if (currentUserId) {
-                try { localStorage.setItem(`employee_history_unseen_${currentUserId}`, '0'); } catch (_) { }
-              }
+              try { localStorage.setItem('employee_history_unseen', '0'); } catch (_) { }
               setNotificationCount(0);
               // Force refetch history to show latest
               fetchTransactionHistory();
