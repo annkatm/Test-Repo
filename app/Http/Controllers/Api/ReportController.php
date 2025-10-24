@@ -109,6 +109,55 @@ class ReportController extends Controller
                 $trend[$c->month]['completed'] = (int) $c->completed;
             }
 
+            // Top borrowed items (count all transactions regardless of status to show borrowing activity)
+            $topBorrowed = DB::table('equipment')
+                ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
+                ->leftJoin('transactions', 'equipment.id', '=', 'transactions.equipment_id')
+                ->select([
+                    'equipment.name as item',
+                    'equipment.brand',
+                    DB::raw('COALESCE(categories.name, "Uncategorized") as category'),
+                    DB::raw('COUNT(transactions.id) as borrowed_count')
+                ])
+                ->whereNotNull('transactions.id')
+                ->groupBy('equipment.id', 'equipment.name', 'equipment.brand', 'categories.name')
+                ->having('borrowed_count', '>', 0)
+                ->orderByDesc('borrowed_count')
+                ->limit(10)
+                ->get();
+
+            // Most expensive equipment
+            $expensiveEquipment = DB::table('equipment')
+                ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
+                ->select([
+                    'equipment.name as item',
+                    'equipment.brand',
+                    'equipment.purchase_price as value',
+                    DB::raw('COALESCE(categories.name, "Uncategorized") as category')
+                ])
+                ->whereNotNull('equipment.purchase_price')
+                ->where('equipment.purchase_price', '>', 0)
+                ->orderByDesc('equipment.purchase_price')
+                ->limit(10)
+                ->get();
+
+            // Return compliance (employees with their borrow/return stats)
+            $returnCompliance = DB::table('employees')
+                ->leftJoin('transactions', 'employees.id', '=', 'transactions.employee_id')
+                ->select([
+                    DB::raw("CONCAT(COALESCE(employees.first_name, ''), ' ', COALESCE(employees.last_name, '')) as user"),
+                    DB::raw('COUNT(transactions.id) as borrowed'),
+                    DB::raw('SUM(CASE WHEN transactions.return_date IS NOT NULL THEN 1 ELSE 0 END) as returned'),
+                    DB::raw('SUM(CASE WHEN transactions.return_date IS NOT NULL AND transactions.return_date > transactions.expected_return_date THEN 1 ELSE 0 END) as late'),
+                    DB::raw('ROUND(AVG(CASE WHEN transactions.return_date IS NOT NULL AND transactions.return_date > transactions.expected_return_date THEN DATEDIFF(transactions.return_date, transactions.expected_return_date) ELSE 0 END), 0) as avgDelayDays')
+                ])
+                ->whereNotNull('transactions.id')
+                ->groupBy('employees.id', 'employees.first_name', 'employees.last_name')
+                ->having('borrowed', '>', 0)
+                ->orderByDesc('borrowed')
+                ->limit(10)
+                ->get();
+
             // Recent transactions table
             $transactions = DB::table('transactions')
                 ->leftJoin('employees', 'transactions.employee_id', '=', 'employees.id')
@@ -145,6 +194,9 @@ class ReportController extends Controller
                     'categories' => $byCategory,
                     'trend' => array_values($trend),
                     'transactions' => $transactions,
+                    'topBorrowed' => $topBorrowed,
+                    'expensiveEquipment' => $expensiveEquipment,
+                    'returnCompliance' => $returnCompliance,
                 ],
             ]);
         } catch (\Exception $e) {
