@@ -22,6 +22,28 @@ const ViewTransactionModal = ({ isOpen, onClose, transactionData }) => {
     return condition.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
   };
 
+  // Helper function to get avatar URL
+  const getAvatarUrl = (data) => {
+    const avatar = data?.avatar_url || data?.profile_photo_url || data?.photo_url || data?.employee_image || data?.avatar || null;
+    if (!avatar) return null;
+    if (avatar.includes('http') || avatar.startsWith('/storage/')) return avatar;
+    return `/storage/${avatar}`;
+  };
+
+  // Helper function to get initials
+  const getInitials = (name) => {
+    if (!name) return '?';
+    return name
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  const avatarUrl = getAvatarUrl(transactionData);
+  const employeeName = transactionData?.full_name || transactionData?.name || 'N/A';
+
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
       <div className="relative bg-white rounded-2xl shadow-2xl w-[460px] max-w-[95vw] border border-blue-100" style={{ boxShadow: '0 8px 32px rgba(29, 78, 216, 0.35)' }}>
@@ -46,12 +68,24 @@ const ViewTransactionModal = ({ isOpen, onClose, transactionData }) => {
         <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-                <User className="h-6 w-6 text-white" />
+              <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center overflow-hidden text-blue-600 font-semibold text-sm">
+                {avatarUrl ? (
+                  <img 
+                    src={avatarUrl} 
+                    alt={employeeName} 
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.parentElement.textContent = getInitials(employeeName);
+                    }}
+                  />
+                ) : (
+                  getInitials(employeeName)
+                )}
               </div>
               <div>
                 <h4 className="text-lg font-bold text-white">
-                  {transactionData.full_name || transactionData.name || 'N/A'}
+                  {employeeName}
                 </h4>
                 <p className="text-sm text-white/90">Employee</p>
               </div>
