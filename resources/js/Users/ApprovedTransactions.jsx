@@ -1,46 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { getCurrentUserEmployeeId } from '../utils/userUtils';
 
 // Props now accept dynamic data instead of hardcoded examples
 // - approvedTransactions: [{ date, item, status, exchangeItems?: [...] }]
 // - transactionStats: { borrowed: number }
 // - borrowedDetails: { items: [{name, specs}], borrowDate, returnDate }
 const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions = [], borrowedDetails = null }) => {
-  const [currentUserId, setCurrentUserId] = useState(null);
-
-  // Get current user
-  useEffect(() => {
-    const getCurrentUser = async () => {
-      try {
-        const userResponse = await fetch('/check-auth', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
-          },
-          credentials: 'same-origin'
-        });
-        
-        const userData = await userResponse.json();
-        if (userData.authenticated && userData.user) {
-          setCurrentUserId(userData.user.id);
-        }
-      } catch (error) {
-        console.error('Failed to get current user:', error);
-      }
-    };
-    
-    getCurrentUser();
-  }, []);
-
   const logActivity = (message, variant = 'info') => {
     try {
-      const prev = JSON.parse(localStorage.getItem(`employee_activities_${currentUserId || 'default'}`) || '[]');
+      const prev = JSON.parse(localStorage.getItem('employee_activities') || '[]');
       const entry = { id: Date.now(), message, variant, time: new Date().toISOString() };
       const next = [entry, ...(Array.isArray(prev) ? prev : [])].slice(0, 50);
-      if (currentUserId) {
-        localStorage.setItem(`employee_activities_${currentUserId}`, JSON.stringify(next));
-      }
+      localStorage.setItem('employee_activities', JSON.stringify(next));
     } catch (_) { }
   };
   const [selectedRow, setSelectedRow] = useState(null);
@@ -68,7 +38,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
   const [displayList, setDisplayList] = useState(() => Array.isArray(approvedTransactions) ? approvedTransactions : []);
   const [chosenUnit, setChosenUnit] = useState(() => {
     try {
-      const saved = localStorage.getItem(`approved_selected_unit_${currentUserId || 'default'}`);
+      const saved = localStorage.getItem('approved_selected_unit');
       return saved ? JSON.parse(saved) : null;
     } catch (_) { return null; }
   });
@@ -76,7 +46,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
   // Keep chosenUnit in sync if changed by another tab/process
   useEffect(() => {
     const onStorage = (e) => {
-      if (e.key === `approved_selected_unit_${currentUserId}`) {
+      if (e.key === 'approved_selected_unit') {
         try {
           const val = e.newValue ? JSON.parse(e.newValue) : null;
           setChosenUnit(val);
@@ -87,19 +57,19 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
-  }, [currentUserId]);
+  }, []);
 
   // Refresh selection whenever Browse Laptops reopens
   useEffect(() => {
     if (showBrowseLaptopsModal) {
       try {
-        const saved = localStorage.getItem(`approved_selected_unit_${currentUserId || 'default'}`);
+        const saved = localStorage.getItem('approved_selected_unit');
         setChosenUnit(saved ? JSON.parse(saved) : null);
       } catch (_) {
         setChosenUnit(null);
       }
     }
-  }, [showBrowseLaptopsModal, currentUserId]);
+  }, [showBrowseLaptopsModal]);
 
   useEffect(() => {
     try { setDisplayList(Array.isArray(approvedTransactions) ? approvedTransactions : []); } catch (_) {}
@@ -235,7 +205,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
+    <div className="h-full min-h-0 bg-White p-4 sm:p-6 lg:p-8">
       {actionLoading && (
         <div className="fixed inset-0 z-[100] grid place-items-center bg-black/30">
           <div className="h-12 w-12 border-4 border-white/60 border-t-blue-600 rounded-full animate-spin"></div>
@@ -390,7 +360,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
               </button>
               <button
                 onClick={() => {
-                  try { localStorage.setItem(`approved_selected_unit_${currentUserId}`, JSON.stringify(selectedUnit)); } catch (_) { }
+                  try { localStorage.setItem('approved_selected_unit', JSON.stringify(selectedUnit)); } catch (_) { }
                   setChosenUnit(selectedUnit);
                   logActivity(`Approved: Selected unit ${selectedUnit.name}`, 'success');
                   setShowUnitConfirmModal(false);
@@ -406,10 +376,10 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-[1600px] mx-auto px-2 sm:px-4">
         {/* Header Row - Title and Back Button */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 -mt-2">
-          <h1 className="text-2xl sm:text-3xl font-bold text-[#2262C6]">Approved</h1>
+          <h1 className="text-2xl sm:text-3xl xl:text-4xl font-bold text-[#2262C6]">Approved</h1>
           <div className="flex items-center gap-3">
             <button
               onClick={() => { logActivity('Approved: Back to transactions', 'info'); onBack(); }}
@@ -420,27 +390,27 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8">
           {/* Left Column - Table */}
           <div className={`${selectedRow !== null ? 'lg:col-span-8' : 'lg:col-span-12'}`}>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-300 overflow-hidden">
               {/* Table Header - Hidden on mobile, visible on tablet+ */}
-              <div className="hidden sm:grid grid-cols-12 bg-gray-50 text-gray-700 font-semibold text-base py-4 px-4 sm:px-6 border-b border-gray-200">
-                <div className="col-span-3">Date</div>
-                <div className="col-span-6">Item</div>
-                <div className="col-span-3">Status</div>
+              <div className="hidden sm:grid grid-cols-12 bg-gray-50 text-gray-700 font-semibold text-base lg:text-lg py-4 xl:py-5 px-4 sm:px-6 border-b border-gray-200">
+                <div className="col-span-3 text-center">Date</div>
+                <div className="col-span-6 text-center">Item</div>
+                <div className="col-span-3 text-center">Status</div>
               </div>
 
               {/* Scrollable Table Rows Container */}
-              <div className="overflow-y-auto h-[400px] sm:h-[500px] lg:h-[600px] bg-white">
+              <div className="overflow-y-auto h-[360px] sm:h-[360px] lg:h-[360px] xl:h-[420px] bg-white [&::-webkit-scrollbar]:hidden">
                 <div className="divide-y divide-gray-100">
-                  {(paginated || []).map((transaction, index) => {
-                    const globalIndex = (page - 1) * pageSize + index;
+                  {(displayList || []).map((transaction, index) => {
+                    const globalIndex = index;
                     return (
                       <div
                         key={globalIndex}
                         onClick={() => { setSelectedRow(globalIndex); logActivity(`Approved: Selected row ${globalIndex + 1} (${transaction.item})`, 'info'); }}
-                        className={`grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-0 items-start sm:items-center py-4 sm:py-6 px-4 sm:px-6 transition-colors cursor-pointer ${selectedRow === globalIndex ? 'border-l-4 border-blue-600' : ''
+                        className={`grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-0 items-start sm:items-center py-4 sm:py-6 xl:py-7 px-4 sm:px-6 transition-colors cursor-pointer ${selectedRow === globalIndex ? 'border-l-4 border-blue-600' : ''
                           }`}
                       >
                         {/* Mobile layout */}
@@ -460,13 +430,13 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                           </div>
                         </div>
                         <div className="hidden sm:contents">
-                          <div className="col-span-3 text-gray-800 text-base font-semibold">
+                          <div className="col-span-3 text-gray-800 text-base lg:text-lg font-semibold text-center">
                             {transaction.date}
                           </div>
-                          <div className="col-span-6 text-gray-800 text-base font-semibold">
+                          <div className="col-span-6 text-gray-800 text-base lg:text-lg font-semibold text-center">
                             {transaction.item}
                           </div>
-                          <div className="col-span-3">
+                          <div className="col-span-3 flex justify-center">
                             <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200">
                               {transaction.status}
                             </span>
@@ -495,7 +465,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
             />
 
             {/* Panel content */}
-            <div className="absolute right-0 top-0 bottom-0 w-full sm:w-96 lg:w-auto lg:relative bg-gray-50 lg:bg-transparent overflow-y-auto p-4 sm:p-6 lg:p-0">
+            <div className="absolute right-0 top-0 bottom-0 w-full sm:w-96 lg:w-[360px] xl:w-[420px] lg:relative bg-gray-50 lg:bg-transparent overflow-y-auto p-4 sm:p-6 lg:p-0">
               <div className="flex flex-col space-y-8">
                 {/* Exchange Card */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
@@ -704,7 +674,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                     <span className="font-semibold text-blue-700">Selected:</span> {chosenUnit.brand} — {chosenUnit.name}
                   </div>
                   <button
-                    onClick={() => { setChosenUnit(null); try { localStorage.removeItem(`approved_selected_unit_${currentUserId}`); } catch (_) { }; }}
+                    onClick={() => { setChosenUnit(null); try { localStorage.removeItem('approved_selected_unit'); } catch (_) { }; }}
                     className="text-xs px-2 py-1 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700"
                   >
                     Clear

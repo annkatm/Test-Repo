@@ -33,16 +33,16 @@ const EmployeeTaskbar = ({
   const STORAGE_KEY_BASE = 'employee_profile_v1';
   const getStorageKey = () => {
     try {
-      const u = user || (JSON.parse(localStorage.getItem('user') || 'null')) || null;
-      const tag = (u && (u.email || u.id)) ? (u.email || u.id) : 'guest';
+      const tag = (user && (user.email || user.id)) ? (user.email || user.id) : 'guest';
       return `${STORAGE_KEY_BASE}:${tag}`;
     } catch (_) {
       return `${STORAGE_KEY_BASE}:guest`;
     }
   };
 
-  // Load locally saved profile first to prevent losing edits on reload
+  // Load locally saved profile once the authenticated user is known
   useEffect(() => {
+    if (!isAuthenticated || !user) return;
     try {
       const savedRaw = localStorage.getItem(getStorageKey());
       if (savedRaw) {
@@ -58,7 +58,7 @@ const EmployeeTaskbar = ({
         if (saved?.employeeId) setEmployeeId(saved.employeeId);
       }
     } catch (_) {}
-  }, []);
+  }, [isAuthenticated, user]);
 
   // Once the authenticated user is known, re-check the per-user cache
   useEffect(() => {
@@ -78,7 +78,7 @@ const EmployeeTaskbar = ({
   }, [isAuthenticated, user]);
 
   useEffect(() => {
-    if (!isAuthenticated || !user || isEditing) return;
+    if (!user || isEditing) return;
 
     const derivedName = (() => {
       const first = user.first_name || user.firstName || null;
@@ -112,7 +112,7 @@ const EmployeeTaskbar = ({
         setProfileImageUrl(prev => prev || uAvatar);
       }
     } catch (_) {}
-  }, [isAuthenticated, user, isEditing, initialEmployeeName]);
+  }, [user, isEditing, initialEmployeeName]);
 
   // Load detailed employee profile from backend to reflect accurate info
   useEffect(() => {
@@ -165,6 +165,21 @@ const EmployeeTaskbar = ({
 
         if (cancelled) return;
         if (employee) {
+          // Validate the resolved employee actually belongs to the authenticated user
+          const hasEmpEmail = !!employee.email;
+          const hasUserEmail = !!authData.user.email;
+          const emailsMatch = (hasEmpEmail && hasUserEmail)
+            ? String(employee.email).toLowerCase() === String(authData.user.email).toLowerCase()
+            : true;
+          const idsMatch = !!authData.user.linked_employee_id && (employee.id === authData.user.linked_employee_id);
+          // If both emails are present but don't match, treat as mismatch even if IDs are linked
+          if (hasEmpEmail && hasUserEmail && !emailsMatch) {
+            return;
+          }
+          // Otherwise, require at least email match or id match
+          if (!emailsMatch && !idsMatch) {
+            return;
+          }
           try { setEmployeeId(employee.id || authData.user.linked_employee_id || null); } catch (_) {}
           const first = employee.first_name || user?.first_name || user?.firstName || '';
           const last = employee.last_name || user?.last_name || user?.lastName || '';
@@ -185,10 +200,11 @@ const EmployeeTaskbar = ({
           setFormData(prev => ({ ...prev, ...merged }));
           setOriginalProfile(merged);
           // Try to derive existing profile photo url if provided by API/user
-          const photo = employee.photo_url || employee.avatar_url || employee.profile_photo_url || user?.avatar_url || user?.profile_photo_url || "";
+          const photo = employee.photo_url || employee.avatar_url || employee.profile_photo_url || "";
           if (photo) {
+            // Do not override an already set user avatar
             const url = photo.includes('http') || photo.startsWith('/storage/') ? photo : `/storage/${photo}`;
-            setProfileImageUrl(`${url}${url.includes('?') ? '' : `?t=${Date.now()}`}`);
+            setProfileImageUrl(prev => prev ? prev : `${url}${url.includes('?') ? '' : `?t=${Date.now()}`}`);
           }
         }
 
@@ -207,7 +223,7 @@ const EmployeeTaskbar = ({
     };
     loadEmployee();
     return () => { cancelled = true; };
-  }, [isAuthenticated, user, isEditing, initialEmployeeName]);
+  }, [user, isEditing, initialEmployeeName]);
 
   // When opening the modal, ensure form has the latest loaded profile
   useEffect(() => {
@@ -220,21 +236,108 @@ const EmployeeTaskbar = ({
     setShowProfileMenu(!showProfileMenu);
   };
 
-  const handleMenuItemClick = (action) => {
+  const fetchFreshProfile = async () => {
+    try {
+      // 1) Get the current authenticated user from the session
+      const authRes = await fetch('/check-auth', {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        credentials: 'same-origin'
+      });
+      const authData = await authRes.json();
+      if (!authData?.authenticated || !authData.user) return false;
+
+      const authUser = authData.user;
+      // Prefer the canonical user avatar immediately
+      try {
+        const uAvatar = authUser?.avatar_url || authUser?.image || authUser?.profile_photo_url || '';
+        if (uAvatar && !String(uAvatar).startsWith('blob:')) {
+          setProfileImageUrl(uAvatar);
+        }
+      } catch (_) {}
+
+      // 2) Resolve employee from linked id or by email
+      let employee = null;
+      if (authUser.linked_employee_id) {
+        try {
+          const empRes = await fetch(`/api/employees/${authUser.linked_employee_id}`);
+          const empData = await empRes.json();
+          if (empData?.success && empData.data) employee = empData.data;
+        } catch (_) {}
+      }
+      if (!employee) {
+        try {
+          const listRes = await fetch('/api/employees');
+          const listJson = await listRes.json();
+          const list = listJson?.success ? listJson.data : listJson;
+          if (Array.isArray(list)) {
+            if (authUser.email) {
+              employee = list.find(e => (e.email || '').toLowerCase() === String(authUser.email).toLowerCase()) || employee;
+            }
+            if (!employee && authUser.employee_id) {
+              employee = list.find(e => e.employee_id === authUser.employee_id) || employee;
+            }
+          }
+        } catch (_) {}
+      }
+
+      // 3) Apply to UI if matched (validate belongs to user)
+      if (employee) {
+        const hasEmpEmail = !!employee.email;
+        const hasUserEmail = !!authUser.email;
+        const emailsMatch = (hasEmpEmail && hasUserEmail)
+          ? String(employee.email).toLowerCase() === String(authUser.email).toLowerCase()
+          : true;
+        const idsMatch = !!authUser.linked_employee_id && (employee.id === authUser.linked_employee_id);
+        if (hasEmpEmail && hasUserEmail && !emailsMatch) return true; // don't apply wrong person
+        if (!emailsMatch && !idsMatch) return true; // don't apply wrong person
+
+        const first = employee.first_name || user?.first_name || user?.firstName || '';
+        const last = employee.last_name || user?.last_name || user?.lastName || '';
+        const full = `${first} ${last}`.trim() || employee.name || authUser?.name || initialEmployeeName;
+        setEmployeeName(full);
+        const profile = {
+          firstName: first || '',
+          lastName: last || '',
+          email: employee.email || authUser?.email || '',
+          phoneNumber: employee.phone || employee.contact || '',
+          Department: employee.department || employee.Department || '',
+          position: employee.position || employee.job_title || user?.position || '',
+          accountType: authUser?.role || user?.role?.name || 'employee',
+        };
+        setFormData(prev => ({ ...prev, ...profile }));
+        setOriginalProfile(profile);
+        const photo = employee.photo_url || employee.avatar_url || employee.profile_photo_url || '';
+        if (photo) {
+          const url = photo.includes('http') || photo.startsWith('/storage/') ? photo : `/storage/${photo}`;
+          setProfileImageUrl(prev => prev ? prev : `${url}${url.includes('?') ? '' : `?t=${Date.now()}`}`);
+        }
+      }
+
+      return true;
+    } catch (_) {
+      return false;
+    }
+  };
+
+  const handleMenuItemClick = async (action) => {
     setShowProfileMenu(false);
     
     switch(action) {
       case 'personalDetails':
+        await fetchFreshProfile();
         setShowProfileModal(true);
         onPersonalDetailsClick?.();
         break;
       case 'profile':
         // Backward-compat: treat as open modal in edit mode
+        await fetchFreshProfile();
         setShowProfileModal(true);
         setIsEditing(true);
         onProfileClick?.();
         break;
       case 'profile_edit':
+        await fetchFreshProfile();
         setShowProfileModal(true);
         setIsEditing(true);
         onProfileClick?.();

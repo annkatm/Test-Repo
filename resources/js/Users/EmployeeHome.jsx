@@ -11,32 +11,6 @@ const EmployeeHome = () => {
   const [cartItems, setCartItems] = useState([]);
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [returnDate, setReturnDate] = useState(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
-  const [currentUserId, setCurrentUserId] = useState(null);
-
-  // Get current user and set up user-specific localStorage
-  useEffect(() => {
-    const getCurrentUser = async () => {
-      try {
-        const userResponse = await fetch('/check-auth', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
-          },
-          credentials: 'same-origin'
-        });
-        
-        const userData = await userResponse.json();
-        if (userData.authenticated && userData.user) {
-          setCurrentUserId(userData.user.id);
-        }
-      } catch (error) {
-        console.error('Failed to get current user:', error);
-      }
-    };
-    
-    getCurrentUser();
-  }, []);
 
   const isLaptopCategory = (categoryId) => {
     const cat = categories.find(c => String(c.id) === String(categoryId));
@@ -81,19 +55,17 @@ const EmployeeHome = () => {
 
   const logActivity = (message, variant = 'info') => {
     try {
-      const prev = JSON.parse(localStorage.getItem(`employee_activities_${currentUserId || 'default'}`) || '[]');
+      const prev = JSON.parse(localStorage.getItem('employee_activities') || '[]');
       const entry = { id: Date.now(), message, variant, time: new Date().toISOString() };
       const next = [entry, ...(Array.isArray(prev) ? prev : [])].slice(0, 50);
-      if (currentUserId) {
-        localStorage.setItem(`employee_activities_${currentUserId}`, JSON.stringify(next));
-      }
+      localStorage.setItem('employee_activities', JSON.stringify(next));
     } catch (_) {}
   };
 
   // Keep a per-user local list of reserved equipment IDs so they stay hidden after request submission
   const getReservedIds = () => {
     try {
-      const raw = localStorage.getItem(`employee_reserved_equipment_ids_${currentUserId || 'default'}`) || '[]';
+      const raw = localStorage.getItem('employee_reserved_equipment_ids') || '[]';
       const arr = JSON.parse(raw);
       return Array.isArray(arr) ? new Set(arr.map(String)) : new Set();
     } catch (_) { return new Set(); }
@@ -102,18 +74,14 @@ const EmployeeHome = () => {
     try {
       const cur = getReservedIds();
       for (const id of ids) cur.add(String(id));
-      if (currentUserId) {
-        localStorage.setItem(`employee_reserved_equipment_ids_${currentUserId}`, JSON.stringify(Array.from(cur)));
-      }
+      localStorage.setItem('employee_reserved_equipment_ids', JSON.stringify(Array.from(cur)));
     } catch (_) {}
   };
   const removeReservedId = (id) => {
     try {
       const cur = getReservedIds();
       cur.delete(String(id));
-      if (currentUserId) {
-        localStorage.setItem(`employee_reserved_equipment_ids_${currentUserId}`, JSON.stringify(Array.from(cur)));
-      }
+      localStorage.setItem('employee_reserved_equipment_ids', JSON.stringify(Array.from(cur)));
     } catch (_) {}
   };
   const filterOutReserved = (list) => {
