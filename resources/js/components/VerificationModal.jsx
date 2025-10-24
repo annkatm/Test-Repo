@@ -41,6 +41,28 @@ const VerificationModal = ({
     return date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
   };
 
+  // Helper function to get avatar URL
+  const getAvatarUrl = (data) => {
+    const avatar = data?.avatar_url || data?.profile_photo_url || data?.photo_url || data?.employee_image || data?.avatar || null;
+    if (!avatar) return null;
+    if (avatar.includes('http') || avatar.startsWith('/storage/')) return avatar;
+    return `/storage/${avatar}`;
+  };
+
+  // Helper function to get initials
+  const getInitials = (name) => {
+    if (!name) return '?';
+    return name
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  const avatarUrl = getAvatarUrl(requestData);
+  const employeeName = requestData?.employee_name || requestData?.full_name || requestData?.name || 'Employee';
+
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
       <style jsx>{`
@@ -87,19 +109,31 @@ const VerificationModal = ({
         <div className="bg-blue-600 px-4 py-3">
           <div className="flex items-center space-x-3">
             {/* Profile Picture */}
-            <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden">
-              <User className="h-6 w-6 text-gray-500" />
+            <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center overflow-hidden text-blue-600 font-semibold text-sm">
+              {avatarUrl ? (
+                <img 
+                  src={avatarUrl} 
+                  alt={employeeName} 
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    e.target.parentElement.textContent = getInitials(employeeName);
+                  }}
+                />
+              ) : (
+                getInitials(employeeName)
+              )}
             </div>
             
             {/* Employee Info */}
             <div className="flex-1">
-              <h4 className="text-base font-bold text-white">{requestData?.employee_name || requestData?.name || 'Employee'}</h4>
+              <h4 className="text-base font-bold text-white">{employeeName}</h4>
               <p className="text-xs text-blue-100">{requestData?.role || 'Employee'}</p>
             </div>
             
             {/* Status */}
             <div className="text-white font-medium text-sm">
-              {requestData?.employee_type || 'Regular'}
+              {requestData?.employee_type || requestData?.position || 'Regular'}
             </div>
           </div>
         </div>

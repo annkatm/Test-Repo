@@ -70,6 +70,7 @@ class RequestController extends Controller
             // Simple query first to test
             $query = DB::table('requests')
                 ->leftJoin('employees', 'requests.employee_id', '=', 'employees.id')
+                ->leftJoin('users', 'employees.user_id', '=', 'users.id')
                 ->leftJoin('equipment', 'requests.equipment_id', '=', 'equipment.id')
                 ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
                 ->leftJoin('users as approver', 'requests.approved_by', '=', 'approver.id')
@@ -78,7 +79,8 @@ class RequestController extends Controller
                     DB::raw("COALESCE(employees.first_name, '') as first_name"),
                     DB::raw("COALESCE(employees.last_name, '') as last_name"),
                     DB::raw("CONCAT(COALESCE(employees.first_name, ''), ' ', COALESCE(employees.last_name, '')) as full_name"),
-                    DB::raw("COALESCE(employees.employee_type, '') as position"),
+                    DB::raw("COALESCE(employees.position, '') as position"),
+                    DB::raw("COALESCE(employees.employee_image, users.avatar, '') as avatar_url"),
                     DB::raw("COALESCE(equipment.name, '') as equipment_name"),
                     DB::raw("COALESCE(equipment.brand, '') as brand"),
                     DB::raw("COALESCE(equipment.model, '') as model"),

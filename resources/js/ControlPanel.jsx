@@ -30,10 +30,10 @@ const ControlPanel = () => {
   // Generic dropdown management states
   const [activeModal, setActiveModal] = React.useState(null);
   const [dropdownItems, setDropdownItems] = React.useState({
-    positions: [],
-    departments: [],
-    clients: [],
-    employeeTypes: []
+    'position': [],
+    'department': [],
+    'client': [],
+    'employee type': []
   });
   const [newItemName, setNewItemName] = React.useState('');
   const [itemError, setItemError] = React.useState('');
@@ -55,7 +55,7 @@ const ControlPanel = () => {
       setShowCategoryModal(true);
     } else {
       // Handle other dropdown management cards
-      const modalType = card.title.toLowerCase().replace(' ', '');
+      const modalType = card.title.toLowerCase();
       setActiveModal(modalType);
       await loadDropdownItems(modalType);
     }
