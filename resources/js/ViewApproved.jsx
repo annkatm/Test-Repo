@@ -5,6 +5,7 @@ import HomeSidebar from './HomeSidebar';
 import ConfirmModal from './components/ConfirmModal.jsx';
 import PrintReceipt from './components/PrintReceipt.jsx';
 import ViewTransactionModal from './components/ViewTransactionModal';
+import VerifyReturnModal from './components/VerifyReturnModal';
 import { transactionService, apiUtils } from './services/api.js';
 import api from './services/api';
 
@@ -56,6 +57,11 @@ const ViewApproved = () => {
   const [viewHolderModal, setViewHolderModal] = useState({
     isOpen: false,
     holderData: null
+  });
+
+  const [viewReturnModal, setViewReturnModal] = useState({
+    isOpen: false,
+    returnData: null
   });
 
   // Track clicked items
@@ -509,6 +515,23 @@ const ViewApproved = () => {
     });
   };
 
+  const handleViewReturn = (returnId) => {
+    const returnItem = verifyReturns.find(r => r.id === returnId);
+    if (returnItem) {
+      setViewReturnModal({
+        isOpen: true,
+        returnData: returnItem
+      });
+    }
+  };
+
+  const handleCloseViewReturnModal = () => {
+    setViewReturnModal({
+      isOpen: false,
+      returnData: null
+    });
+  };
+
   return (
      <div className="h-screen overflow-hidden bg-white flex">
       <div className="flex-shrink-0">
@@ -827,12 +850,8 @@ const ViewApproved = () => {
                       groupedVerifyReturns.map((group) => (
                         <tr 
                           key={group.id}
-                          onClick={() => handleRowClick(group.id, 'verifyReturn')}
-                          className={`border-b last:border-0 cursor-pointer transition-colors duration-200 ${
-                            isItemClicked(group.id, 'verifyReturn') 
-                              ? 'bg-gray-200 hover:bg-blue-50' 
-                              : 'hover:bg-blue-50'
-                          }`}
+                          onClick={() => handleViewReturn(group.returns[0]?.id || group.id)}
+                          className="border-b last:border-0 cursor-pointer transition-colors duration-200 hover:bg-blue-50"
                         >
                           <td className="py-3 px-3">{group.full_name}</td>
                           <td className="py-3 px-3">{group.position}</td>
@@ -884,6 +903,13 @@ const ViewApproved = () => {
         isOpen={viewHolderModal.isOpen}
         onClose={handleCloseViewHolderModal}
         transactionData={viewHolderModal.holderData}
+      />
+
+      {/* View Return Modal */}
+      <VerifyReturnModal
+        isOpen={viewReturnModal.isOpen}
+        onClose={handleCloseViewReturnModal}
+        returnData={viewReturnModal.returnData}
       />
 
     </div>

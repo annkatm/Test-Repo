@@ -850,7 +850,7 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
 
             {/* Receipt Upload */}
             <div className="mb-6">
-              <label className="text-sm text-gray-600 mb-2 block">Description</label>
+              <label className="text-sm text-gray-600 mb-2 block">Receipt</label>
               <div 
                 className={`h-36 w-full border-2 border-dashed rounded-lg ${
                   receipt ? 'border-blue-300' : 'border-gray-300'
