@@ -613,34 +613,38 @@ const EmployeeTransaction = () => {
   }
 
 
-
+  // Main transaction view
+  // Show full Approved list when requested
   if (currentView === 'approved') {
-    // Convert approved transactions to the format expected by ApprovedTransactions
-    const approvedData = [...transactions]
+    const approvedData = [...(transactions || [])]
       .sort((a, b) => {
-        const aDate = new Date(a.created_at || a.expected_start_date || a.start_date || 0).getTime();
-        const bDate = new Date(b.created_at || b.expected_start_date || b.start_date || 0).getTime();
-        return bDate - aDate; // newest first
+        const aDate = new Date(a?.created_at || a?.expected_start_date || a?.start_date || 0).getTime();
+        const bDate = new Date(b?.created_at || b?.expected_start_date || b?.start_date || 0).getTime();
+        return bDate - aDate;
       })
-      .map((transaction, index) => ({
-      date: transaction.created_at ? new Date(transaction.created_at).toLocaleDateString("en-US", {
-        month: "2-digit",
-        day: "2-digit",
-        year: "numeric",
-      }) : "09/23/2025",
-      item: transaction.equipment_name || "Laptop, Projector, etc",
-      status: "Approved",
-      exchangeItems: [
-        {
-          name: transaction.equipment_name || "Laptop",
-          brand: "Equipment",
-          details: transaction.description || "Equipment details",
-          icon: "💻"
-        }
-      ]
-    }));
-
-    // Mock borrowed details for the clickable card
+      .map((t) => {
+        const dsrc = t?.created_at || t?.expected_start_date || t?.start_date || null;
+        const date = dsrc ? new Date(dsrc).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '';
+        return {
+          id: t?.id,
+          date,
+          item: t?.equipment_name || t?.item || '-',
+          status: t?.status || '-',
+          equipment_id: t?.equipment_id || t?.equipment?.id || null,
+          brand: t?.brand || t?.equipment?.brand || null,
+          model: t?.model || t?.equipment?.model || null,
+          equipment: t?.equipment || t?.equipment_details || null,
+          exchangeItems: [
+            {
+              name: t?.equipment_name || t?.item || '-',
+              brand: 'Equipment',
+              details: t?.description || '',
+              icon: '💻',
+            },
+          ],
+        };
+      })
+      .filter((x) => Boolean(x.date));
 
     return (
       <ApprovedTransactions
@@ -651,26 +655,25 @@ const EmployeeTransaction = () => {
     );
   }
 
-
+  // Show full On Process list when requested
   if (showPendings) {
-    // Convert pending transactions to the format expected by OnProcessTransactions
-    const requestsData = pendingTransactions.map((transaction, index) => ({
-      id: transaction.id || index + 1,
-      date: transaction.created_at ? new Date(transaction.created_at).toLocaleDateString("en-US", {
-        month: "2-digit",
-        day: "2-digit",
-        year: "numeric",
-      }) : "09/23/2025",
-      item: transaction.equipment_name || transaction.item || "Laptop, Projector, etc",
-      status: transaction.status || "Pending",
-      details: [
-        {
-          name: transaction.equipment_name || "Laptop",
-          description: transaction.description || "Equipment details",
-          icon: "https://cdn-icons-png.flaticon.com/512/1086/1086933.png"
-        }
-      ]
-    }));
+    const requestsData = (pendingTransactions || []).map((t, index) => {
+      const dsrc = t?.created_at || t?.expected_start_date || null;
+      const date = dsrc ? new Date(dsrc).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '';
+      return {
+        id: t?.id || index + 1,
+        date: date || '-',
+        item: t?.equipment_name || t?.item || '-',
+        status: t?.status || 'Pending',
+        details: [
+          {
+            name: t?.equipment_name || t?.item || '-',
+            description: t?.description || '',
+            icon: 'https://cdn-icons-png.flaticon.com/512/1086/1086933.png',
+          },
+        ],
+      };
+    });
 
     return (
       <OnProcessTransactions
@@ -683,11 +686,9 @@ const EmployeeTransaction = () => {
     );
   }
 
-
-  // Main transaction view
   return (
-    <div className="grid grid-cols-12 gap-6">
-      <div className="col-span-8 space-y-6">
+    <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+      <div className="col-span-12 md:col-span-8 space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-4xl font-bold text-[#2262C6] transition-all duration-300">Home</h1>
         </div>
@@ -741,7 +742,7 @@ const EmployeeTransaction = () => {
                 <div className="grid grid-cols-12 gap-6 items-center">
                   <div className="col-span-3">
                     <span className="text-sm text-gray-900">
-                      {transaction.equipment_name || transaction.item || "Laptop, Projector, etc"}
+                      {transaction.equipment_name || transaction.item || '-'}
                     </span>
                   </div>
                   <div className="col-span-3">
@@ -752,7 +753,7 @@ const EmployeeTransaction = () => {
                           day: "2-digit",
                           year: "numeric",
                         })
-                        : "09/24/2025"}
+                        : '-'}
                     </span>
                   </div>
                   <div className="col-span-3">
@@ -763,7 +764,7 @@ const EmployeeTransaction = () => {
                           day: "2-digit",
                           year: "numeric",
                         })
-                        : "09/24/2025"}
+                        : '-'}
                     </span>
                   </div>
                   <div className="col-span-3">
@@ -812,6 +813,14 @@ const EmployeeTransaction = () => {
                 const bDate = new Date(b.created_at || b.expected_start_date || b.start_date || 0).getTime();
                 return bDate - aDate; // newest first
               })
+              .filter(t => {
+                const startRaw = t.expected_start_date || t.start_date;
+                const endRaw = t.expected_end_date || t.return_date;
+                const startOk = startRaw ? !isNaN(new Date(startRaw).getTime()) : false;
+                const endOk = endRaw ? !isNaN(new Date(endRaw).getTime()) : false;
+                const approved = String(t.status || '').toLowerCase() === 'approved';
+                return approved && startOk && endOk;
+              })
               .slice(0, 3)
               .map((transaction, index) => (
               <div
@@ -822,25 +831,25 @@ const EmployeeTransaction = () => {
                 <div className="grid grid-cols-12 gap-6 items-center">
                   <div className="col-span-3">
                     <span className="text-sm text-gray-900">
-                      {transaction.equipment_name || "Laptop, Projector, etc"}
+                      {transaction.equipment_name || '-'}
                     </span>
                   </div>
                   <div className="col-span-3">
                     <span className="text-sm text-gray-900">
                       {(transaction.expected_start_date || transaction.start_date)
                         ? new Date(transaction.expected_start_date || transaction.start_date).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" })
-                        : "09/24/2025"}
+                        : '-'}
                     </span>
                   </div>
                   <div className="col-span-3">
                     <span className="text-sm text-gray-900">
                       {(transaction.expected_end_date || transaction.return_date)
                         ? new Date(transaction.expected_end_date || transaction.return_date).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" })
-                        : "09/24/2025"}
+                        : '-'}
                     </span>
                   </div>
                   <div className="col-span-3">
-                    <span className="text-sm text-gray-900">{transaction.status || "Approved"}</span>
+                    <span className="text-sm text-gray-900">{transaction.status || '-'}</span>
                   </div>
                 </div>
               </div>
@@ -852,7 +861,7 @@ const EmployeeTransaction = () => {
         </div>
       </div>
 
-      <div className="col-span-4 space-y-6">
+      <div className="col-span-12 md:col-span-4 space-y-6">
         <div className="flex justify-end">
           <button
             onClick={() => {
@@ -900,7 +909,7 @@ const EmployeeTransaction = () => {
               <div className="space-y-3 max-h-96 overflow-y-auto">
                 {(borrowedItems || []).map((it, i) => (
                   <div key={it.id || i} className="border border-gray-200 rounded-lg p-3">
-                    <div className="font-semibold text-gray-900">{it.equipment_name || it.item || 'Item'}</div>
+                    <div className="font-semibold text-gray-900">{it.equipment_name || it.item || '-'}</div>
                     <div className="text-sm text-gray-600">Request No.: {it.request_number || '-'}</div>
                     <div className="text-sm text-gray-600">Start: {it.expected_start_date ? new Date(it.expected_start_date).toLocaleDateString('en-US') : (it.start_date ? new Date(it.start_date).toLocaleDateString('en-US') : '-')}</div>
                     <div className="text-sm text-gray-600">Due: {it.expected_end_date ? new Date(it.expected_end_date).toLocaleDateString('en-US') : '-'}</div>
@@ -940,7 +949,7 @@ const EmployeeTransaction = () => {
               <div className="space-y-3 max-h-96 overflow-y-auto">
                 {(overdueItems || []).map((it, i) => (
                   <div key={it.id || i} className="border border-gray-200 rounded-lg p-3">
-                    <div className="font-semibold text-gray-900">{it.equipment_name || it.item || 'Item'}</div>
+                    <div className="font-semibold text-gray-900">{it.equipment_name || it.item || '-'}</div>
                     <div className="text-sm text-gray-600">Request No.: {it.request_number || '-'}</div>
                     <div className="text-sm text-gray-600">Due: {it.expected_end_date ? new Date(it.expected_end_date).toLocaleDateString('en-US') : '-'}</div>
                     <div className="text-xs text-red-600">Overdue</div>

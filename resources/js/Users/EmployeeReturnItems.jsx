@@ -108,8 +108,8 @@ const ReturnItems = () => {
       </div>
 
       {/* 🔍 Search Bar */}
-      <div className="flex items-center justify-between">
-        <div className="relative w-1/3">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="relative w-full sm:w-1/2 md:w-1/3">
           <Search className="absolute left-3 top-3 text-gray-400" size={18} />
           <input
             type="text"
@@ -143,16 +143,16 @@ const ReturnItems = () => {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-2xl shadow-md border border-gray-200 p-6">
+      <div className="bg-white rounded-2xl shadow-md border border-gray-200 p-6 overflow-x-auto">
         {/* Table Header */}
-        <div className="grid grid-cols-9 gap-6 pb-4 border-b border-gray-200 font-semibold text-gray-700">
+        <div className="grid grid-cols-9 gap-6 pb-4 border-b border-gray-200 font-semibold text-gray-700 min-w-[640px]">
           <div className="col-span-3">Date</div>
           <div className="col-span-3">Item</div>
           <div className="col-span-3">Status</div>
         </div>
 
         {/* Table Rows */}
-        <div className="divide-y divide-gray-100">
+        <div className="divide-y divide-gray-100 min-w-[640px]">
           {loading ? (
             <p className="text-center py-6 text-gray-500">Loading...</p>
           ) : error ? (
@@ -176,7 +176,7 @@ const ReturnItems = () => {
       </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between mt-6">
+      <div className="flex items-center justify-between mt-6 flex-wrap gap-3">
         <div className="flex items-center space-x-2">
           {/* Previous Button */}
           <button

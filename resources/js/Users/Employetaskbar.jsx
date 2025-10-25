@@ -30,6 +30,9 @@ const EmployeeTaskbar = ({
     position: ""
   });
   const [originalProfile, setOriginalProfile] = useState(null);
+  const [originalPhotoUrl, setOriginalPhotoUrl] = useState("");
+  const [tempPhotoFile, setTempPhotoFile] = useState(null);
+  const [tempPhotoUrl, setTempPhotoUrl] = useState("");
   const STORAGE_KEY_BASE = 'employee_profile_v1';
   const getStorageKey = () => {
     try {
@@ -356,6 +359,7 @@ const EmployeeTaskbar = ({
   const handleEdit = () => {
     // Snapshot current values for cancel
     setOriginalProfile({ ...formData });
+    setOriginalPhotoUrl(profileImageUrl || "");
     setIsEditing(true);
   };
 
@@ -365,6 +369,13 @@ const EmployeeTaskbar = ({
       setFormData(prev => ({ ...prev, ...originalProfile }));
       setEmployeeName(`${originalProfile.firstName} ${originalProfile.lastName}`.trim() || employeeName);
     }
+    // Revert avatar to the original if a temp preview exists
+    if (tempPhotoUrl) {
+      try { URL.revokeObjectURL(tempPhotoUrl); } catch (_) {}
+    }
+    setTempPhotoFile(null);
+    setTempPhotoUrl("");
+    setProfileImageUrl(originalPhotoUrl || profileImageUrl || "");
   };
 
   const handleSave = async () => {
@@ -413,6 +424,42 @@ const EmployeeTaskbar = ({
       savedRemotely = ok;
     } catch (_) {
       savedRemotely = false;
+    }
+
+    // If user selected a new avatar during editing, upload it now (commit)
+    if (tempPhotoFile) {
+      try {
+        const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+        const form = new FormData();
+        form.append('avatar', tempPhotoFile);
+        const resUser = await fetch('/api/profile/avatar', {
+          method: 'POST',
+          body: form,
+          credentials: 'same-origin',
+          headers: { 'X-CSRF-TOKEN': csrf },
+        });
+        if (resUser.ok) {
+          let dataUser = null; try { dataUser = await resUser.json(); } catch (_) {}
+          const finalUrl = dataUser?.data?.avatar_url || dataUser?.avatar_url || dataUser?.url || dataUser?.photo_url || dataUser?.path || '';
+          if (finalUrl) {
+            setProfileImageUrl(finalUrl);
+            try {
+              // Update user cache for header/avatar consumers
+              const storedUserRaw = localStorage.getItem('user');
+              if (storedUserRaw) {
+                const storedUser = JSON.parse(storedUserRaw);
+                storedUser.avatar_url = finalUrl;
+                localStorage.setItem('user', JSON.stringify(storedUser));
+              }
+            } catch (_) {}
+          }
+        }
+      } catch (_) { /* ignore upload failure; keep old avatar */ }
+      finally {
+        if (tempPhotoUrl) { try { URL.revokeObjectURL(tempPhotoUrl); } catch (_) {} }
+        setTempPhotoFile(null);
+        setTempPhotoUrl("");
+      }
     }
 
     // Update UI and persist locally regardless to survive reloads
@@ -503,13 +550,13 @@ const EmployeeTaskbar = ({
           saved.ts = Date.now();
           localStorage.setItem(key, JSON.stringify(saved));
         } catch (_) {}
-        showSuccess('Profile photo updated');
+        // Removed immediate photo updated toast to avoid popups
         return true;
       } else {
         // Still show local preview if upload failed silently
         const localUrl = URL.createObjectURL(file);
         setProfileImageUrl(localUrl);
-        showSuccess('Profile photo updated locally');
+        // Removed immediate photo updated toast to avoid popups
         return false;
       }
     } catch (_) {
@@ -526,7 +573,18 @@ const EmployeeTaskbar = ({
   const handleAvatarFileChange = async (e) => {
     const file = e?.target?.files?.[0];
     if (!file) return;
-    await uploadProfilePhoto(file);
+    // During editing, only show a local preview and defer upload until Save
+    if (isEditing) {
+      try {
+        if (tempPhotoUrl) { try { URL.revokeObjectURL(tempPhotoUrl); } catch (_) {} }
+        const localUrl = URL.createObjectURL(file);
+        setTempPhotoFile(file);
+        setTempPhotoUrl(localUrl);
+        setProfileImageUrl(localUrl);
+      } catch (_) {}
+      return;
+    }
+    // If not editing (fallback), do nothing or perform immediate upload if desired
   };
 
   const performGlobalSearch = async (q) => {
@@ -579,7 +637,7 @@ const EmployeeTaskbar = ({
 
   return (
     <>
-      <header className="flex items-center justify-end px-10 py-6">
+      <header className="flex items-center justify-end px-4 sm:px-6 md:px-10 py-4 md:py-6">
         <div className="flex items-center space-x-4">
           
 
@@ -690,6 +748,15 @@ const EmployeeTaskbar = ({
               <button
                 onClick={() => {
                   setShowProfileModal(false);
+                  // If a temp avatar preview exists and user closes without saving, revert to original
+                  if (tempPhotoUrl) {
+                    try { URL.revokeObjectURL(tempPhotoUrl); } catch (_) {}
+                  }
+                  if (isEditing) {
+                    setProfileImageUrl(originalPhotoUrl || profileImageUrl || "");
+                    setTempPhotoFile(null);
+                    setTempPhotoUrl("");
+                  }
                   setIsEditing(false);
                 }}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"

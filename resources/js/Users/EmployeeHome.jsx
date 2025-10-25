@@ -668,8 +668,8 @@ const EmployeeHome = () => {
         <h1 className="text-4xl font-bold text-[#2262C6] transition-all duration-300">Transaction</h1>
       </div>
 
-      <div className="pl-5 grid grid-cols-12 gap-8 items-start bg-white ">
-        <div id="categories-section" className="rounded-xl shadow-xl shadow-gray-500/70 col-span-3 overflow-y-auto h-138 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+      <div className="pl-5 grid grid-cols-1 md:grid-cols-12 gap-8 items-start bg-white ">
+        <div id="categories-section" className="rounded-xl shadow-xl shadow-gray-500/70 col-span-12 md:col-span-3 overflow-y-auto h-138 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           <div className="p-6 h-full">
             <h2 className="text-lg font-semibold text-gray-900 mb-6">Item Categories</h2>
             <div className="grid grid-cols-2 gap-3">
@@ -726,7 +726,7 @@ const EmployeeHome = () => {
           </div>
         </div>
 
-        <div className=" rounded-xl col-span-5 bg-white">
+        <div className="rounded-xl col-span-12 md:col-span-5 bg-white">
           <div className="rounded-xl shadow-lg shadow-gray-500/70 p-6 overflow-y-auto h-138 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" data-employee-search-target>
           <h2 className="text-lg font-semibold text-gray-900 mb-6">
   {selectedCategory ? `${selectedCategory} Types` : 'Equipment Types'}
@@ -787,7 +787,7 @@ const EmployeeHome = () => {
           </div>
         </div>
 
-        <div id="items-section" className="shadow-lg shadow-gray-500/70 rounded-xl w-96 min-w-[20rem] mb-4 bg-white h-[552px] flex flex-col">
+        <div id="items-section" className="shadow-lg shadow-gray-500/70 rounded-xl col-span-12 md:col-span-4 w-full md:w-auto mb-4 bg-white md:h-[552px] h-auto flex flex-col">
           <div className="rounded-xl shadow-lg shadow-gray-500/70 w-full h-full flex flex-col">
             {/* Header */}
             <div className="p-6 pb-3">

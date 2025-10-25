@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import ExchangePanel from './ExchangePanel.jsx';
 
 // Props now accept dynamic data instead of hardcoded examples
 // - approvedTransactions: [{ date, item, status, exchangeItems?: [...] }]
@@ -42,6 +43,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
       return saved ? JSON.parse(saved) : null;
     } catch (_) { return null; }
   });
+  const [returnTxId, setReturnTxId] = useState(null);
 
   // Keep chosenUnit in sync if changed by another tab/process
   useEffect(() => {
@@ -72,7 +74,21 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
   }, [showBrowseLaptopsModal]);
 
   useEffect(() => {
-    try { setDisplayList(Array.isArray(approvedTransactions) ? approvedTransactions : []); } catch (_) {}
+    try {
+      const src = Array.isArray(approvedTransactions) ? approvedTransactions : [];
+      const mapped = src.map((t, i) => ({
+        id: t?.id ?? t?.transaction_id ?? t?.request_id ?? t?.transactionID ?? t?.trans_id ?? t?.trx_id ?? t?.uuid ?? t?.pivot?.transaction_id ?? null,
+        date: t?.created_at ? new Date(t.created_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : (t?.date || ''),
+        item: t?.equipment_name || t?.item || '-',
+        status: t?.status || 'Approved',
+        equipment_id: t?.equipment_id || t?.equipment?.id || null,
+        brand: t?.brand || t?.equipment?.brand || t?.equipment_brand || null,
+        model: t?.model || t?.equipment?.model || t?.equipment_model || null,
+        equipment: t?.equipment || t?.equipment_details || null,
+        exchangeItems: Array.isArray(t?.exchangeItems) ? t.exchangeItems : [],
+      })).filter(r => r.date);
+      setDisplayList(mapped);
+    } catch (_) {}
   }, [approvedTransactions]);
 
   useEffect(() => {
@@ -84,12 +100,16 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
         const json = await res.json().catch(() => ({}));
         const list = Array.isArray(json) ? json : (json && json.data && Array.isArray(json.data) ? json.data : []);
         const mapped = (list || []).map((t, i) => ({
-          id: t?.id ?? i + 1,
+          id: t?.id ?? t?.transaction_id ?? t?.request_id ?? t?.transactionID ?? t?.trans_id ?? t?.trx_id ?? t?.uuid ?? t?.pivot?.transaction_id ?? (i + 1),
           date: t?.created_at ? new Date(t.created_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : (t?.date || ''),
-          item: t?.equipment_name || t?.item || 'Item',
+          item: t?.equipment_name || t?.item || '-',
           status: t?.status || 'Approved',
+          equipment_id: t?.equipment_id || t?.equipment?.id || null,
+          brand: t?.brand || t?.equipment?.brand || t?.equipment_brand || null,
+          model: t?.model || t?.equipment?.model || t?.equipment_model || null,
+          equipment: t?.equipment || t?.equipment_details || null,
           exchangeItems: Array.isArray(t?.exchangeItems) ? t.exchangeItems : [],
-        }));
+        })).filter(r => r.date);
         if (!cancelled) setDisplayList(mapped);
       } catch (_) { }
     };
@@ -105,12 +125,16 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
         const json = await res.json().catch(() => ({}));
         const list = Array.isArray(json) ? json : (json && json.data && Array.isArray(json.data) ? json.data : []);
         const mapped = (list || []).map((t, i) => ({
-          id: t?.id ?? i + 1,
+          id: t?.id ?? t?.transaction_id ?? t?.request_id ?? i + 1,
           date: t?.created_at ? new Date(t.created_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : (t?.date || ''),
-          item: t?.equipment_name || t?.item || 'Item',
+          item: t?.equipment_name || t?.item || '-',
           status: t?.status || 'Approved',
+          equipment_id: t?.equipment_id || t?.equipment?.id || null,
+          brand: t?.brand || t?.equipment?.brand || t?.equipment_brand || null,
+          model: t?.model || t?.equipment?.model || t?.equipment_model || null,
+          equipment: t?.equipment || t?.equipment_details || null,
           exchangeItems: Array.isArray(t?.exchangeItems) ? t.exchangeItems : [],
-        }));
+        })).filter(r => r.date);
         setDisplayList(mapped);
       } catch (_) { }
     };
@@ -128,8 +152,34 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
 
   const selectedTransactionData = selectedRow !== null ? displayList[selectedRow] : null;
 
+  // Resolve a transaction ID robustly from a transaction-like object
+  const resolveTxId = async (tx) => {
+    if (!tx) return null;
+    const direct = tx?.id || tx?.transaction_id || tx?.request_id || tx?.transactionID || tx?.trans_id || tx?.trx_id || tx?.uuid || tx?.pivot?.transaction_id;
+    if (direct) return direct;
+    // Fallback: query approved list and match
+    try {
+      const res = await fetch('/api/transactions/approved', { credentials: 'same-origin' });
+      const json = await res.json().catch(() => ({}));
+      const list = Array.isArray(json) ? json : (json && json.data && Array.isArray(json.data) ? json.data : []);
+      const eqId = tx?.equipment_id || tx?.equipment?.id || null;
+      const name = (tx?.equipment_name || tx?.item || '').toLowerCase();
+      const found = (list || []).find((t) => {
+        const candId = t?.id || t?.transaction_id || t?.request_id || t?.transactionID || t?.trans_id || t?.trx_id || t?.uuid || t?.pivot?.transaction_id;
+        if (!candId) return false;
+        const cEq = t?.equipment_id || t?.equipment?.id || null;
+        const cName = (t?.equipment_name || t?.item || '').toLowerCase();
+        const statusOk = String(t?.status || 'Approved').toLowerCase().includes('approved');
+        return statusOk && ((eqId && cEq && String(eqId) === String(cEq)) || (name && cName && name === cName));
+      });
+      return found ? (found.id || found.transaction_id || found.request_id || found.transactionID || found.trans_id || found.trx_id || found.uuid || found?.pivot?.transaction_id) : null;
+    } catch (_) {
+      return null;
+    }
+  };
+
   const handleMarkReleased = async (tx) => {
-    const txId = tx?.id || selectedTransactionData?.id;
+    const txId = await resolveTxId(tx || selectedTransactionData);
     if (!txId) return;
     if (actionLoading) return;
     setActionLoading(true);
@@ -192,6 +242,17 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
         const text = await res.text();
         throw new Error(text || `HTTP ${res.status}`);
       }
+
+      // Notify other pages that the previous equipment became available again
+      try {
+        const prevEquipId = selectedTransactionData?.equipment_id;
+        if (prevEquipId) {
+          window.dispatchEvent(new CustomEvent('ireply:equipment:restore', { detail: { equipment_id: prevEquipId } }));
+        }
+      } catch (_) { }
+
+      // Refresh the approved list UI
+      try { window.dispatchEvent(new CustomEvent('ireply:approved:changed')); } catch (_) {}
 
       setShowExchangeConfirmModal(false);
       setSelectedRow(null);
@@ -390,7 +451,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8 items-stretch">
           {/* Left Column - Table */}
           <div className={`${selectedRow !== null ? 'lg:col-span-8' : 'lg:col-span-12'}`}>
             <div className="bg-white rounded-xl shadow-sm border border-gray-300 overflow-hidden">
@@ -401,8 +462,9 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                 <div className="col-span-3 text-center">Status</div>
               </div>
 
-              {/* Scrollable Table Rows Container */}
-              <div className="overflow-y-auto h-[360px] sm:h-[360px] lg:h-[360px] xl:h-[420px] bg-white [&::-webkit-scrollbar]:hidden">
+              {/* Scrollable Table Rows Container */
+              }
+              <div className="overflow-y-auto h-[50vh] sm:h-[55vh] lg:h-[360px] xl:h-[420px] bg-white [&::-webkit-scrollbar]:hidden">
                 <div className="divide-y divide-gray-100">
                   {(displayList || []).map((transaction, index) => {
                     const globalIndex = index;
@@ -465,65 +527,22 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
             />
 
             {/* Panel content */}
-            <div className="absolute right-0 top-0 bottom-0 w-full sm:w-96 lg:w-[360px] xl:w-[420px] lg:relative bg-gray-50 lg:bg-transparent overflow-y-auto p-4 sm:p-6 lg:p-0">
-              <div className="flex flex-col space-y-8">
+            <div className="absolute right-0 top-0 bottom-0 w-full sm:w-96 lg:w-[360px] xl:w-[420px] lg:relative bg-gray-50 lg:bg-transparent overflow-y-auto p-4 sm:p-6 lg:p-0 h-full min-h-0">
+              <div className="h-full min-h-0 flex flex-col">
                 {/* Exchange Card */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
-                  {/* Header with X button */}
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-lg font-semibold text-gray-800">Exchange</h3>
-                    <button
-                      onClick={() => setSelectedRow(null)}
-                      className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-
-                  {/* Dynamic exchange items based on selected row */}
-                  <div className="space-y-4 mb-6">
-                    {selectedTransactionData?.exchangeItems.map((item, index) => (
-                      <div key={index} className="flex items-start gap-3">
-                        <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-2xl flex-shrink-0">
-                          {item.icon}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="font-semibold text-gray-800">{item.name}</div>
-                          <div className="text-xs text-gray-500">{item.brand}</div>
-                          <div className="text-xs text-gray-600 mt-1">{item.details}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => { setShowReturnModal(true); logActivity('Approved: Clicked Return Now', 'return'); }}
-                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium shadow-md transform transition-all duration-300 hover:scale-105 hover:shadow-xl hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                    >
-                      Return Now
-                    </button>
-                    <button
-                      onClick={() => { setShowBrowseLaptopsModal(true); logActivity('Approved: Clicked Exchange', 'exchange'); }}
-                      className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium shadow-md transform transition-all duration-300 hover:scale-105 hover:shadow-xl hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-300"
-                    >
-                      Exchange
-                    </button>
-                  </div>
-                </div>
-
-                {/* Borrowed Stat Card */}
-                <button onClick={() => setIsBorrowedOpen(true)} className="rounded-xl bg-white text-gray-900 p-6 h-48 w-full border border-gray-200 text-left hover:shadow-md transition">
-                  <div className="flex justify-between items-start mb-4">
-                    <span className="text-sm font-medium">Item Currently Borrowed</span>
-                    <div className="w-10 h-10 flex items-center justify-center bg-gray-100 rounded-md">
-                      📦
-                    </div>
-                  </div>
-                  <div className="text-5xl font-bold">{transactionStats?.borrowed || 0}</div>
-                </button>
+                <ExchangePanel
+                  transaction={selectedTransactionData}
+                  onClose={() => setSelectedRow(null)}
+                  onReturnNow={async () => { 
+                    const tid = await resolveTxId(selectedTransactionData);
+                    setReturnTxId(tid || null);
+                    setShowReturnModal(true); 
+                    logActivity('Approved: Clicked Return Now', 'return'); 
+                  }}
+                  onOpenBrowse={() => { setShowBrowseLaptopsModal(true); logActivity('Approved: Clicked Exchange', 'exchange'); }}
+                  className="flex-1"
+                />
+                
               </div>
             </div>
           </div>
@@ -569,8 +588,12 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                   if (actionLoading) return;
                   setActionLoading(true);
                   try {
-                    const txId = selectedTransactionData?.id;
-                    if (!txId) throw new Error('Missing transaction id.');
+                    const txId = returnTxId || await resolveTxId(selectedTransactionData);
+                    if (!txId) {
+                      alert('Missing transaction information. Please select a transaction and try again.');
+                      setShowReturnModal(false);
+                      return;
+                    }
                     const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
                     const res = await fetch(`/api/transactions/${txId}/return`, {
                       method: 'POST',
@@ -589,6 +612,12 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                     setShowReturnModal(false);
                     setSelectedRow(null);
                     logActivity('Approved: Confirmed Return', 'success');
+                    try {
+                      const equipId = selectedTransactionData?.equipment_id;
+                      if (equipId) {
+                        window.dispatchEvent(new CustomEvent('ireply:equipment:restore', { detail: { equipment_id: equipId } }));
+                      }
+                    } catch (_) { }
                     try {
                       const payload = {
                         id: selectedTransactionData?.id,

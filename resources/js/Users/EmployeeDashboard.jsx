@@ -121,7 +121,7 @@ const EmployeeDashboard = ({
 
   return (
     <AppProvider>
-    <div className="h-screen overflow-hidden bg-white w-full pl-60">
+    <div className="min-h-screen overflow-x-hidden bg-white w-full pl-0 md:pl-60">
       {/* Employee Sidebar Component */}
       <EmployeeSidebar 
         activeMenu={activeMenu}
@@ -140,7 +140,7 @@ const EmployeeDashboard = ({
           onLogoutClick={handleLogoutClick}
         />
   
-        <div className="flex-1 min-h-0 overflow-auto p-6 bg-white">
+        <div className="flex-1 min-h-0 overflow-auto p-4 sm:p-6 bg-white">
           {renderContent()}
         </div>
       </div>
