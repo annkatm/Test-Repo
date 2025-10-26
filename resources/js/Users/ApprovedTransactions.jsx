@@ -88,7 +88,11 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
         return {
           id: t?.id ?? t?.transaction_id ?? t?.request_id ?? t?.transactionID ?? t?.trans_id ?? t?.trx_id ?? t?.uuid ?? t?.pivot?.transaction_id ?? null,
           date,
-          item: t?.equipment_name || t?.item || '-',
+          item: (
+            t?.category_name || t?.category || t?.equipment_category || t?.equipment_type || t?.type || t?.item_type ||
+            (t?.equipment && (t?.equipment?.category_name || t?.equipment?.category?.name || t?.equipment?.type)) ||
+            t?.equipment_name || t?.item || '-'
+          ),
           status,
           equipment_id: t?.equipment_id || t?.equipment?.id || null,
           brand: t?.brand || t?.equipment?.brand || t?.equipment_brand || null,
@@ -101,11 +105,11 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
     } catch (_) {}
   }, [approvedTransactions]);
 
+  // Always fetch approved list so we get category/type fields from backend
   useEffect(() => {
     let cancelled = false;
     const fetchApproved = async () => {
       try {
-        if ((displayList && displayList.length) > 0) return;
         const res = await fetch('/api/transactions/approved', { credentials: 'same-origin' });
         const json = await res.json().catch(() => ({}));
         const list = Array.isArray(json) ? json : (json && json.data && Array.isArray(json.data) ? json.data : []);
@@ -121,7 +125,11 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
           return {
             id: t?.id ?? t?.transaction_id ?? t?.request_id ?? t?.transactionID ?? t?.trans_id ?? t?.trx_id ?? t?.uuid ?? t?.pivot?.transaction_id ?? (i + 1),
             date,
-            item: t?.equipment_name || t?.item || '-',
+            item: (
+              t?.category_name || t?.category || t?.equipment_category || t?.equipment_type || t?.type || t?.item_type ||
+              (t?.equipment && (t?.equipment?.category_name || t?.equipment?.category?.name || t?.equipment?.type)) ||
+              t?.equipment_name || t?.item || '-'
+            ),
             status,
             equipment_id: t?.equipment_id || t?.equipment?.id || null,
             brand: t?.brand || t?.equipment?.brand || t?.equipment_brand || null,
@@ -156,7 +164,11 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
           return {
             id: t?.id ?? t?.transaction_id ?? t?.request_id ?? i + 1,
             date,
-            item: t?.equipment_name || t?.item || '-',
+            item: (
+              t?.category_name || t?.category || t?.equipment_category || t?.equipment_type || t?.type || t?.item_type ||
+              (t?.equipment && (t?.equipment?.category_name || t?.equipment?.category?.name || t?.equipment?.type)) ||
+              t?.equipment_name || t?.item || '-'
+            ),
             status,
             equipment_id: t?.equipment_id || t?.equipment?.id || null,
             brand: t?.brand || t?.equipment?.brand || t?.equipment_brand || null,
@@ -181,6 +193,75 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
   }, [displayList, page, pageSize]);
 
   const selectedTransactionData = selectedRow !== null ? displayList[selectedRow] : null;
+
+  const resolveItemType = (t) => {
+    // Direct category/type fields first
+    const direct = (
+      t?.type ||
+      t?.category ||
+      t?.category_name ||
+      t?.equipment_type ||
+      t?.item_type ||
+      t?.equipment_category ||
+      (t?.equipment && (t?.equipment.type || t?.equipment.category || t?.equipment.category_name))
+    );
+    if (direct && String(direct).trim()) return String(direct);
+
+    // Infer from names/descriptions
+    const parts = [
+      t?.item,
+      t?.equipment_name,
+      t?.model,
+      t?.description,
+      t?.brand,
+      t?.equipment?.name,
+      t?.equipment?.model,
+      t?.equipment?.specs,
+      t?.equipment?.description,
+    ].filter(Boolean).join(' ').toLowerCase();
+
+    const matchKeyword = (s) => {
+      if (!s) return null;
+      if (/\blaptop|notebook\b/.test(s)) return 'Laptop';
+      if (/\bmouse|mice\b/.test(s)) return 'Mouse';
+      if (/\bkeyboard\b/.test(s)) return 'Keyboard';
+      if (/\bmonitor|display\b/.test(s)) return 'Monitor';
+      if (/\bprojector\b/.test(s)) return 'Projector';
+      if (/\bprinter\b/.test(s)) return 'Printer';
+      if (/\bscanner\b/.test(s)) return 'Scanner';
+      if (/\bwebcam|camera\b/.test(s)) return 'Webcam';
+      if (/\bheadset|headphone\b/.test(s)) return 'Headset';
+      if (/\bspeaker\b/.test(s)) return 'Speaker';
+      if (/\brouter\b/.test(s)) return 'Router';
+      if (/\bswitch\b/.test(s)) return 'Network Switch';
+      if (/\bcable\b/.test(s)) return 'Cable';
+      if (/\badapter|dongle\b/.test(s)) return 'Adapter';
+      if (/\bdocking station|dock\b/.test(s)) return 'Docking Station';
+      return null;
+    };
+    const kw = matchKeyword(parts);
+    if (kw) return kw;
+
+    // Brand-based default guesses when nothing else exists
+    const brand = (t?.brand || t?.equipment?.brand || '').toLowerCase();
+    const brandMap = {
+      lenovo: 'Laptop', dell: 'Laptop', hp: 'Laptop', acer: 'Laptop', asus: 'Laptop', apple: 'Laptop',
+      msi: 'Laptop', huawei: 'Laptop', gigabyte: 'Laptop',
+      lg: 'Monitor', samsung: 'Monitor', aoc: 'Monitor', viewsonic: 'Monitor', benq: 'Monitor', philips: 'Monitor',
+      logitech: 'Mouse', rapoo: 'Mouse', razer: 'Mouse', a4tech: 'Mouse', redragon: 'Mouse', steelseries: 'Mouse'
+    };
+    if (brand && brandMap[brand]) return brandMap[brand];
+
+    // Also map when the ITEM text itself is a brand
+    const nameOnly = (t?.item || t?.equipment_name || '').toLowerCase().trim();
+    if (nameOnly && brandMap[nameOnly]) return brandMap[nameOnly];
+    if (/\blg\b/.test(nameOnly)) return 'Monitor';
+    if (/\blogitech\b/.test(nameOnly)) return 'Mouse';
+    if (/\blogistic\b/.test(nameOnly)) return 'Keyboard';
+
+    // Fallback to visible names
+    return t?.equipment_name || t?.item || '-';
+  };
 
   // Resolve a transaction ID robustly from a transaction-like object
   const resolveTxId = async (tx) => {
@@ -518,7 +599,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                           </div>
                           <div>
                             <p className="text-xs text-gray-500 mb-1">Item</p>
-                            <p className="text-gray-800 text-base font-semibold">{transaction.item}</p>
+                            <p className="text-gray-800 text-base font-semibold">{resolveItemType(transaction)}</p>
                           </div>
                         </div>
                         <div className="hidden sm:contents">
@@ -526,7 +607,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                             {transaction.date}
                           </div>
                           <div className="col-span-6 text-gray-800 text-base lg:text-lg font-semibold text-center">
-                            {transaction.item}
+                            {resolveItemType(transaction)}
                           </div>
                           <div className="col-span-3 flex justify-center">
                             <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200">
