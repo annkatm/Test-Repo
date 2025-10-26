@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 const ExchangePanel = ({
   transaction,
@@ -8,11 +8,70 @@ const ExchangePanel = ({
   className = '',
 }) => {
   const items = Array.isArray(transaction?.exchangeItems) ? transaction.exchangeItems : [];
+  const [fetchedEquipment, setFetchedEquipment] = useState(null);
 
   // Build details from provided fields while excluding any serial-like fields
-  const equipment = transaction?.equipment || {};
+  const equipmentBase = transaction?.equipment || {};
+  const equipment = { ...equipmentBase, ...(fetchedEquipment || {}) };
+
+  // Fetch missing equipment details (image, description, price) if we only have an id
+  useEffect(() => {
+    const id = transaction?.equipment_id || transaction?.equipment?.id;
+    if (!id) return;
+    // If we already have image/description/price, skip fetch
+    const hasKeyDetails = Boolean(
+      equipmentBase?.image || equipmentBase?.image_url || equipmentBase?.photo_url ||
+      equipmentBase?.description || equipmentBase?.details ||
+      equipmentBase?.price || equipmentBase?.cost
+    );
+    if (hasKeyDetails) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/equipment/${id}`, { credentials: 'same-origin' });
+        const json = await res.json().catch(() => ({}));
+        const payload = json && (json.data || json);
+        if (!cancelled && payload && typeof payload === 'object') setFetchedEquipment(payload);
+      } catch (_) {}
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transaction?.equipment_id, transaction?.equipment?.id]);
+  // Resolve item category/type robustly
+  const itemType = (
+    transaction?.type ||
+    transaction?.category ||
+    transaction?.category_name ||
+    transaction?.item_type ||
+    transaction?.equipment_type ||
+    transaction?.equipment_category ||
+    transaction?.equipment_category_name ||
+    transaction?.type_of_item ||
+    transaction?.kind ||
+    transaction?.category?.name ||
+    transaction?.type?.name ||
+    transaction?.category?.title ||
+    equipment?.category_name ||
+    (typeof equipment?.category === 'string' ? equipment?.category : equipment?.category?.name || equipment?.category?.title) ||
+    equipment?.type ||
+    equipment?.type_name ||
+    equipment?.equipment_type ||
+    equipment?.equipment_category ||
+    equipment?.equipment_category_name ||
+    equipment?.type_of_item ||
+    equipment?.kind ||
+    null
+  );
+  // Prefer explicit category/type; otherwise fall back to item name
+  const categoryLabel = itemType || transaction?.item || transaction?.equipment_name || equipment?.name || null;
+  const itemBrandOrName = transaction?.brand || equipment?.brand || transaction?.item || equipment?.name || '-';
+  const description = transaction?.description || equipment?.description || equipment?.details || '';
+  const priceRaw = transaction?.price || equipment?.price || equipment?.cost || null;
+  const price = typeof priceRaw === 'number' || (typeof priceRaw === 'string' && priceRaw.trim() !== '')
+    ? new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(Number(priceRaw))
+    : null;
+  const imageUrl = equipment?.image_url || equipment?.image || equipment?.photo_url || transaction?.image || transaction?.image_url || null;
   const baseDetails = {
-    Item: transaction?.item,
     Brand: transaction?.brand || equipment?.brand,
     Model: transaction?.model || equipment?.model,
     Category: equipment?.category_name || equipment?.category || equipment?.type,
@@ -20,7 +79,8 @@ const ExchangePanel = ({
     Condition: equipment?.condition,
     Status: equipment?.status,
     Location: equipment?.location,
-    Notes: equipment?.description || equipment?.details,
+    Notes: description,
+    Price: price || undefined,
   };
 
   const excludeKeys = new Set([
@@ -65,6 +125,51 @@ const ExchangePanel = ({
         </button>
       </div>
 
+      {/* Item summary */}
+      <div className="mb-4">
+        <div className="text-sm text-gray-500">Item</div>
+        <div className="text-base font-semibold text-gray-900">{categoryLabel || 'Item'}</div>
+      </div>
+
+      {/* Brand card with image */}
+      <div className="flex items-start gap-3 mb-4">
+        <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
+          {imageUrl ? (
+            <img src={imageUrl} alt={itemBrandOrName} className="w-full h-full object-cover" />
+          ) : (
+            <span role="img" aria-label="item" className="text-2xl">💻</span>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-gray-800">{itemBrandOrName}</div>
+          {categoryLabel ? (
+            <div className="text-xs text-gray-500">{categoryLabel}</div>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Key details under the card */}
+      <div className="space-y-3 mb-6">
+        {description ? (
+          <div>
+            <div className="text-xs text-gray-500">Description</div>
+            <div className="text-sm text-gray-800">{description}</div>
+          </div>
+        ) : null}
+        {price ? (
+          <div>
+            <div className="text-xs text-gray-500">Price</div>
+            <div className="text-sm text-gray-800 font-semibold">{price}</div>
+          </div>
+        ) : null}
+        {imageUrl ? (
+          <div>
+            <div className="text-xs text-gray-500 mb-1">Image</div>
+            <img src={imageUrl} alt={itemBrandOrName} className="w-full max-h-48 object-contain rounded-lg border border-gray-200" />
+          </div>
+        ) : null}
+      </div>
+
       {/* Details section (excludes serial numbers) */}
       <div className="mb-4 space-y-2">
         {detailPairs.length > 0 ? (
@@ -81,23 +186,7 @@ const ExchangePanel = ({
         )}
       </div>
 
-      <div className="space-y-4 mb-6 overflow-auto">
-        {items.map((item, index) => (
-          <div key={index} className="flex items-start gap-3">
-            <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-2xl flex-shrink-0">
-              {item.icon}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="font-semibold text-gray-800">{item.name}</div>
-              <div className="text-xs text-gray-500">{item.brand}</div>
-              <div className="text-xs text-gray-600 mt-1">{item.details}</div>
-            </div>
-          </div>
-        ))}
-        {items.length === 0 && (
-          <div className="text-sm text-gray-500">No extra details for this item.</div>
-        )}
-      </div>
+      {/* Removed duplicate items list to avoid repeating Item/Lenovo */}
 
       <div className="mt-auto pt-2 flex gap-3">
         <button

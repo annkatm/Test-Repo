@@ -76,17 +76,27 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
   useEffect(() => {
     try {
       const src = Array.isArray(approvedTransactions) ? approvedTransactions : [];
-      const mapped = src.map((t, i) => ({
-        id: t?.id ?? t?.transaction_id ?? t?.request_id ?? t?.transactionID ?? t?.trans_id ?? t?.trx_id ?? t?.uuid ?? t?.pivot?.transaction_id ?? null,
-        date: t?.created_at ? new Date(t.created_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : (t?.date || ''),
-        item: t?.equipment_name || t?.item || '-',
-        status: t?.status || 'Approved',
-        equipment_id: t?.equipment_id || t?.equipment?.id || null,
-        brand: t?.brand || t?.equipment?.brand || t?.equipment_brand || null,
-        model: t?.model || t?.equipment?.model || t?.equipment_model || null,
-        equipment: t?.equipment || t?.equipment_details || null,
-        exchangeItems: Array.isArray(t?.exchangeItems) ? t.exchangeItems : [],
-      })).filter(r => r.date);
+      const mapped = src.map((t, i) => {
+        const dateSrc = t?.created_at || t?.expected_start_date || t?.start_date || t?.date || null;
+        const date = dateSrc
+          ? new Date(dateSrc).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
+          : new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+        const rawStatus = String(t?.status ?? '').trim().toLowerCase();
+        const status = (!rawStatus || rawStatus === '-' || /approved|released|borrowed|active/.test(rawStatus))
+          ? 'Approved'
+          : (t?.status || 'Approved');
+        return {
+          id: t?.id ?? t?.transaction_id ?? t?.request_id ?? t?.transactionID ?? t?.trans_id ?? t?.trx_id ?? t?.uuid ?? t?.pivot?.transaction_id ?? null,
+          date,
+          item: t?.equipment_name || t?.item || '-',
+          status,
+          equipment_id: t?.equipment_id || t?.equipment?.id || null,
+          brand: t?.brand || t?.equipment?.brand || t?.equipment_brand || null,
+          model: t?.model || t?.equipment?.model || t?.equipment_model || null,
+          equipment: t?.equipment || t?.equipment_details || null,
+          exchangeItems: Array.isArray(t?.exchangeItems) ? t.exchangeItems : [],
+        };
+      });
       setDisplayList(mapped);
     } catch (_) {}
   }, [approvedTransactions]);
@@ -99,17 +109,27 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
         const res = await fetch('/api/transactions/approved', { credentials: 'same-origin' });
         const json = await res.json().catch(() => ({}));
         const list = Array.isArray(json) ? json : (json && json.data && Array.isArray(json.data) ? json.data : []);
-        const mapped = (list || []).map((t, i) => ({
-          id: t?.id ?? t?.transaction_id ?? t?.request_id ?? t?.transactionID ?? t?.trans_id ?? t?.trx_id ?? t?.uuid ?? t?.pivot?.transaction_id ?? (i + 1),
-          date: t?.created_at ? new Date(t.created_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : (t?.date || ''),
-          item: t?.equipment_name || t?.item || '-',
-          status: t?.status || 'Approved',
-          equipment_id: t?.equipment_id || t?.equipment?.id || null,
-          brand: t?.brand || t?.equipment?.brand || t?.equipment_brand || null,
-          model: t?.model || t?.equipment?.model || t?.equipment_model || null,
-          equipment: t?.equipment || t?.equipment_details || null,
-          exchangeItems: Array.isArray(t?.exchangeItems) ? t.exchangeItems : [],
-        })).filter(r => r.date);
+        const mapped = (list || []).map((t, i) => {
+          const dateSrc = t?.created_at || t?.expected_start_date || t?.start_date || t?.date || null;
+          const date = dateSrc
+            ? new Date(dateSrc).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
+            : new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+          const rawStatus = String(t?.status ?? '').trim().toLowerCase();
+          const status = (!rawStatus || rawStatus === '-' || /approved|released|borrowed|active/.test(rawStatus))
+            ? 'Approved'
+            : (t?.status || 'Approved');
+          return {
+            id: t?.id ?? t?.transaction_id ?? t?.request_id ?? t?.transactionID ?? t?.trans_id ?? t?.trx_id ?? t?.uuid ?? t?.pivot?.transaction_id ?? (i + 1),
+            date,
+            item: t?.equipment_name || t?.item || '-',
+            status,
+            equipment_id: t?.equipment_id || t?.equipment?.id || null,
+            brand: t?.brand || t?.equipment?.brand || t?.equipment_brand || null,
+            model: t?.model || t?.equipment?.model || t?.equipment_model || null,
+            equipment: t?.equipment || t?.equipment_details || null,
+            exchangeItems: Array.isArray(t?.exchangeItems) ? t.exchangeItems : [],
+          };
+        });
         if (!cancelled) setDisplayList(mapped);
       } catch (_) { }
     };
@@ -124,17 +144,27 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
         const res = await fetch('/api/transactions/approved', { credentials: 'same-origin' });
         const json = await res.json().catch(() => ({}));
         const list = Array.isArray(json) ? json : (json && json.data && Array.isArray(json.data) ? json.data : []);
-        const mapped = (list || []).map((t, i) => ({
-          id: t?.id ?? t?.transaction_id ?? t?.request_id ?? i + 1,
-          date: t?.created_at ? new Date(t.created_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : (t?.date || ''),
-          item: t?.equipment_name || t?.item || '-',
-          status: t?.status || 'Approved',
-          equipment_id: t?.equipment_id || t?.equipment?.id || null,
-          brand: t?.brand || t?.equipment?.brand || t?.equipment_brand || null,
-          model: t?.model || t?.equipment?.model || t?.equipment_model || null,
-          equipment: t?.equipment || t?.equipment_details || null,
-          exchangeItems: Array.isArray(t?.exchangeItems) ? t.exchangeItems : [],
-        })).filter(r => r.date);
+        const mapped = (list || []).map((t, i) => {
+          const dateSrc = t?.created_at || t?.expected_start_date || t?.start_date || t?.date || null;
+          const date = dateSrc
+            ? new Date(dateSrc).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
+            : new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+          const rawStatus = String(t?.status ?? '').trim().toLowerCase();
+          const status = (!rawStatus || rawStatus === '-' || /approved|released|borrowed|active/.test(rawStatus))
+            ? 'Approved'
+            : (t?.status || 'Approved');
+          return {
+            id: t?.id ?? t?.transaction_id ?? t?.request_id ?? i + 1,
+            date,
+            item: t?.equipment_name || t?.item || '-',
+            status,
+            equipment_id: t?.equipment_id || t?.equipment?.id || null,
+            brand: t?.brand || t?.equipment?.brand || t?.equipment_brand || null,
+            model: t?.model || t?.equipment?.model || t?.equipment_model || null,
+            equipment: t?.equipment || t?.equipment_details || null,
+            exchangeItems: Array.isArray(t?.exchangeItems) ? t.exchangeItems : [],
+          };
+        }).filter(r => r.date);
         setDisplayList(mapped);
       } catch (_) { }
     };
@@ -454,7 +484,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8 items-stretch">
           {/* Left Column - Table */}
           <div className={`${selectedRow !== null ? 'lg:col-span-8' : 'lg:col-span-12'}`}>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-300 overflow-hidden">
+            <div className="bg-white rounded-xl shadow-lg border border-gray-300 overflow-hidden">
               {/* Table Header - Hidden on mobile, visible on tablet+ */}
               <div className="hidden sm:grid grid-cols-12 bg-gray-50 text-gray-700 font-semibold text-base lg:text-lg py-4 xl:py-5 px-4 sm:px-6 border-b border-gray-200">
                 <div className="col-span-3 text-center">Date</div>

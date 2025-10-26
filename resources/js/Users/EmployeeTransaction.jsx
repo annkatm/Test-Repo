@@ -369,14 +369,59 @@ const EmployeeTransaction = () => {
 
   const fetchApprovedTransactions = async () => {
     try {
-      const response = await fetch('/api/transactions/approved');
-      const data = await response.json();
-
-      if (data.success && Array.isArray(data.data)) {
-        setTransactions(data.data);
-      } else {
-        setTransactions([]);
+      const response = await fetch('/api/transactions/approved', { credentials: 'same-origin' });
+      const data = await response.json().catch(() => ({}));
+      let list = [];
+      if (Array.isArray(data)) {
+        list = data;
+      } else if (data && Array.isArray(data.data)) {
+        list = data.data;
+      } else if (data && data.data && Array.isArray(data.data.data)) {
+        list = data.data.data;
       }
+
+      // Fallback: try generic transactions endpoint and filter likely approved/active statuses
+      if (!Array.isArray(list) || list.length === 0) {
+        try {
+          const res2 = await fetch('/api/transactions', { credentials: 'same-origin' });
+          const j2 = await res2.json().catch(() => ({}));
+          let alt = Array.isArray(j2) ? j2 : (Array.isArray(j2?.data) ? j2.data : (Array.isArray(j2?.data?.data) ? j2.data.data : []));
+          const allowed = ['approved', 'released', 'borrowed', 'active'];
+          list = (alt || []).filter(t => allowed.includes(String(t?.status || '').toLowerCase()));
+        } catch (_) {}
+      }
+
+      // Last fallback: current holders
+      if (!Array.isArray(list) || list.length === 0) {
+        try {
+          const res3 = await fetch('/api/employees/current-holders', { credentials: 'same-origin' });
+          const j3 = await res3.json().catch(() => ({}));
+          list = Array.isArray(j3) ? j3 : (Array.isArray(j3?.data) ? j3.data : []);
+        } catch (_) {}
+      }
+
+      // Additional fallback: approved requests (many systems record approval here before transaction record exists)
+      if (!Array.isArray(list) || list.length === 0) {
+        try {
+          const res4 = await fetch('/api/requests?status=approved', { credentials: 'same-origin' });
+          const j4 = await res4.json().catch(() => ({}));
+          const reqs = Array.isArray(j4) ? j4 : (Array.isArray(j4?.data) ? j4.data : []);
+          list = (reqs || []).map(r => ({
+            id: r.id,
+            equipment_id: r.equipment_id || r.equipment?.id,
+            equipment_name: r.equipment_name || r.item || '-',
+            expected_start_date: r.expected_start_date || r.start_date,
+            expected_end_date: r.expected_end_date || r.return_date,
+            status: r.status || 'approved',
+          }));
+        } catch (_) {}
+      }
+
+      const finalList = Array.isArray(list) ? list : [];
+      try {
+        console.log('[EmployeeTransaction] Approved fetch result count:', finalList.length, finalList.slice(0, 3));
+      } catch (_) {}
+      setTransactions(finalList);
     } catch (error) {
       console.error('Failed to fetch approved transactions:', error);
       setTransactions([]);
@@ -623,8 +668,10 @@ const EmployeeTransaction = () => {
         return bDate - aDate;
       })
       .map((t) => {
-        const dsrc = t?.created_at || t?.expected_start_date || t?.start_date || null;
-        const date = dsrc ? new Date(dsrc).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '';
+        const dsrc = t?.created_at || t?.expected_start_date || t?.start_date || t?.date || null;
+        const date = dsrc
+          ? new Date(dsrc).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
+          : new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
         return {
           id: t?.id,
           date,
@@ -643,8 +690,7 @@ const EmployeeTransaction = () => {
             },
           ],
         };
-      })
-      .filter((x) => Boolean(x.date));
+      });
 
     return (
       <ApprovedTransactions
@@ -742,7 +788,7 @@ const EmployeeTransaction = () => {
                 <div className="grid grid-cols-12 gap-6 items-center">
                   <div className="col-span-3">
                     <span className="text-sm text-gray-900">
-                      {transaction.equipment_name || transaction.item || '-'}
+                      {transaction.type || transaction.category || transaction.category_name || transaction.equipment_type || transaction.item_type || transaction?.equipment?.type || transaction?.equipment?.category || transaction?.equipment?.category_name || transaction.item || transaction.equipment_name || transaction?.equipment?.name || '-'}
                     </span>
                   </div>
                   <div className="col-span-3">
@@ -768,9 +814,17 @@ const EmployeeTransaction = () => {
                     </span>
                   </div>
                   <div className="col-span-3">
-                    <span className="text-sm text-gray-900">
-                      {transaction.status || "Pending"}
-                    </span>
+                    {(() => {
+                      const s = String(transaction.status || 'pending').toLowerCase();
+                      const isApproved = /approved|released|borrowed|active/.test(s);
+                      const cls = isApproved
+                        ? 'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200'
+                        : 'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200';
+                      const label = isApproved ? 'Approved' : (transaction.status || 'Pending');
+                      return (
+                        <span className={cls}>{label}</span>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
@@ -807,55 +861,69 @@ const EmployeeTransaction = () => {
           </div>
 
           <div className="divide-y divide-gray-100">
-            {transactions.length > 0 ? [...transactions]
-              .sort((a, b) => {
+            {transactions.length > 0 ? (() => {
+              const sorted = [...transactions].sort((a, b) => {
                 const aDate = new Date(a.created_at || a.expected_start_date || a.start_date || 0).getTime();
                 const bDate = new Date(b.created_at || b.expected_start_date || b.start_date || 0).getTime();
                 return bDate - aDate; // newest first
-              })
-              .filter(t => {
-                const startRaw = t.expected_start_date || t.start_date;
-                const endRaw = t.expected_end_date || t.return_date;
-                const startOk = startRaw ? !isNaN(new Date(startRaw).getTime()) : false;
-                const endOk = endRaw ? !isNaN(new Date(endRaw).getTime()) : false;
-                const approved = String(t.status || '').toLowerCase() === 'approved';
-                return approved && startOk && endOk;
-              })
-              .slice(0, 3)
-              .map((transaction, index) => (
-              <div
-                key={transaction.id}
-                className="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer"
-                onClick={() => logActivity(`Clicked approved row: ${transaction.equipment_name || 'Item'} (${transaction.id || index})`, 'info')}
-              >
-                <div className="grid grid-cols-12 gap-6 items-center">
-                  <div className="col-span-3">
-                    <span className="text-sm text-gray-900">
-                      {transaction.equipment_name || '-'}
-                    </span>
-                  </div>
-                  <div className="col-span-3">
-                    <span className="text-sm text-gray-900">
-                      {(transaction.expected_start_date || transaction.start_date)
-                        ? new Date(transaction.expected_start_date || transaction.start_date).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" })
-                        : '-'}
-                    </span>
-                  </div>
-                  <div className="col-span-3">
-                    <span className="text-sm text-gray-900">
-                      {(transaction.expected_end_date || transaction.return_date)
-                        ? new Date(transaction.expected_end_date || transaction.return_date).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" })
-                        : '-'}
-                    </span>
-                  </div>
-                  <div className="col-span-3">
-                    <span className="text-sm text-gray-900">{transaction.status || '-'}</span>
+              });
+              const filtered = sorted.filter(t => {
+                const s = String(t.status || '').toLowerCase();
+                return ['approved', 'released', 'borrowed', 'active'].includes(s);
+              });
+              const useList = (filtered.length > 0 ? filtered : sorted).slice(0, 3);
+              return useList.map((transaction, index) => (
+                <div
+                  key={transaction.id || index}
+                  className="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer"
+                  onClick={() => logActivity(`Clicked approved row: ${transaction.equipment_name || transaction.item || 'Item'} (${transaction.id || index})`, 'info')}
+                >
+                  <div className="grid grid-cols-12 gap-6 items-center">
+                    <div className="col-span-3">
+                      <span className="text-sm text-gray-900">
+                        {transaction.type || transaction.category || transaction.category_name || transaction.equipment_type || transaction.item_type || transaction?.equipment?.type || transaction?.equipment?.category || transaction?.equipment?.category_name || transaction.item || transaction.equipment_name || transaction?.equipment?.name || '-'}
+                      </span>
+                    </div>
+                    <div className="col-span-3">
+                      <span className="text-sm text-gray-900">
+                        {(transaction.expected_start_date || transaction.start_date || transaction.created_at || transaction.borrow_date || transaction.borrowed_at || transaction.release_date || transaction.start || transaction.expected_start || transaction.startDate)
+                          ? new Date(
+                              transaction.expected_start_date || transaction.start_date || transaction.created_at ||
+                              transaction.borrow_date || transaction.borrowed_at || transaction.release_date ||
+                              transaction.start || transaction.expected_start || transaction.startDate
+                            ).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
+                          : '-'}
+                      </span>
+                    </div>
+                    <div className="col-span-3">
+                      <span className="text-sm text-gray-900">
+                        {(transaction.expected_end_date || transaction.return_date || transaction.end_date || transaction.due_date || transaction.expected_return_date || transaction.return_due || transaction.end || transaction.expected_end || transaction.endDate)
+                          ? new Date(
+                              transaction.expected_end_date || transaction.return_date || transaction.end_date ||
+                              transaction.due_date || transaction.expected_return_date || transaction.return_due ||
+                              transaction.end || transaction.expected_end || transaction.endDate
+                            ).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
+                          : '-'}
+                      </span>
+                    </div>
+                    <div className="col-span-3">
+                      {(() => {
+                        const s = String(transaction.status || 'approved').toLowerCase();
+                        const isApproved = /approved|released|borrowed|active/.test(s);
+                        const cls = isApproved
+                          ? 'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200'
+                          : 'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200';
+                        const label = isApproved ? 'Approved' : (transaction.status || 'Approved');
+                        return (
+                          <span className={cls}>{label}</span>
+                        );
+                      })()}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )) : (
-              <>
-              </>
+              ));
+            })() : (
+              <></>
             )}
           </div>
         </div>
