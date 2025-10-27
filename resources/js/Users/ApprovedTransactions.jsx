@@ -38,6 +38,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
     } catch (_) { }
   };
   const [selectedRow, setSelectedRow] = useState(null);
+  const [showReturnModal, setShowReturnModal] = useState(false);
   const [showBrowseLaptopsModal, setShowBrowseLaptopsModal] = useState(false);
   const [showReasonModal, setShowReasonModal] = useState(false);
   const [showExchangeConfirmModal, setShowExchangeConfirmModal] = useState(false);
@@ -66,6 +67,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
       return saved ? JSON.parse(saved) : null;
     } catch (_) { return null; }
   });
+  const [returnTxId, setReturnTxId] = useState(null);
 
   // Keep chosenUnit in sync if changed by another tab/process
   useEffect(() => {
@@ -685,48 +687,11 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                 <ExchangePanel
                   transaction={selectedTransactionData}
                   onClose={() => setSelectedRow(null)}
-                  onReturnNow={async () => {
-                    if (actionLoading) return;
-                    setActionLoading(true);
-                    try {
-                      const txId = await resolveTxId(selectedTransactionData);
-                      if (!txId) {
-                        alert('Missing transaction information. Please select a transaction and try again.');
-                        return;
-                      }
-                      const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-                      const res = await fetch(`/api/transactions/${txId}/return`, {
-                        method: 'POST',
-                        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf },
-                        credentials: 'same-origin',
-                        body: JSON.stringify({}),
-                      });
-                      if (!res.ok) {
-                        const text = await res.text();
-                        throw new Error(text || `HTTP ${res.status}`);
-                      }
-                      setSelectedRow(null);
-                      logActivity('Approved: Confirmed Return', 'success');
-                      try {
-                        const equipId = selectedTransactionData?.equipment_id;
-                        if (equipId) {
-                          window.dispatchEvent(new CustomEvent('ireply:equipment:restore', { detail: { equipment_id: equipId } }));
-                        }
-                      } catch (_) { }
-                      try {
-                        const payload = { id: selectedTransactionData?.id, item: selectedTransactionData?.item, date: new Date().toISOString() };
-                        window.dispatchEvent(new CustomEvent('ireply:returned:add', { detail: payload }));
-                      } catch (_) { }
-                      try {
-                        window.dispatchEvent(new CustomEvent('ireply:navigate', { detail: { menu: 'Returned Items' } }));
-                      } catch (_) { }
-                      onBack();
-                    } catch (err) {
-                      console.error(err);
-                      alert('Failed to mark item as returned. Please try again.');
-                    } finally {
-                      setActionLoading(false);
-                    }
+                  onReturnNow={async () => { 
+                    const tid = selectedTransactionData?.tx_id || selectedTransactionData?.id || await resolveTxId(selectedTransactionData);
+                    setReturnTxId(tid || null);
+                    setShowReturnModal(true); 
+                    logActivity('Approved: Clicked Return Now', 'return'); 
                   }}
                   onOpenBrowse={() => { setShowBrowseLaptopsModal(true); logActivity('Approved: Clicked Exchange', 'exchange'); }}
                   className="flex-1"
@@ -737,6 +702,104 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
           </div>
         </div>
       </div>
+
+      {/* RETURN NOW MODAL */}
+      {showReturnModal && selectedTransactionData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-2xl shadow-2xl w-[420px] p-6 relative transform transition-all duration-500 scale-100 hover:scale-[1.01] hover:rotate-[0.5deg] shadow-blue-900/30 hover:shadow-blue-800/50 perspective-[1200px] motion-safe:animate-pop3D">
+            <h2 className="text-lg font-bold text-gray-900 mb-6 text-center drop-shadow-md">
+              Return Confirmation
+            </h2>
+
+            {/* Dynamic Item List */}
+            <div className="space-y-4 mb-6">
+              {selectedTransactionData.exchangeItems.map((item, index) => (
+                <div
+                  key={index}
+                  className="flex items-start gap-4 pb-4 border-b border-gray-100 last:border-0"
+                >
+                  <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-2xl">
+                    {item.icon}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-900">{item.name}</p>
+                    <p className="text-sm text-gray-500">{item.brand} - {item.details}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Buttons */}
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => { setShowReturnModal(false); logActivity('Approved: Return modal closed', 'info'); }}
+                className="px-5 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 shadow-sm transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (actionLoading) return;
+                  setActionLoading(true);
+                  try {
+                    const txId = returnTxId || selectedTransactionData?.tx_id || selectedTransactionData?.id || await resolveTxId(selectedTransactionData);
+                    if (!txId) {
+                      alert('Missing transaction information. Please select a transaction and try again.');
+                      setShowReturnModal(false);
+                      return;
+                    }
+                    const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+                    const res = await fetch(`/api/transactions/${txId}/return`, {
+                      method: 'POST',
+                      headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrf,
+                      },
+                      credentials: 'same-origin',
+                      body: JSON.stringify({}),
+                    });
+                    if (!res.ok) {
+                      const text = await res.text();
+                      throw new Error(text || `HTTP ${res.status}`);
+                    }
+                    setShowReturnModal(false);
+                    setSelectedRow(null);
+                    logActivity('Approved: Confirmed Return', 'success');
+                    try {
+                      const equipId = selectedTransactionData?.equipment_id;
+                      if (equipId) {
+                        window.dispatchEvent(new CustomEvent('ireply:equipment:restore', { detail: { equipment_id: equipId } }));
+                      }
+                    } catch (_) { }
+                    try {
+                      const payload = {
+                        id: selectedTransactionData?.id,
+                        item: selectedTransactionData?.item,
+                        date: new Date().toISOString(),
+                      };
+                      window.dispatchEvent(new CustomEvent('ireply:returned:add', { detail: payload }));
+                    } catch (_) { }
+                    try {
+                      window.dispatchEvent(new CustomEvent('ireply:navigate', { detail: { menu: 'Returned Items' } }));
+                    } catch (_) { }
+                    onBack();
+                  } catch (err) {
+                    console.error(err);
+                    alert('Failed to mark item as returned. Please try again.');
+                  } finally {
+                    setActionLoading(false);
+                  }
+                }}
+                disabled={actionLoading}
+                className="px-5 py-2 bg-blue-600 text-white rounded-lg font-medium shadow-md hover:bg-blue-700 hover:shadow-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* BROWSE LAPTOPS MODAL */}
       {showBrowseLaptopsModal && (

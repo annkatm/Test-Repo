@@ -9,8 +9,6 @@ const ExchangePanel = ({
 }) => {
   const items = Array.isArray(transaction?.exchangeItems) ? transaction.exchangeItems : [];
   const [fetchedEquipment, setFetchedEquipment] = useState(null);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [confirmEnter, setConfirmEnter] = useState(false);
 
   // Build details from provided fields while excluding any serial-like fields
   const equipmentBase = transaction?.equipment || {};
@@ -39,13 +37,6 @@ const ExchangePanel = ({
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transaction?.equipment_id, transaction?.equipment?.id]);
-  useEffect(() => {
-    if (showConfirm) {
-      const t = setTimeout(() => setConfirmEnter(true), 20);
-      return () => clearTimeout(t);
-    }
-    setConfirmEnter(false);
-  }, [showConfirm]);
   // Resolve item category/type robustly
   const itemType = (
     transaction?.type ||
@@ -80,31 +71,20 @@ const ExchangePanel = ({
     ? new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(Number(priceRaw))
     : null;
   const imageUrl = equipment?.image_url || equipment?.image || equipment?.photo_url || transaction?.image || transaction?.image_url || null;
-  // Derive key business fields
-  const serialUpdated = (
-    transaction?.updated_serial_no || transaction?.new_serial_no || equipment?.updated_serial_no || equipment?.new_serial_no || null
-  );
-  const serialFallback = (
-    transaction?.serial_no || transaction?.serial_number || transaction?.serial || transaction?.asset_tag || equipment?.serial_no || equipment?.serial_number || equipment?.serial || equipment?.asset_tag || null
-  );
-  const approvedBy = (
-    transaction?.approved_by || transaction?.approved_by_name || transaction?.approver || transaction?.approvedBy || equipment?.approved_by || null
-  );
-
   const baseDetails = {
     Brand: transaction?.brand || equipment?.brand,
     Model: transaction?.model || equipment?.model,
     Category: equipment?.category_name || equipment?.category || equipment?.type,
-    'Serial no.': serialUpdated || serialFallback || undefined,
+    Specs: equipment?.specs || equipment?.specifications || equipment?.specification,
     Condition: equipment?.condition,
     Status: equipment?.status,
     Location: equipment?.location,
-    'Approved By': approvedBy || undefined,
+    Notes: description,
     Price: price || undefined,
   };
 
   const excludeKeys = new Set([
-    'id','equipment_id','transaction_id','request_id','user_id','employee_id','status','date','created_at','updated_at','deleted_at','exchangeitems','serial','serial_no','serial_number','sn','equipment_name','item','name','image','avatar','avatar_url','photo','photo_url','warranty','purchase_date','purchase','specs','specifications','specification','asset_tag','tag','notes','note'
+    'id','equipment_id','transaction_id','request_id','user_id','employee_id','status','date','created_at','updated_at','deleted_at','exchangeitems','serial','serial_no','serial_number','sn','equipment_name','item','name','image','avatar','avatar_url','photo','photo_url'
   ]);
   const shouldInclude = (k, v) => {
     if (v == null) return false;
@@ -112,11 +92,7 @@ const ExchangePanel = ({
     if (t === 'object' || t === 'function') return false;
     const key = String(k).toLowerCase();
     if (key.includes('serial')) return false;
-    if (key.includes('warranty')) return false;
-    if (key.includes('purchase')) return false;
-    if (key.includes('spec')) return false;
     if (excludeKeys.has(key)) return false;
-    if (key === 'notes' || key === 'note') return false;
     return String(v).trim() !== '';
   };
   const labelize = (k) => String(k)
@@ -214,7 +190,7 @@ const ExchangePanel = ({
 
       <div className="mt-auto pt-2 flex gap-3">
         <button
-          onClick={() => setShowConfirm(true)}
+          onClick={onReturnNow}
           className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium shadow-md transform transition-all duration-300 hover:scale-105 hover:shadow-xl hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
         >
           Return Now
@@ -226,51 +202,6 @@ const ExchangePanel = ({
           Exchange
         </button>
       </div>
-      {showConfirm && (
-        <div className="fixed inset-0 z-[60] flex items-start justify-center bg-black/40 backdrop-blur-md p-4 pt-8 sm:pt-10">
-          <div className={`w-full max-w-xl bg-white rounded-2xl border border-blue-200 shadow-2xl p-7 transform transition-all duration-500 ease-out ${confirmEnter ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}`}>
-            <h3 className="text-xl font-semibold text-gray-900 mb-4 text-center">Return Confirmation</h3>
-            <p className="text-sm text-gray-600 mb-4 text-center">Are you sure you want to return this item now?</p>
-            <div className="flex items-start gap-3 mb-6">
-              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
-                {imageUrl ? (
-                  <img src={imageUrl} alt={itemBrandOrName} className="w-full h-full object-cover" />
-                ) : (
-                  <span role="img" aria-label="item" className="text-2xl">💻</span>
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="font-semibold text-gray-900">{itemBrandOrName}</div>
-                {categoryLabel ? (
-                  <div className="text-xs text-gray-500 mb-1">{categoryLabel}</div>
-                ) : null}
-                <div className="text-xs text-gray-600 space-y-0.5">
-                  {(serialUpdated || serialFallback) ? (
-                    <div><span className="text-gray-500">Serial no.:</span> <span className="text-gray-800">{serialUpdated || serialFallback}</span></div>
-                  ) : null}
-                  {approvedBy ? (
-                    <div><span className="text-gray-500">Approved by:</span> <span className="text-gray-800">{approvedBy}</span></div>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setShowConfirm(false)}
-                className="px-5 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium transition-colors hover:bg-gray-200"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => { onReturnNow(); setShowConfirm(false); }}
-                className="px-5 py-2 bg-blue-600 text-white rounded-lg font-medium shadow-md transition-colors hover:bg-blue-700"
-              >
-                Confirm
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
