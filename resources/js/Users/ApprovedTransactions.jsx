@@ -6,12 +6,35 @@ import ExchangePanel from './ExchangePanel.jsx';
 // - transactionStats: { borrowed: number }
 // - borrowedDetails: { items: [{name, specs}], borrowDate, returnDate }
 const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions = [], borrowedDetails = null }) => {
+  // Per-user storage helpers so every user sees a fresh page state
+  const getUserTag = () => {
+    try {
+      const raw = localStorage.getItem('user');
+      if (raw) {
+        const u = JSON.parse(raw);
+        return u?.id || u?.email || 'guest';
+      }
+    } catch (_) {}
+    return 'guest';
+  };
+  const userKey = (base) => `${base}:${getUserTag()}`;
+  const migrateKeyIfNeeded = (base) => {
+    try {
+      const scoped = userKey(base);
+      const cur = localStorage.getItem(scoped);
+      if (cur) return; // already scoped
+      const legacy = localStorage.getItem(base);
+      if (legacy != null) localStorage.setItem(scoped, legacy);
+      // do not remove legacy automatically to avoid affecting other pages
+    } catch (_) {}
+  };
   const logActivity = (message, variant = 'info') => {
     try {
-      const prev = JSON.parse(localStorage.getItem('employee_activities') || '[]');
+      migrateKeyIfNeeded('employee_activities');
+      const prev = JSON.parse(localStorage.getItem(userKey('employee_activities')) || '[]');
       const entry = { id: Date.now(), message, variant, time: new Date().toISOString() };
       const next = [entry, ...(Array.isArray(prev) ? prev : [])].slice(0, 50);
-      localStorage.setItem('employee_activities', JSON.stringify(next));
+      localStorage.setItem(userKey('employee_activities'), JSON.stringify(next));
     } catch (_) { }
   };
   const [selectedRow, setSelectedRow] = useState(null);
@@ -39,7 +62,8 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
   const [displayList, setDisplayList] = useState(() => Array.isArray(approvedTransactions) ? approvedTransactions : []);
   const [chosenUnit, setChosenUnit] = useState(() => {
     try {
-      const saved = localStorage.getItem('approved_selected_unit');
+      migrateKeyIfNeeded('approved_selected_unit');
+      const saved = localStorage.getItem(userKey('approved_selected_unit'));
       return saved ? JSON.parse(saved) : null;
     } catch (_) { return null; }
   });
@@ -61,11 +85,22 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
+  // When an item is returned elsewhere, refresh approved and notify other lists to update
+  useEffect(() => {
+    const handler = () => {
+      try { window.dispatchEvent(new CustomEvent('ireply:approved:changed')); } catch (_) {}
+      try { window.dispatchEvent(new CustomEvent('ireply:catalog:refresh')); } catch (_) {}
+    };
+    window.addEventListener('ireply:equipment:restore', handler);
+    return () => window.removeEventListener('ireply:equipment:restore', handler);
+  }, []);
+
   // Refresh selection whenever Browse Laptops reopens
   useEffect(() => {
     if (showBrowseLaptopsModal) {
       try {
-        const saved = localStorage.getItem('approved_selected_unit');
+        migrateKeyIfNeeded('approved_selected_unit');
+        const saved = localStorage.getItem(userKey('approved_selected_unit'));
         setChosenUnit(saved ? JSON.parse(saved) : null);
       } catch (_) {
         setChosenUnit(null);
@@ -86,13 +121,16 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
           ? 'Approved'
           : (t?.status || 'Approved');
         return {
+          // Preserve both a display id and a stable tx_id (no fallback index)
           id: t?.id ?? t?.transaction_id ?? t?.request_id ?? t?.transactionID ?? t?.trans_id ?? t?.trx_id ?? t?.uuid ?? t?.pivot?.transaction_id ?? null,
+          tx_id: t?.id ?? t?.transaction_id ?? t?.request_id ?? t?.transactionID ?? t?.trans_id ?? t?.trx_id ?? t?.uuid ?? t?.pivot?.transaction_id ?? null,
           date,
           item: (
             t?.category_name || t?.category || t?.equipment_category || t?.equipment_type || t?.type || t?.item_type ||
             (t?.equipment && (t?.equipment?.category_name || t?.equipment?.category?.name || t?.equipment?.type)) ||
             t?.equipment_name || t?.item || '-'
           ),
+          match_name: t?.equipment_name || t?.item || t?.name || null,
           status,
           equipment_id: t?.equipment_id || t?.equipment?.id || null,
           brand: t?.brand || t?.equipment?.brand || t?.equipment_brand || null,
@@ -124,12 +162,14 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
             : (t?.status || 'Approved');
           return {
             id: t?.id ?? t?.transaction_id ?? t?.request_id ?? t?.transactionID ?? t?.trans_id ?? t?.trx_id ?? t?.uuid ?? t?.pivot?.transaction_id ?? (i + 1),
+            tx_id: t?.id ?? t?.transaction_id ?? t?.request_id ?? t?.transactionID ?? t?.trans_id ?? t?.trx_id ?? t?.uuid ?? t?.pivot?.transaction_id ?? null,
             date,
             item: (
               t?.category_name || t?.category || t?.equipment_category || t?.equipment_type || t?.type || t?.item_type ||
               (t?.equipment && (t?.equipment?.category_name || t?.equipment?.category?.name || t?.equipment?.type)) ||
               t?.equipment_name || t?.item || '-'
             ),
+            match_name: t?.equipment_name || t?.item || t?.name || null,
             status,
             equipment_id: t?.equipment_id || t?.equipment?.id || null,
             brand: t?.brand || t?.equipment?.brand || t?.equipment_brand || null,
@@ -163,12 +203,14 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
             : (t?.status || 'Approved');
           return {
             id: t?.id ?? t?.transaction_id ?? t?.request_id ?? i + 1,
+            tx_id: t?.id ?? t?.transaction_id ?? t?.request_id ?? null,
             date,
             item: (
               t?.category_name || t?.category || t?.equipment_category || t?.equipment_type || t?.type || t?.item_type ||
               (t?.equipment && (t?.equipment?.category_name || t?.equipment?.category?.name || t?.equipment?.type)) ||
               t?.equipment_name || t?.item || '-'
             ),
+            match_name: t?.equipment_name || t?.item || t?.name || null,
             status,
             equipment_id: t?.equipment_id || t?.equipment?.id || null,
             brand: t?.brand || t?.equipment?.brand || t?.equipment_brand || null,
@@ -274,13 +316,14 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
       const json = await res.json().catch(() => ({}));
       const list = Array.isArray(json) ? json : (json && json.data && Array.isArray(json.data) ? json.data : []);
       const eqId = tx?.equipment_id || tx?.equipment?.id || null;
-      const name = (tx?.equipment_name || tx?.item || '').toLowerCase();
+      const name = (tx?.match_name || tx?.equipment_name || tx?.item || '').toLowerCase();
       const found = (list || []).find((t) => {
         const candId = t?.id || t?.transaction_id || t?.request_id || t?.transactionID || t?.trans_id || t?.trx_id || t?.uuid || t?.pivot?.transaction_id;
         if (!candId) return false;
         const cEq = t?.equipment_id || t?.equipment?.id || null;
-        const cName = (t?.equipment_name || t?.item || '').toLowerCase();
-        const statusOk = String(t?.status || 'Approved').toLowerCase().includes('approved');
+        const cName = (t?.equipment_name || t?.item || t?.name || '').toLowerCase();
+        const s = String(t?.status || '').toLowerCase();
+        const statusOk = /approved|released|borrowed|active/.test(s) || !s;
         return statusOk && ((eqId && cEq && String(eqId) === String(cEq)) || (name && cName && name === cName));
       });
       return found ? (found.id || found.transaction_id || found.request_id || found.transactionID || found.trans_id || found.trx_id || found.uuid || found?.pivot?.transaction_id) : null;
@@ -532,7 +575,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
               </button>
               <button
                 onClick={() => {
-                  try { localStorage.setItem('approved_selected_unit', JSON.stringify(selectedUnit)); } catch (_) { }
+                  try { migrateKeyIfNeeded('approved_selected_unit'); localStorage.setItem(userKey('approved_selected_unit'), JSON.stringify(selectedUnit)); } catch (_) { }
                   setChosenUnit(selectedUnit);
                   logActivity(`Approved: Selected unit ${selectedUnit.name}`, 'success');
                   setShowUnitConfirmModal(false);
@@ -645,7 +688,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                   transaction={selectedTransactionData}
                   onClose={() => setSelectedRow(null)}
                   onReturnNow={async () => { 
-                    const tid = await resolveTxId(selectedTransactionData);
+                    const tid = selectedTransactionData?.tx_id || selectedTransactionData?.id || await resolveTxId(selectedTransactionData);
                     setReturnTxId(tid || null);
                     setShowReturnModal(true); 
                     logActivity('Approved: Clicked Return Now', 'return'); 
@@ -699,7 +742,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                   if (actionLoading) return;
                   setActionLoading(true);
                   try {
-                    const txId = returnTxId || await resolveTxId(selectedTransactionData);
+                    const txId = returnTxId || selectedTransactionData?.tx_id || selectedTransactionData?.id || await resolveTxId(selectedTransactionData);
                     if (!txId) {
                       alert('Missing transaction information. Please select a transaction and try again.');
                       setShowReturnModal(false);
@@ -814,7 +857,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                     <span className="font-semibold text-blue-700">Selected:</span> {chosenUnit.brand} — {chosenUnit.name}
                   </div>
                   <button
-                    onClick={() => { setChosenUnit(null); try { localStorage.removeItem('approved_selected_unit'); } catch (_) { }; }}
+                    onClick={() => { setChosenUnit(null); try { localStorage.removeItem(userKey('approved_selected_unit')); } catch (_) { }; }}
                     className="text-xs px-2 py-1 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700"
                   >
                     Clear
