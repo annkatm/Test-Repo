@@ -464,6 +464,96 @@ const ViewRequest = () => {
     });
   };
 
+  const handleConfirmReturn = async (returnData) => {
+    try {
+      // Get the transaction ID
+      const transactionId = returnData.id || returnData.transaction_id;
+      
+      if (!transactionId) {
+        if (window.showToast) {
+          window.showToast({
+            type: 'error',
+            title: 'Return Failed',
+            message: 'Transaction ID not found',
+            duration: 4000
+          });
+        } else {
+          alert('Transaction ID not found');
+        }
+        return;
+      }
+
+      // Call the return API endpoint
+      const response = await api.post(`/transactions/${transactionId}/return`, {});
+      
+      if (response.data.success) {
+        // Log the return activity
+        await activityLogService.logEquipmentReturn(transactionId, returnData);
+        
+        // Refresh the data to update the lists
+        await refreshData();
+        
+        // Close the modal
+        handleCloseViewReturnModal();
+        
+        // Show success message
+        if (window.showToast) {
+          window.showToast({
+            type: 'success',
+            title: 'Return Confirmed',
+            message: `Equipment has been successfully returned`,
+            duration: 4000
+          });
+        } else {
+          alert('Equipment has been successfully returned');
+        }
+        
+        // Dispatch custom events for UI updates
+        try {
+          const equipId = returnData?.equipment_id;
+          if (equipId) {
+            window.dispatchEvent(new CustomEvent('ireply:equipment:restore', { 
+              detail: { equipment_id: equipId } 
+            }));
+          }
+        } catch (e) {
+          console.error('Error dispatching equipment restore event:', e);
+        }
+        
+        try {
+          const payload = {
+            id: returnData?.id,
+            item: returnData?.equipment_name,
+            date: new Date().toISOString(),
+          };
+          window.dispatchEvent(new CustomEvent('ireply:returned:add', { 
+            detail: payload 
+          }));
+        } catch (e) {
+          console.error('Error dispatching returned add event:', e);
+        }
+      } else {
+        throw new Error(response.data.message || 'Failed to process return');
+      }
+    } catch (error) {
+      console.error('Error processing return:', error);
+      
+      // Show error message
+      if (window.showToast) {
+        window.showToast({
+          type: 'error',
+          title: 'Return Failed',
+          message: error.response?.data?.message || error.message || 'Failed to process return',
+          duration: 6000
+        });
+      } else {
+        alert('Error processing return: ' + (error.response?.data?.message || error.message));
+      }
+      
+      throw error; // Re-throw to let the modal handle loading state
+    }
+  };
+
   const handleTransactionUpdate = async (updatedTransaction) => {
     try {
       // Log the transaction update
@@ -1414,6 +1504,7 @@ const ViewRequest = () => {
         isOpen={viewReturnModal.isOpen}
         onClose={handleCloseViewReturnModal}
         returnData={viewReturnModal.returnData}
+        onConfirmReturn={handleConfirmReturn}
       />
     </div>
   );
