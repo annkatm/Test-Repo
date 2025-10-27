@@ -332,60 +332,6 @@ const EmployeeTransaction = () => {
   // Equipment data will be fetched from API
   const [laptopBrands, setLaptopBrands] = useState([]);
   const [exchangeItems, setExchangeItems] = useState([]);
-  const [availableEquipment, setAvailableEquipment] = useState([]);
-  const [equipmentByCategory, setEquipmentByCategory] = useState({});
-
-  // Fetch available equipment from API
-  const fetchAvailableEquipment = async () => {
-    try {
-      const res = await fetch('/api/equipment?per_page=1000&status=available');
-      const data = await res.json();
-      
-      let equipmentData = [];
-      if (Array.isArray(data)) {
-        equipmentData = data;
-      } else if (data && data.data && Array.isArray(data.data.data)) {
-        equipmentData = data.data.data;
-      } else if (Array.isArray(data.data)) {
-        equipmentData = data.data;
-      }
-
-      // Group by category
-      const grouped = equipmentData.reduce((acc, item) => {
-        const catName = item.category?.name || item.category_name || 'Uncategorized';
-        if (!acc[catName]) {
-          acc[catName] = [];
-        }
-        acc[catName].push(item);
-        return acc;
-      }, {});
-
-      setAvailableEquipment(equipmentData);
-      setEquipmentByCategory(grouped);
-
-      // Group by brand for laptop brands
-      const laptopBrands = equipmentData
-        .filter(eq => {
-          const catName = (eq.category?.name || eq.category_name || '').toLowerCase();
-          return catName.includes('laptop');
-        })
-        .reduce((acc, eq) => {
-          const brand = eq.brand || 'Unknown';
-          if (!acc[brand]) {
-            acc[brand] = { brand, count: 0 };
-          }
-          acc[brand].count += 1;
-          return acc;
-        }, {});
-
-      setLaptopBrands(Object.values(laptopBrands));
-
-    } catch (error) {
-      console.error('Failed to fetch available equipment:', error);
-      setAvailableEquipment([]);
-      setEquipmentByCategory({});
-    }
-  };
 
   // Database connection functions for transactions
   const fetchTransactionStats = async () => {
@@ -558,7 +504,6 @@ const EmployeeTransaction = () => {
       // Set the previous history length so the polling doesn't treat existing items as new
       prevHistoryLenRef.current = Array.isArray(initialHistory) ? initialHistory.length : 0;
       await fetchDeniedRequests(); // Fetch denied requests on load
-      await fetchAvailableEquipment(); // Fetch available equipment
 
       try {
         const res = await fetch('/api/employees/current-holders');
@@ -574,16 +519,6 @@ const EmployeeTransaction = () => {
     };
 
     loadTransactionData();
-
-    // Set up polling to refresh equipment every 30 seconds to detect new items added by admin
-    const equipmentRefreshInterval = setInterval(() => {
-      fetchAvailableEquipment();
-    }, 30000); // 30 seconds
-
-    // Cleanup interval on unmount
-    return () => {
-      clearInterval(equipmentRefreshInterval);
-    };
 
     // Setup Echo subscription for real-time events when available
     let subscribedChannel = null;
@@ -762,8 +697,6 @@ const EmployeeTransaction = () => {
         onBack={() => setCurrentView('transactions')}
         transactionStats={transactionStats}
         approvedTransactions={approvedData}
-        availableEquipment={availableEquipment}
-        equipmentByCategory={equipmentByCategory}
       />
     );
   }
