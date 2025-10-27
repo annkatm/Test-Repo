@@ -5,7 +5,9 @@ import ExchangePanel from './ExchangePanel.jsx';
 // - approvedTransactions: [{ date, item, status, exchangeItems?: [...] }]
 // - transactionStats: { borrowed: number }
 // - borrowedDetails: { items: [{name, specs}], borrowDate, returnDate }
-const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions = [], borrowedDetails = null }) => {
+// - availableEquipment: [{ id, brand, category, ... }]
+// - equipmentByCategory: { "Laptops": [...], "Projectors": [...] }
+const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions = [], borrowedDetails = null, availableEquipment = [], equipmentByCategory = {} }) => {
   // Per-user storage helpers so every user sees a fresh page state
   const getUserTag = () => {
     try {
@@ -66,6 +68,48 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
       return saved ? JSON.parse(saved) : null;
     } catch (_) { return null; }
   });
+
+  // Dynamically group equipment by category and brand
+  const equipmentGroups = useMemo(() => {
+    const groups = {
+      laptops: [],
+      projectors: [],
+      accessories: []
+    };
+
+    if (!Array.isArray(availableEquipment)) return groups;
+
+    availableEquipment.forEach(eq => {
+      const catName = (eq.category?.name || eq.category_name || 'uncategorized').toLowerCase();
+      const brand = eq.brand || 'Unknown';
+      const item = { brand, equipment: eq };
+
+      if (catName.includes('laptop')) {
+        const existing = groups.laptops.find(g => g.brand === brand);
+        if (existing) {
+          existing.count++;
+        } else {
+          groups.laptops.push({ ...item, count: 1 });
+        }
+      } else if (catName.includes('projector')) {
+        const existing = groups.projectors.find(g => g.brand === brand);
+        if (existing) {
+          existing.count++;
+        } else {
+          groups.projectors.push({ ...item, count: 1 });
+        }
+      } else {
+        const existing = groups.accessories.find(g => g.brand === brand);
+        if (existing) {
+          existing.count++;
+        } else {
+          groups.accessories.push({ ...item, count: 1 });
+        }
+      }
+    });
+
+    return groups;
+  }, [availableEquipment]);
 
   // Keep chosenUnit in sync if changed by another tab/process
   useEffect(() => {
@@ -808,7 +852,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
               <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                 {activeCategory === 'All' && (
                   <>
-                    {[{ brand: 'Asus', available: 9 }, { brand: 'Lenovo', available: 7 }, { brand: 'Acer', available: 4 }, { brand: 'Razor', available: 9 }].map((item, index) => (
+                    {equipmentGroups.laptops.map((item, index) => (
                       <div key={`all-l-${index}`}
                         onClick={() => setSelectedLaptop(item.brand)}
                         className={`bg-white rounded-xl border-2 p-6 cursor-pointer transition-all duration-300 hover:shadow-lg ${selectedLaptop === item.brand ? 'border-blue-600 shadow-lg ring-2 ring-blue-200' : 'border-gray-200 hover:border-blue-300'}`}
@@ -817,13 +861,13 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                           <div className="w-32 h-32 bg-gray-100 rounded-lg flex items-center justify-center mb-4 overflow-hidden"><span className="text-6xl">💻</span></div>
                           <h3 className="font-bold text-gray-900 mb-2">{item.brand}</h3>
                           <p className="text-sm text-gray-600 mb-1">Available Unit:</p>
-                          <p className="text-2xl font-bold text-blue-600">{item.available}</p>
+                          <p className="text-2xl font-bold text-blue-600">{item.count || 0}</p>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedLaptop(item.brand);
-                              const count = Number(item.available) || 0;
-                              const units = Array.from({ length: count }, (_, i) => ({ id: `${item.brand}-${i + 1}`, name: `${item.brand} Unit #${i + 1}`, specs: 'Core i5, 16GB RAM, 512GB SSD' }));
+                              const count = Number(item.count) || 0;
+                              const units = Array.from({ length: count }, (_, i) => ({ id: `${item.brand}-${i + 1}`, name: `${item.brand} Unit #${i + 1}`, specs: item.equipment?.specifications || item.equipment?.specs || 'Specifications not available' }));
                               setLaptopUnits(units);
                               setShowBrowseLaptopsModal(false);
                               setIsLaptopListOpen(true);
@@ -834,7 +878,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                       </div>
                     ))}
 
-                    {[{ brand: 'Epson', available: 5 }, { brand: 'BenQ', available: 3 }, { brand: 'Sony', available: 4 }, { brand: 'ViewSonic', available: 2 }].map((item, index) => (
+                    {equipmentGroups.projectors.map((item, index) => (
                       <div key={`all-p-${index}`}
                         onClick={() => setSelectedLaptop(item.brand)}
                         className={`bg-white rounded-xl border-2 p-6 cursor-pointer transition-all duration-300 hover:shadow-lg ${selectedLaptop === item.brand ? 'border-blue-600 shadow-lg ring-2 ring-blue-200' : 'border-gray-200 hover:border-blue-300'}`}
@@ -843,13 +887,13 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                           <div className="w-32 h-32 bg-gray-100 rounded-lg flex items-center justify-center mb-4 overflow-hidden"><span className="text-6xl">📽️</span></div>
                           <h3 className="font-bold text-gray-900 mb-2">{item.brand}</h3>
                           <p className="text-sm text-gray-600 mb-1">Available Unit:</p>
-                          <p className="text-2xl font-bold text-blue-600">{item.available}</p>
+                          <p className="text-2xl font-bold text-blue-600">{item.count || 0}</p>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedLaptop(item.brand);
-                              const count = Number(item.available) || 0;
-                              const units = Array.from({ length: count }, (_, i) => ({ id: `${item.brand}-${i + 1}`, name: `${item.brand} Projector #${i + 1}`, specs: '1080p, 3500 lumens' }));
+                              const count = Number(item.count) || 0;
+                              const units = Array.from({ length: count }, (_, i) => ({ id: `${item.brand}-${i + 1}`, name: `${item.brand} Projector #${i + 1}`, specs: item.equipment?.specifications || item.equipment?.specs || 'Specifications not available' }));
                               setProjectorUnits(units);
                               setShowBrowseLaptopsModal(false);
                               setIsProjectorListOpen(true);
@@ -860,7 +904,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                       </div>
                     ))}
 
-                    {[{ brand: 'Headsets', available: 12 }, { brand: 'Mice', available: 20 }, { brand: 'Keyboards', available: 15 }, { brand: 'HDMI Cables', available: 30 }].map((item, index) => (
+                    {equipmentGroups.accessories.map((item, index) => (
                       <div key={`all-a-${index}`}
                         onClick={() => setSelectedLaptop(item.brand)}
                         className={`bg-white rounded-xl border-2 p-6 cursor-pointer transition-all duration-300 hover:shadow-lg ${selectedLaptop === item.brand ? 'border-blue-600 shadow-lg ring-2 ring-blue-200' : 'border-gray-200 hover:border-blue-300'}`}
@@ -869,13 +913,13 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                           <div className="w-32 h-32 bg-gray-100 rounded-lg flex items-center justify-center mb-4 overflow-hidden"><span className="text-6xl">🎧</span></div>
                           <h3 className="font-bold text-gray-900 mb-2">{item.brand}</h3>
                           <p className="text-sm text-gray-600 mb-1">Available Items:</p>
-                          <p className="text-2xl font-bold text-blue-600">{item.available}</p>
+                          <p className="text-2xl font-bold text-blue-600">{item.count || 0}</p>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedLaptop(item.brand);
-                              const count = Number(item.available) || 0;
-                              const units = Array.from({ length: count }, (_, i) => ({ id: `${item.brand}-${i + 1}`, name: `${item.brand} #${i + 1}`, specs: 'Standard accessory' }));
+                              const count = Number(item.count) || 0;
+                              const units = Array.from({ length: count }, (_, i) => ({ id: `${item.brand}-${i + 1}`, name: `${item.brand} #${i + 1}`, specs: item.equipment?.specifications || item.equipment?.specs || 'Standard accessory' }));
                               setAccessoryUnits(units);
                               setShowBrowseLaptopsModal(false);
                               setIsAccessoryListOpen(true);
@@ -887,12 +931,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                     ))}
                   </>
                 )}
-                {activeCategory === 'Laptops' && [
-                  { brand: 'Asus', available: 9 },
-                  { brand: 'Lenovo', available: 7 },
-                  { brand: 'Acer', available: 4 },
-                  { brand: 'Razor', available: 9 }
-                ].map((item, index) => (
+                {activeCategory === 'Laptops' && equipmentGroups.laptops.map((item, index) => (
                   <div key={`l-${index}`}
                     onClick={() => setSelectedLaptop(item.brand)}
                     className={`bg-white rounded-xl border-2 p-6 cursor-pointer transition-all duration-300 hover:shadow-lg ${selectedLaptop === item.brand ? 'border-blue-600 shadow-lg ring-2 ring-blue-200' : 'border-gray-200 hover:border-blue-300'}`}
@@ -901,12 +940,12 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                       <div className="w-32 h-32 bg-gray-100 rounded-lg flex items-center justify-center mb-4 overflow-hidden"><span className="text-6xl">💻</span></div>
                       <h3 className="font-bold text-gray-900 mb-2">{item.brand}</h3>
                       <p className="text-sm text-gray-600 mb-1">Available Unit:</p>
-                      <p className="text-2xl font-bold text-blue-600">{item.available}</p>
+                      <p className="text-2xl font-bold text-blue-600">{item.count || 0}</p>
                       <button
                         onClick={() => {
                           setSelectedLaptop(item.brand);
-                          const count = Number(item.available) || 0;
-                          const units = Array.from({ length: count }, (_, i) => ({ id: `${item.brand}-${i + 1}`, name: `${item.brand} Unit #${i + 1}`, specs: 'Core i5, 16GB RAM, 512GB SSD' }));
+                          const count = Number(item.count) || 0;
+                          const units = Array.from({ length: count }, (_, i) => ({ id: `${item.brand}-${i + 1}`, name: `${item.brand} Unit #${i + 1}`, specs: item.equipment?.specifications || item.equipment?.specs || 'Specifications not available' }));
                           setLaptopUnits(units);
                           setShowBrowseLaptopsModal(false);
                           setIsLaptopListOpen(true);
@@ -917,12 +956,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                   </div>
                 ))}
 
-                {activeCategory === 'Projectors' && [
-                  { brand: 'Epson', available: 5 },
-                  { brand: 'BenQ', available: 3 },
-                  { brand: 'Sony', available: 4 },
-                  { brand: 'ViewSonic', available: 2 }
-                ].map((item, index) => (
+                {activeCategory === 'Projectors' && equipmentGroups.projectors.map((item, index) => (
                   <div key={`p-${index}`}
                     onClick={() => setSelectedLaptop(item.brand)}
                     className={`bg-white rounded-xl border-2 p-6 cursor-pointer transition-all duration-300 hover:shadow-lg ${selectedLaptop === item.brand ? 'border-blue-600 shadow-lg ring-2 ring-blue-200' : 'border-gray-200 hover:border-blue-300'}`}
@@ -931,12 +965,12 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                       <div className="w-32 h-32 bg-gray-100 rounded-lg flex items-center justify-center mb-4 overflow-hidden"><span className="text-6xl">📽️</span></div>
                       <h3 className="font-bold text-gray-900 mb-2">{item.brand}</h3>
                       <p className="text-sm text-gray-600 mb-1">Available Unit:</p>
-                      <p className="text-2xl font-bold text-blue-600">{item.available}</p>
+                      <p className="text-2xl font-bold text-blue-600">{item.count || 0}</p>
                       <button
                         onClick={() => {
                           setSelectedLaptop(item.brand);
-                          const count = Number(item.available) || 0;
-                          const units = Array.from({ length: count }, (_, i) => ({ id: `${item.brand}-${i + 1}`, name: `${item.brand} Projector #${i + 1}`, specs: '1080p, 3500 lumens' }));
+                          const count = Number(item.count) || 0;
+                          const units = Array.from({ length: count }, (_, i) => ({ id: `${item.brand}-${i + 1}`, name: `${item.brand} Projector #${i + 1}`, specs: item.equipment?.specifications || item.equipment?.specs || 'Specifications not available' }));
                           setProjectorUnits(units);
                           setShowBrowseLaptopsModal(false);
                           setIsProjectorListOpen(true);
@@ -947,12 +981,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                   </div>
                 ))}
 
-                {activeCategory === 'Accesories' && [
-                  { brand: 'Headsets', available: 12 },
-                  { brand: 'Mice', available: 20 },
-                  { brand: 'Keyboards', available: 15 },
-                  { brand: 'HDMI Cables', available: 30 }
-                ].map((item, index) => (
+                {activeCategory === 'Accesories' && equipmentGroups.accessories.map((item, index) => (
                   <div key={`a-${index}`}
                     onClick={() => setSelectedLaptop(item.brand)}
                     className={`bg-white rounded-xl border-2 p-6 cursor-pointer transition-all duration-300 hover:shadow-lg ${selectedLaptop === item.brand ? 'border-blue-600 shadow-lg ring-2 ring-blue-200' : 'border-gray-200 hover:border-blue-300'}`}
@@ -961,12 +990,12 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                       <div className="w-32 h-32 bg-gray-100 rounded-lg flex items-center justify-center mb-4 overflow-hidden"><span className="text-6xl">🎧</span></div>
                       <h3 className="font-bold text-gray-900 mb-2">{item.brand}</h3>
                       <p className="text-sm text-gray-600 mb-1">Available Items:</p>
-                      <p className="text-2xl font-bold text-blue-600">{item.available}</p>
+                      <p className="text-2xl font-bold text-blue-600">{item.count || 0}</p>
                       <button
                         onClick={() => {
                           setSelectedLaptop(item.brand);
-                          const count = Number(item.available) || 0;
-                          const units = Array.from({ length: count }, (_, i) => ({ id: `${item.brand}-${i + 1}`, name: `${item.brand} #${i + 1}`, specs: 'Standard accessory' }));
+                          const count = Number(item.count) || 0;
+                          const units = Array.from({ length: count }, (_, i) => ({ id: `${item.brand}-${i + 1}`, name: `${item.brand} #${i + 1}`, specs: item.equipment?.specifications || item.equipment?.specs || 'Standard accessory' }));
                           setAccessoryUnits(units);
                           setShowBrowseLaptopsModal(false);
                           setIsAccessoryListOpen(true);
