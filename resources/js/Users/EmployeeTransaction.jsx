@@ -43,6 +43,9 @@ const EmployeeTransaction = () => {
   // Toasts for upper-right popup notifications
   const [toasts, setToasts] = useState([]);
   const [isBorrowedOpen, setIsBorrowedOpen] = useState(false);
+  const [isOverdueOpen, setIsOverdueOpen] = useState(false);
+  const [borrowedItems, setBorrowedItems] = useState([]);
+  const [overdueItems, setOverdueItems] = useState([]);
 
   const showToast = (message, variant = 'info', ttl = 4500) => {
     const id = Date.now() + Math.random();
@@ -95,6 +98,69 @@ const EmployeeTransaction = () => {
         return next;
       });
       setHistoryData((prev) => [entry, ...prev]);
+    }
+  };
+
+  const fetchBorrowedItems = async () => {
+    try {
+      let list = [];
+      try {
+        const res = await fetch('/api/transactions/borrowed');
+        if (res.ok) {
+          const data = await res.json();
+          list = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
+        }
+      } catch (_) {}
+
+      if (!Array.isArray(list) || list.length === 0) {
+        try {
+          const res2 = await fetch('/api/employees/current-holders');
+          const data2 = await res2.json();
+          list = Array.isArray(data2?.data) ? data2.data : (Array.isArray(data2) ? data2 : []);
+        } catch (_) {}
+      }
+
+      if (!Array.isArray(list) || list.length === 0) {
+        const derived = (transactions || []).filter(t => (t.status || '').toLowerCase() === 'approved' && !t.return_date);
+        list = derived;
+      }
+
+      setBorrowedItems(list);
+      return list;
+    } catch (_) {
+      setBorrowedItems([]);
+      return [];
+    }
+  };
+
+  const fetchOverdueItems = async () => {
+    try {
+      let list = [];
+      try {
+        const res = await fetch('/api/transactions/overdue');
+        if (res.ok) {
+          const data = await res.json();
+          list = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
+        }
+      } catch (_) {}
+
+      if (!Array.isArray(list) || list.length === 0) {
+        const now = Date.now();
+        const derived = (transactions || []).filter(t => {
+          const end = t.expected_end_date || t.return_date;
+          if (!end) return false;
+          const endTs = new Date(end).getTime();
+          const isReturned = Boolean(t.return_date && new Date(t.return_date).getTime());
+          return !isReturned && endTs && endTs < now;
+        });
+        list = derived;
+      }
+
+      setOverdueItems(list);
+      return list;
+    } catch (_) {
+      setOverdueItems([]);
+      return [];
     }
   };
 
@@ -303,14 +369,59 @@ const EmployeeTransaction = () => {
 
   const fetchApprovedTransactions = async () => {
     try {
-      const response = await fetch('/api/transactions/approved');
-      const data = await response.json();
-
-      if (data.success && Array.isArray(data.data)) {
-        setTransactions(data.data);
-      } else {
-        setTransactions([]);
+      const response = await fetch('/api/transactions/approved', { credentials: 'same-origin' });
+      const data = await response.json().catch(() => ({}));
+      let list = [];
+      if (Array.isArray(data)) {
+        list = data;
+      } else if (data && Array.isArray(data.data)) {
+        list = data.data;
+      } else if (data && data.data && Array.isArray(data.data.data)) {
+        list = data.data.data;
       }
+
+      // Fallback: try generic transactions endpoint and filter likely approved/active statuses
+      if (!Array.isArray(list) || list.length === 0) {
+        try {
+          const res2 = await fetch('/api/transactions', { credentials: 'same-origin' });
+          const j2 = await res2.json().catch(() => ({}));
+          let alt = Array.isArray(j2) ? j2 : (Array.isArray(j2?.data) ? j2.data : (Array.isArray(j2?.data?.data) ? j2.data.data : []));
+          const allowed = ['approved', 'released', 'borrowed', 'active'];
+          list = (alt || []).filter(t => allowed.includes(String(t?.status || '').toLowerCase()));
+        } catch (_) {}
+      }
+
+      // Last fallback: current holders
+      if (!Array.isArray(list) || list.length === 0) {
+        try {
+          const res3 = await fetch('/api/employees/current-holders', { credentials: 'same-origin' });
+          const j3 = await res3.json().catch(() => ({}));
+          list = Array.isArray(j3) ? j3 : (Array.isArray(j3?.data) ? j3.data : []);
+        } catch (_) {}
+      }
+
+      // Additional fallback: approved requests (many systems record approval here before transaction record exists)
+      if (!Array.isArray(list) || list.length === 0) {
+        try {
+          const res4 = await fetch('/api/requests?status=approved', { credentials: 'same-origin' });
+          const j4 = await res4.json().catch(() => ({}));
+          const reqs = Array.isArray(j4) ? j4 : (Array.isArray(j4?.data) ? j4.data : []);
+          list = (reqs || []).map(r => ({
+            id: r.id,
+            equipment_id: r.equipment_id || r.equipment?.id,
+            equipment_name: r.equipment_name || r.item || '-',
+            expected_start_date: r.expected_start_date || r.start_date,
+            expected_end_date: r.expected_end_date || r.return_date,
+            status: r.status || 'approved',
+          }));
+        } catch (_) {}
+      }
+
+      const finalList = Array.isArray(list) ? list : [];
+      try {
+        console.log('[EmployeeTransaction] Approved fetch result count:', finalList.length, finalList.slice(0, 3));
+      } catch (_) {}
+      setTransactions(finalList);
     } catch (error) {
       console.error('Failed to fetch approved transactions:', error);
       setTransactions([]);
@@ -547,28 +658,39 @@ const EmployeeTransaction = () => {
   }
 
 
-
+  // Main transaction view
+  // Show full Approved list when requested
   if (currentView === 'approved') {
-    // Convert approved transactions to the format expected by ApprovedTransactions
-    const approvedData = transactions.map((transaction, index) => ({
-      date: transaction.created_at ? new Date(transaction.created_at).toLocaleDateString("en-US", {
-        month: "2-digit",
-        day: "2-digit",
-        year: "numeric",
-      }) : "09/23/2025",
-      item: transaction.equipment_name || "Laptop, Projector, etc",
-      status: "Approved",
-      exchangeItems: [
-        {
-          name: transaction.equipment_name || "Laptop",
-          brand: "Equipment",
-          details: transaction.description || "Equipment details",
-          icon: "💻"
-        }
-      ]
-    }));
-
-    // Mock borrowed details for the clickable card
+    const approvedData = [...(transactions || [])]
+      .sort((a, b) => {
+        const aDate = new Date(a?.created_at || a?.expected_start_date || a?.start_date || 0).getTime();
+        const bDate = new Date(b?.created_at || b?.expected_start_date || b?.start_date || 0).getTime();
+        return bDate - aDate;
+      })
+      .map((t) => {
+        const dsrc = t?.created_at || t?.expected_start_date || t?.start_date || t?.date || null;
+        const date = dsrc
+          ? new Date(dsrc).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
+          : new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+        return {
+          id: t?.id,
+          date,
+          item: t?.equipment_name || t?.item || '-',
+          status: t?.status || '-',
+          equipment_id: t?.equipment_id || t?.equipment?.id || null,
+          brand: t?.brand || t?.equipment?.brand || null,
+          model: t?.model || t?.equipment?.model || null,
+          equipment: t?.equipment || t?.equipment_details || null,
+          exchangeItems: [
+            {
+              name: t?.equipment_name || t?.item || '-',
+              brand: 'Equipment',
+              details: t?.description || '',
+              icon: '💻',
+            },
+          ],
+        };
+      });
 
     return (
       <ApprovedTransactions
@@ -579,26 +701,25 @@ const EmployeeTransaction = () => {
     );
   }
 
-
+  // Show full On Process list when requested
   if (showPendings) {
-    // Convert pending transactions to the format expected by OnProcessTransactions
-    const requestsData = pendingTransactions.map((transaction, index) => ({
-      id: transaction.id || index + 1,
-      date: transaction.created_at ? new Date(transaction.created_at).toLocaleDateString("en-US", {
-        month: "2-digit",
-        day: "2-digit",
-        year: "numeric",
-      }) : "09/23/2025",
-      item: transaction.equipment_name || transaction.item || "Laptop, Projector, etc",
-      status: transaction.status || "Pending",
-      details: [
-        {
-          name: transaction.equipment_name || "Laptop",
-          description: transaction.description || "Equipment details",
-          icon: "https://cdn-icons-png.flaticon.com/512/1086/1086933.png"
-        }
-      ]
-    }));
+    const requestsData = (pendingTransactions || []).map((t, index) => {
+      const dsrc = t?.created_at || t?.expected_start_date || null;
+      const date = dsrc ? new Date(dsrc).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '';
+      return {
+        id: t?.id || index + 1,
+        date: date || '-',
+        item: t?.equipment_name || t?.item || '-',
+        status: t?.status || 'Pending',
+        details: [
+          {
+            name: t?.equipment_name || t?.item || '-',
+            description: t?.description || '',
+            icon: 'https://cdn-icons-png.flaticon.com/512/1086/1086933.png',
+          },
+        ],
+      };
+    });
 
     return (
       <OnProcessTransactions
@@ -611,16 +732,18 @@ const EmployeeTransaction = () => {
     );
   }
 
-
-  // Main transaction view
   return (
-    <div className="grid grid-cols-12 gap-6 h-full">
-      <div className="col-span-8 space-y-6">
+    <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+      <div className="col-span-12 md:col-span-8 space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-4xl font-bold text-[#2262C6] transition-all duration-300">Home</h1>
         </div>
 
-        <StatsCards transactionStats={transactionStats} onBorrowedClick={() => setIsBorrowedOpen(true)} />
+        <StatsCards 
+          transactionStats={transactionStats} 
+          onBorrowedClick={async () => { await fetchBorrowedItems(); setIsBorrowedOpen(true); }} 
+          onOverdueClick={async () => { await fetchOverdueItems(); setIsOverdueOpen(true); }} 
+        />
 
 
         <div className="bg-gray-100 rounded-lg border border-gray-200 mb-8">
@@ -649,7 +772,14 @@ const EmployeeTransaction = () => {
           </div>
 
           <div className="divide-y divide-gray-100">
-            {pendingTransactions.length > 0 ? pendingTransactions.slice(0, 3).map((transaction, index) => (
+            {pendingTransactions.length > 0 ? [...pendingTransactions]
+              .sort((a, b) => {
+                const aDate = new Date(a.created_at || a.expected_start_date || 0).getTime();
+                const bDate = new Date(b.created_at || b.expected_start_date || 0).getTime();
+                return bDate - aDate; // newest first
+              })
+              .slice(0, 3)
+              .map((transaction, index) => (
               <div
                 key={transaction.id || index}
                 className="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer"
@@ -658,7 +788,7 @@ const EmployeeTransaction = () => {
                 <div className="grid grid-cols-12 gap-6 items-center">
                   <div className="col-span-3">
                     <span className="text-sm text-gray-900">
-                      {transaction.equipment_name || transaction.item || "Laptop, Projector, etc"}
+                      {transaction.type || transaction.category || transaction.category_name || transaction.equipment_type || transaction.item_type || transaction?.equipment?.type || transaction?.equipment?.category || transaction?.equipment?.category_name || transaction.item || transaction.equipment_name || transaction?.equipment?.name || '-'}
                     </span>
                   </div>
                   <div className="col-span-3">
@@ -669,7 +799,7 @@ const EmployeeTransaction = () => {
                           day: "2-digit",
                           year: "numeric",
                         })
-                        : "09/24/2025"}
+                        : '-'}
                     </span>
                   </div>
                   <div className="col-span-3">
@@ -680,13 +810,21 @@ const EmployeeTransaction = () => {
                           day: "2-digit",
                           year: "numeric",
                         })
-                        : "09/24/2025"}
+                        : '-'}
                     </span>
                   </div>
                   <div className="col-span-3">
-                    <span className="text-sm text-gray-900">
-                      {transaction.status || "Pending"}
-                    </span>
+                    {(() => {
+                      const s = String(transaction.status || 'pending').toLowerCase();
+                      const isApproved = /approved|released|borrowed|active/.test(s);
+                      const cls = isApproved
+                        ? 'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200'
+                        : 'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200';
+                      const label = isApproved ? 'Approved' : (transaction.status || 'Pending');
+                      return (
+                        <span className={cls}>{label}</span>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
@@ -723,47 +861,76 @@ const EmployeeTransaction = () => {
           </div>
 
           <div className="divide-y divide-gray-100">
-            {transactions.length > 0 ? transactions.map((transaction, index) => (
-              <div
-                key={transaction.id}
-                className="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer"
-                onClick={() => logActivity(`Clicked approved row: ${transaction.equipment_name || 'Item'} (${transaction.id || index})`, 'info')}
-              >
-                <div className="grid grid-cols-12 gap-6 items-center">
-                  <div className="col-span-3">
-                    <span className="text-sm text-gray-900">
-                      {transaction.equipment_name || "Laptop, Projector, etc"}
-                    </span>
-                  </div>
-                  <div className="col-span-3">
-                    <span className="text-sm text-gray-900">
-                      {transaction.expected_start_date || transaction.start_date
-                        ? new Date(transaction.expected_start_date || transaction.start_date).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" })
-                        : "-"}
-                    </span>
-                  </div>
-                  <div className="col-span-3">
-                    <span className="text-sm text-gray-900">
-                      {transaction.expected_end_date || transaction.return_date
-                        ? new Date(transaction.expected_end_date || transaction.return_date).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" })
-                        : "-"}
-                    </span>
-                  </div>
-                  <div className="col-span-3">
-                    <span className="text-sm text-gray-900">{transaction.status || "Approved"}</span>
+            {transactions.length > 0 ? (() => {
+              const sorted = [...transactions].sort((a, b) => {
+                const aDate = new Date(a.created_at || a.expected_start_date || a.start_date || 0).getTime();
+                const bDate = new Date(b.created_at || b.expected_start_date || b.start_date || 0).getTime();
+                return bDate - aDate; // newest first
+              });
+              const filtered = sorted.filter(t => {
+                const s = String(t.status || '').toLowerCase();
+                return ['approved', 'released', 'borrowed', 'active'].includes(s);
+              });
+              const useList = (filtered.length > 0 ? filtered : sorted).slice(0, 3);
+              return useList.map((transaction, index) => (
+                <div
+                  key={transaction.id || index}
+                  className="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer"
+                  onClick={() => logActivity(`Clicked approved row: ${transaction.equipment_name || transaction.item || 'Item'} (${transaction.id || index})`, 'info')}
+                >
+                  <div className="grid grid-cols-12 gap-6 items-center">
+                    <div className="col-span-3">
+                      <span className="text-sm text-gray-900">
+                        {transaction.type || transaction.category || transaction.category_name || transaction.equipment_type || transaction.item_type || transaction?.equipment?.type || transaction?.equipment?.category || transaction?.equipment?.category_name || transaction.item || transaction.equipment_name || transaction?.equipment?.name || '-'}
+                      </span>
+                    </div>
+                    <div className="col-span-3">
+                      <span className="text-sm text-gray-900">
+                        {(transaction.expected_start_date || transaction.start_date || transaction.created_at || transaction.borrow_date || transaction.borrowed_at || transaction.release_date || transaction.start || transaction.expected_start || transaction.startDate)
+                          ? new Date(
+                              transaction.expected_start_date || transaction.start_date || transaction.created_at ||
+                              transaction.borrow_date || transaction.borrowed_at || transaction.release_date ||
+                              transaction.start || transaction.expected_start || transaction.startDate
+                            ).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
+                          : '-'}
+                      </span>
+                    </div>
+                    <div className="col-span-3">
+                      <span className="text-sm text-gray-900">
+                        {(transaction.expected_end_date || transaction.return_date || transaction.end_date || transaction.due_date || transaction.expected_return_date || transaction.return_due || transaction.end || transaction.expected_end || transaction.endDate)
+                          ? new Date(
+                              transaction.expected_end_date || transaction.return_date || transaction.end_date ||
+                              transaction.due_date || transaction.expected_return_date || transaction.return_due ||
+                              transaction.end || transaction.expected_end || transaction.endDate
+                            ).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
+                          : '-'}
+                      </span>
+                    </div>
+                    <div className="col-span-3">
+                      {(() => {
+                        const s = String(transaction.status || 'approved').toLowerCase();
+                        const isApproved = /approved|released|borrowed|active/.test(s);
+                        const cls = isApproved
+                          ? 'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200'
+                          : 'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200';
+                        const label = isApproved ? 'Approved' : (transaction.status || 'Approved');
+                        return (
+                          <span className={cls}>{label}</span>
+                        );
+                      })()}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )) : (
-              <>
-              </>
+              ));
+            })() : (
+              <></>
             )}
           </div>
         </div>
       </div>
 
-      <div className="col-span-4 space-y-6">
-        <div className="flex justify-end mt-8">
+      <div className="col-span-12 md:col-span-4 space-y-6">
+        <div className="flex justify-end">
           <button
             onClick={() => {
               logActivity('Opened History', 'info');
@@ -804,14 +971,66 @@ const EmployeeTransaction = () => {
                 <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center">📦</div>
                 <div>
                   <div className="font-semibold text-gray-900">Currently Borrowed</div>
-                  <div className="text-sm text-gray-600">Total items: {transactionStats?.borrowed || 0}</div>
+                  <div className="text-sm text-gray-600">Total items: {Array.isArray(borrowedItems) ? borrowedItems.length : (transactionStats?.borrowed || 0)}</div>
                 </div>
               </div>
-              <div className="text-sm text-gray-500">This is a summary view. Contact admin for full details.</div>
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {(borrowedItems || []).map((it, i) => (
+                  <div key={it.id || i} className="border border-gray-200 rounded-lg p-3">
+                    <div className="font-semibold text-gray-900">{it.equipment_name || it.item || '-'}</div>
+                    <div className="text-sm text-gray-600">Request No.: {it.request_number || '-'}</div>
+                    <div className="text-sm text-gray-600">Start: {it.expected_start_date ? new Date(it.expected_start_date).toLocaleDateString('en-US') : (it.start_date ? new Date(it.start_date).toLocaleDateString('en-US') : '-')}</div>
+                    <div className="text-sm text-gray-600">Due: {it.expected_end_date ? new Date(it.expected_end_date).toLocaleDateString('en-US') : '-'}</div>
+                    <div className="text-xs text-gray-500">Status: {it.status || 'Borrowed'}</div>
+                  </div>
+                ))}
+                {(!borrowedItems || borrowedItems.length === 0) && (
+                  <div className="text-sm text-gray-500">No borrowed items</div>
+                )}
+              </div>
             </div>
             <div className="px-6 py-4 border-t bg-gray-50 text-right">
               <button
                 onClick={() => setIsBorrowedOpen(false)}
+                className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isOverdueOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm">
+          <div className="relative w-full max-w-lg bg-white rounded-xl shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-bold text-gray-900">Overdue Items</h2>
+              <button
+                onClick={() => setIsOverdueOpen(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-100 rounded-lg"
+              >
+                <X size={22} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {(overdueItems || []).map((it, i) => (
+                  <div key={it.id || i} className="border border-gray-200 rounded-lg p-3">
+                    <div className="font-semibold text-gray-900">{it.equipment_name || it.item || '-'}</div>
+                    <div className="text-sm text-gray-600">Request No.: {it.request_number || '-'}</div>
+                    <div className="text-sm text-gray-600">Due: {it.expected_end_date ? new Date(it.expected_end_date).toLocaleDateString('en-US') : '-'}</div>
+                    <div className="text-xs text-red-600">Overdue</div>
+                  </div>
+                ))}
+                {(!overdueItems || overdueItems.length === 0) && (
+                  <div className="text-sm text-gray-500">No overdue items</div>
+                )}
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t bg-gray-50 text-right">
+              <button
+                onClick={() => setIsOverdueOpen(false)}
                 className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
               >
                 Close

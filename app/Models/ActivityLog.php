@@ -58,6 +58,75 @@ class ActivityLog extends Model
         return $query->where('created_at', '>=', now()->subDays($days));
     }
 
+    public function scopeForType($query, $type)
+    {
+        $typeMapping = [
+            'equipment' => 'App\\Models\\Equipment',
+            'requests' => 'App\\Models\\Request',
+            'transactions' => 'App\\Models\\Transaction',
+            'employees' => 'App\\Models\\Employee',
+            'users' => 'App\\Models\\User',
+        ];
+
+        // Direct model_type-based filtering when we know the model
+        if (isset($typeMapping[$type])) {
+            return $query->where('model_type', $typeMapping[$type]);
+        }
+
+        // Fallback to action-based categorization for items that don't map cleanly to a model
+        // This keeps filters useful for sections like Reports, Role Management, Control Panel, etc.
+        switch ($type) {
+            case 'transaction':
+                // Combine both Request and Transaction-related logs
+                return $query->where(function ($q) {
+                    $q->where('model_type', 'App\\Models\\Request')
+                      ->orWhere('model_type', 'App\\Models\\Transaction')
+                      ->orWhere('action', 'like', '%Transaction%')
+                      ->orWhere('action', 'like', '%Request%')
+                      ->orWhere('description', 'like', '%transaction%')
+                      ->orWhere('description', 'like', '%request%');
+                });
+            case 'reports':
+                return $query->where(function ($q) {
+                    $q->where('action', 'like', '%Report%')
+                      ->orWhere('description', 'like', '%report%');
+                });
+            case 'role_management':
+                return $query->where(function ($q) {
+                    $q->where('action', 'like', '%Role%')
+                      ->orWhere('action', 'like', '%Permission%')
+                      ->orWhere('description', 'like', '%role%')
+                      ->orWhere('description', 'like', '%permission%')
+                      ->orWhere('model_type', 'like', '%Role%')
+                      ->orWhere('model_type', 'like', '%Permission%');
+                });
+            case 'control_panel':
+                return $query->where(function ($q) {
+                    $q->where('action', 'like', '%Control Panel%')
+                      ->orWhere('action', 'like', '%Settings%')
+                      ->orWhere('description', 'like', '%setting%')
+                      ->orWhere('description', 'like', '%configuration%');
+                });
+            case 'inventory':
+            case 'add_stocks':
+                // Merge inventory and stock actions under Equipment umbrella
+                return $query->where(function ($q) {
+                    $q->where('model_type', 'App\\Models\\Equipment')
+                      ->orWhere('action', 'like', '%Inventory%')
+                      ->orWhere('action', 'like', '%Stock%')
+                      ->orWhere('description', 'like', '%inventory%')
+                      ->orWhere('description', 'like', '%stock%');
+                });
+            case 'activity_logs':
+                return $query->where(function ($q) {
+                    $q->where('action', 'like', '%Activity Log%')
+                      ->orWhere('description', 'like', '%activity log%');
+                });
+            default:
+                return $query;
+        }
+    }
+
     // Accessors
     public function getFormattedTimestampAttribute()
     {

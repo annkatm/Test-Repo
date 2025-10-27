@@ -12,6 +12,47 @@ const EmployeeHome = () => {
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [returnDate, setReturnDate] = useState(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
 
+  const isLaptopCategory = (categoryId) => {
+    const cat = categories.find(c => String(c.id) === String(categoryId));
+    return (cat?.name || '').toLowerCase() === 'laptop';
+  };
+
+  const getCategoryNameById = (categoryId) => {
+    const cat = categories.find(c => String(c.id) === String(categoryId));
+    return (cat?.name || '').toLowerCase();
+  };
+
+  const getLimitForCategoryId = (categoryId) => {
+    const name = getCategoryNameById(categoryId);
+    if (name === 'laptop') return 1;
+    if (name === 'monitor') return 3;
+    if (name === 'keyboard') return 1;
+    if (name === 'mouse') return 1;
+    return Infinity;
+  };
+
+  const countInCartByCategoryId = (categoryId) => {
+    try {
+      const idStr = String(categoryId);
+      let count = 0;
+      for (const ci of cartItems) {
+        const units = Array.isArray(ci?.units) ? ci.units : [];
+        for (const u of units) {
+          if (String(u?.category_id) === idStr) count += 1;
+        }
+      }
+      return count;
+    } catch (_) {
+      return 0;
+    }
+  };
+
+  const isAtLimitForCategoryId = (categoryId) => {
+    const limit = getLimitForCategoryId(categoryId);
+    const current = countInCartByCategoryId(categoryId);
+    return current >= limit;
+  };
+
   const logActivity = (message, variant = 'info') => {
     try {
       const prev = JSON.parse(localStorage.getItem('employee_activities') || '[]');
@@ -226,9 +267,37 @@ const EmployeeHome = () => {
     }
   };
 
+  const fetchAllAvailableEquipment = async () => {
+    try {
+      setLoading(true);
+      setSelectedCategory(null);
+      const res = await fetch('/api/equipment?per_page=100&status=available');
+      const data = await res.json();
+      let equipmentData = [];
+      if (Array.isArray(data)) {
+        equipmentData = data;
+      } else if (data && data.data && Array.isArray(data.data.data)) {
+        equipmentData = data.data.data;
+      } else if (Array.isArray(data.data)) {
+        equipmentData = data.data;
+      }
+      setEquipment(filterOutReserved(equipmentData));
+    } catch (e) {
+      setError('Failed to load all equipment');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handlePlusClick = (item) => {
     if (item.status && item.status !== 'available') {
       alert('This equipment is currently unavailable. Please choose another item.');
+      return;
+    }
+    if (isAtLimitForCategoryId(item.category_id)) {
+      const name = getCategoryNameById(item.category_id) || 'item';
+      const limit = getLimitForCategoryId(item.category_id);
+      alert(`You can only add up to ${limit} ${name}${limit > 1 ? 's' : ''}.`);
       return;
     }
     // Group key based on same logic as equipment grouping
@@ -306,6 +375,13 @@ const EmployeeHome = () => {
       ));
       logActivity(`Decreased quantity: ${group.name} to x${newQuantity}`, 'info');
     } else if (newQuantity > group.quantity) {
+      const catId = group?.units?.[0]?.category_id;
+      if (catId && isAtLimitForCategoryId(catId)) {
+        const name = getCategoryNameById(catId) || 'item';
+        const limit = getLimitForCategoryId(catId);
+        alert(`You can only add up to ${limit} ${name}${limit > 1 ? 's' : ''}.`);
+        return;
+      }
       // Increment: try to take one matching available unit from equipment
       const matchIndex = equipment.findIndex(eq => (
         `${(eq.name || eq.brand || 'Unknown').toLowerCase()}||${(eq.specifications || '').toLowerCase()}||${eq.category_id || ''}` === groupKey
@@ -592,11 +668,21 @@ const EmployeeHome = () => {
         <h1 className="text-4xl font-bold text-[#2262C6] transition-all duration-300">Transaction</h1>
       </div>
 
-      <div className="pl-5 grid grid-cols-12 gap-8 items-start bg-white ">
-        <div id="categories-section" className="rounded-xl shadow-xl shadow-gray-500/70 col-span-3 overflow-y-auto h-138 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+      <div className="pl-5 grid grid-cols-1 md:grid-cols-12 gap-8 items-start bg-white ">
+        <div id="categories-section" className="rounded-xl shadow-xl shadow-gray-600 col-span-12 md:col-span-3 overflow-y-auto h-138 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           <div className="p-6 h-full">
             <h2 className="text-lg font-semibold text-gray-900 mb-6">Item Categories</h2>
             <div className="grid grid-cols-2 gap-3">
+              <button
+                key="all"
+                onClick={fetchAllAvailableEquipment}
+                className={`aspect-square bg-gray-100 rounded-lg flex flex-col items-center justify-center hover:shadow-md transition-all cursor-pointer ${
+                  selectedCategory === null ? 'ring-2 ring-blue-500' : ''
+                }`}
+              >
+                <Laptop className="h-8 w-8 text-gray-600 mb-2" />
+                <span className="text-sm font-semibold text-gray-800 text-center px-1 truncate">All</span>
+              </button>
               {categories.map((category) => (
                 <button
                   key={category.id}
@@ -640,8 +726,8 @@ const EmployeeHome = () => {
           </div>
         </div>
 
-        <div className=" rounded-xl col-span-5 bg-white">
-          <div className="rounded-xl shadow-lg shadow-gray-500/70 p-6 overflow-y-auto h-138 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" data-employee-search-target>
+        <div className="rounded-xl col-span-12 md:col-span-5 bg-white">
+          <div className="rounded-xl shadow-lg shadow-gray-600 p-6 overflow-y-auto h-138 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" data-employee-search-target>
           <h2 className="text-lg font-semibold text-gray-900 mb-6">
   {selectedCategory ? `${selectedCategory} Types` : 'Equipment Types'}
         </h2>
@@ -683,12 +769,11 @@ const EmployeeHome = () => {
                   <div className="col-span-2 flex justify-end">
                     <button 
                       onClick={() => {
-                        // pick one available unit from the group
                         const unit = group.items.find(i => !i.status || i.status === 'available');
                         if (unit) handlePlusClick(unit);
                       }}
-                      disabled={group.availableCount === 0}
-                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${group.availableCount === 0 ? 'bg-gray-200 cursor-not-allowed' : 'bg-blue-100 hover:bg-blue-200'}`}
+                      disabled={group.availableCount === 0 || isAtLimitForCategoryId(group.category_id)}
+                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${group.availableCount === 0 || isAtLimitForCategoryId(group.category_id) ? 'bg-gray-200 cursor-not-allowed' : 'bg-blue-100 hover:bg-blue-200'}`}
                     >
                       <Plus className="h-4 w-4 text-blue-600" />
                     </button>
@@ -702,8 +787,8 @@ const EmployeeHome = () => {
           </div>
         </div>
 
-        <div id="items-section" className="shadow-lg shadow-gray-500/70 rounded-xl w-96 min-w-[20rem] mb-4 bg-white h-[552px] flex flex-col">
-          <div className="rounded-xl shadow-lg shadow-gray-500/70 w-full h-full flex flex-col">
+        <div id="items-section" className="shadow-lg shadow-gray-600 rounded-xl col-span-12 md:col-span-4 w-full md:w-auto mb-4 bg-white md:h-[552px] h-auto flex flex-col">
+          <div className="rounded-xl shadow-lg shadow-gray-600 w-full h-full flex flex-col">
             {/* Header */}
             <div className="p-6 pb-3">
               <h2 className="text-lg font-semibold text-gray-900">Items</h2>
@@ -750,7 +835,8 @@ const EmployeeHome = () => {
                         <span className="text-xs text-gray-600 min-w-[20px] text-center font-medium">x{item.quantity}</span>
                         <button 
                           onClick={() => handleQuantityChange(item.groupKey, item.quantity + 1)}
-                          className="w-6 h-6 bg-blue-50 border border-blue-200 hover:bg-blue-100 rounded-full flex items-center justify-center">
+                          disabled={item?.units?.[0]?.category_id ? isAtLimitForCategoryId(item.units[0].category_id) : false}
+                          className="w-6 h-6 bg-blue-50 border border-blue-200 hover:bg-blue-100 rounded-full flex items-center justify-center disabled:bg-gray-200 disabled:border-gray-200 disabled:cursor-not-allowed">
                           <Plus className="h-3 w-3 text-blue-600" />
                         </button>
                       </div>

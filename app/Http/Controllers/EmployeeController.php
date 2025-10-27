@@ -37,13 +37,13 @@ class EmployeeController extends Controller
 
             $employee = Employee::create($validated);
 
-            // Update equipment status to 'in_use' if equipment IDs are provided
+            // Update equipment status to 'issued' if equipment IDs are provided
             if ($request->has('issued_equipment_ids') && is_array($request->issued_equipment_ids)) {
                 foreach ($request->issued_equipment_ids as $equipmentId) {
                     DB::table('equipment')
                         ->where('id', $equipmentId)
                         ->update([
-                            'status' => 'in_use',
+                            'status' => 'issued',
                             'updated_at' => now()
                         ]);
                 }
@@ -124,13 +124,13 @@ class EmployeeController extends Controller
                     ]);
             }
 
-            // Equipment that was added - set to 'in_use'
+            // Equipment that was added - set to 'issued'
             $addedEquipmentIds = array_diff($newEquipmentIds, $oldEquipmentIds);
             foreach ($addedEquipmentIds as $equipmentId) {
                 DB::table('equipment')
                     ->where('id', $equipmentId)
                     ->update([
-                        'status' => 'in_use',
+                        'status' => 'issued',
                         'updated_at' => now()
                     ]);
             }
@@ -201,13 +201,68 @@ class EmployeeController extends Controller
         }
     }
     /**
-     * Get all employees (excluding soft-deleted)
+     * Get all employees (excluding soft-deleted) with optional filtering
      */
-    public function index()
+    public function index(Request $request)
     {
         try {
-            // Using Employee model to respect soft deletes and include user relationship
-            $employees = Employee::with('user')->orderBy('first_name', 'asc')->get();
+            $query = Employee::with('user');
+
+            // Apply filters
+            if ($request->has('employee_type') && $request->employee_type !== 'all') {
+                $query->where('employee_type', $request->employee_type);
+            }
+
+            if ($request->has('department') && $request->department !== 'all') {
+                $query->where('department', $request->department);
+            }
+
+            if ($request->has('client') && $request->client !== 'all') {
+                $query->where('client', $request->client);
+            }
+
+
+            if ($request->has('search') && !empty($request->search)) {
+                $searchTerm = $request->search;
+                $query->where(function($q) use ($searchTerm) {
+                    $q->where('first_name', 'like', "%{$searchTerm}%")
+                      ->orWhere('last_name', 'like', "%{$searchTerm}%")
+                      ->orWhere('email', 'like', "%{$searchTerm}%")
+                      ->orWhere('position', 'like', "%{$searchTerm}%")
+                      ->orWhere('department', 'like', "%{$searchTerm}%")
+                      ->orWhere('client', 'like', "%{$searchTerm}%");
+                });
+            }
+
+            $employees = $query->orderBy('first_name', 'asc')->get();
+
+            // Enhance each employee with issued equipment details
+            $employees->each(function ($employee) {
+                if ($employee->issued_item) {
+                    try {
+                        $issuedData = json_decode($employee->issued_item, true);
+                        if (is_array($issuedData) && count($issuedData) > 0) {
+                            $equipmentIds = array_column($issuedData, 'id');
+                            // Fetch full equipment details
+                            $equipmentDetails = DB::table('equipment')
+                                ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
+                                ->whereIn('equipment.id', $equipmentIds)
+                                ->select(
+                                    'equipment.*',
+                                    'categories.name as category_name'
+                                )
+                                ->get();
+                            $employee->issued_equipment = $equipmentDetails;
+                        } else {
+                            $employee->issued_equipment = [];
+                        }
+                    } catch (\Exception $e) {
+                        $employee->issued_equipment = [];
+                    }
+                } else {
+                    $employee->issued_equipment = [];
+                }
+            });
 
             return response()->json([
                 'success' => true,
@@ -228,13 +283,39 @@ class EmployeeController extends Controller
     public function show($id)
     {
         try {
-            $employee = Employee::find($id);
+            $employee = Employee::with('user')->find($id);
             
             if (!$employee) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Employee not found'
                 ], 404);
+            }
+
+            // Enhance with issued equipment details
+            if ($employee->issued_item) {
+                try {
+                    $issuedData = json_decode($employee->issued_item, true);
+                    if (is_array($issuedData) && count($issuedData) > 0) {
+                        $equipmentIds = array_column($issuedData, 'id');
+                        // Fetch full equipment details
+                        $equipmentDetails = DB::table('equipment')
+                            ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
+                            ->whereIn('equipment.id', $equipmentIds)
+                            ->select(
+                                'equipment.*',
+                                'categories.name as category_name'
+                            )
+                            ->get();
+                        $employee->issued_equipment = $equipmentDetails;
+                    } else {
+                        $employee->issued_equipment = [];
+                    }
+                } catch (\Exception $e) {
+                    $employee->issued_equipment = [];
+                }
+            } else {
+                $employee->issued_equipment = [];
             }
 
             return response()->json([
@@ -257,7 +338,8 @@ class EmployeeController extends Controller
         try {
             $currentHolders = DB::table('transactions')
                 ->join('employees', 'transactions.employee_id', '=', 'employees.id')
-                ->join('equipments', 'transactions.equipment_id', '=', 'equipments.id')
+                ->join('equipment', 'transactions.equipment_id', '=', 'equipment.id')
+                ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
                 ->where('transactions.status', 'released')
                 ->select(
                     'transactions.id as transaction_id',
@@ -265,8 +347,8 @@ class EmployeeController extends Controller
                     'employees.first_name',
                     'employees.last_name',
                     'employees.position',
-                    'equipments.name as equipment_name',
-                    'equipments.category',
+                    'equipment.name as equipment_name',
+                    'categories.name as category_name',
                     'transactions.request_mode',
                     'transactions.expected_return_date',
                     'transactions.release_date'
@@ -295,7 +377,8 @@ class EmployeeController extends Controller
         try {
             $pendingRequests = DB::table('requests')
                 ->join('employees', 'requests.employee_id', '=', 'employees.id')
-                ->join('equipments', 'requests.equipment_id', '=', 'equipments.id')
+                ->join('equipment', 'requests.equipment_id', '=', 'equipment.id')
+                ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
                 ->where('requests.status', 'pending')
                 ->select(
                     'requests.id as request_id',
@@ -303,8 +386,8 @@ class EmployeeController extends Controller
                     'employees.first_name',
                     'employees.last_name',
                     'employees.position',
-                    'equipments.name as equipment_name',
-                    'equipments.category',
+                    'equipment.name as equipment_name',
+                    'categories.name as category_name',
                     'requests.request_mode',
                     'requests.reason',
                     'requests.requested_date'
@@ -333,7 +416,8 @@ class EmployeeController extends Controller
         try {
             $verifyReturns = DB::table('transactions')
                 ->join('employees', 'transactions.employee_id', '=', 'employees.id')
-                ->join('equipments', 'transactions.equipment_id', '=', 'equipments.id')
+                ->join('equipment', 'transactions.equipment_id', '=', 'equipment.id')
+                ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
                 ->where('transactions.status', 'returned')
                 ->select(
                     'transactions.id as transaction_id',
@@ -341,8 +425,8 @@ class EmployeeController extends Controller
                     'employees.first_name',
                     'employees.last_name',
                     'employees.position',
-                    'equipments.name as equipment_name',
-                    'equipments.category',
+                    'equipment.name as equipment_name',
+                    'categories.name as category_name',
                     'transactions.return_date',
                     'transactions.expected_return_date',
                     'transactions.return_condition'

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import HomeSidebar from './HomeSidebar';
 import GlobalHeader from './components/GlobalHeader';
+import EmployeeFilter from './components/EmployeeFilter';
 import { Eye, Pencil, Trash2, Search, AlertCircle } from 'lucide-react';
 
 const getBadgeColor = (name) => {
@@ -72,6 +73,7 @@ const EmployeePage = () => {
   const [editing, setEditing] = React.useState(null);
   const [deleting, setDeleting] = React.useState(null);
   const [searchTerm, setSearchTerm] = React.useState('');
+  const [filters, setFilters] = React.useState({});
   const [form, setForm] = React.useState({
     firstName: '',
     lastName: '',
@@ -265,6 +267,49 @@ const EmployeePage = () => {
     }
   };
 
+  const fetchEmployees = async (searchTerm = '', filterParams = {}) => {
+    try {
+      const params = new URLSearchParams();
+      
+      if (searchTerm.trim()) {
+        params.append('search', searchTerm.trim());
+      }
+      
+      Object.entries(filterParams).forEach(([key, value]) => {
+        if (value && value !== 'all') {
+          params.append(key, value);
+        }
+      });
+
+      const response = await fetch(`/api/employees?${params}`);
+      const data = await response.json();
+
+      if (data.success && Array.isArray(data.data)) {
+        const list = data.data.map(e => ({
+          id: e.id,
+          name: `${e.first_name} ${e.last_name}`.trim(),
+          firstName: e.first_name || '',
+          lastName: e.last_name || '',
+          position: e.position || '',
+          client: e.client || '',
+          department: e.department || '',
+          employeeType: e.employee_type || 'Regular',
+          email: e.email || '',
+          phone: e.phone || '',
+          address: e.address || '',
+          issuedItem: e.issued_item || '',
+          issuedEquipment: e.issued_equipment || [],
+          user: e.user || null,
+          badge: (e.first_name?.[0] || '').toUpperCase(),
+          color: getBadgeColor(e.first_name)
+        }));
+        setEmployees(list);
+      }
+    } catch (error) {
+      console.error('Error fetching employees:', error);
+    }
+  };
+
   useEffect(() => {
     // Load dropdown options first
     loadDropdownOptions();
@@ -274,40 +319,17 @@ const EmployeePage = () => {
     const filterEmail = params.get('email');
     const filterEmpId = params.get('employee_id');
 
-    fetch('/api/employees')
-      .then(res => res.json())
-      .then(data => {
-        console.log('API Response:', data);
-
-        let list = [];
-        if (data.success && Array.isArray(data.data)) {
-          list = data.data.map(e => ({
-            id: e.id,
-            name: `${e.first_name} ${e.last_name}`.trim(),
-            firstName: e.first_name || '',
-            lastName: e.last_name || '',
-            position: e.position || '',
-            client: e.client || '',
-            department: e.department || '',
-            employeeType: e.employee_type || 'Regular',
-            email: e.email || '',
-            phone: e.phone || '',
-            address: e.address || '',
-            issuedItem: e.issued_item || '',
-            badge: (e.first_name?.[0] || '').toUpperCase(),
-            color: getBadgeColor(e.first_name)
-          }));
+    fetchEmployees().then(() => {
+      if (filterEmail || filterEmpId) {
+        const match = employees.find(e => 
+          (filterEmail && e.email?.toLowerCase() === filterEmail.toLowerCase()) || 
+          (filterEmpId && (e.employeeId === filterEmpId || e.name?.toLowerCase().includes(filterEmpId.toLowerCase())))
+        );
+        if (match) {
+          setViewing(match);
         }
-
-        if (filterEmail || filterEmpId) {
-          const match = list.find(e => (filterEmail && e.email?.toLowerCase() === filterEmail.toLowerCase()) || (filterEmpId && (e.employeeId === filterEmpId || e.name?.toLowerCase().includes(filterEmpId.toLowerCase()))));
-          if (match) {
-            setViewing(match);
-          }
-        }
-
-        setEmployees(list);
-      });
+      }
+    });
 
     // Listen for dropdown updates
     const handleDropdownUpdate = (event) => {
@@ -377,29 +399,7 @@ const EmployeePage = () => {
   };
 
   const refreshEmployees = () => {
-    fetch('/api/employees')
-      .then(res => res.json())
-      .then(data => {
-        console.log('API Response:', data);
-        if (data.success && Array.isArray(data.data)) {
-          setEmployees(data.data.map(e => ({
-            id: e.id,
-            name: `${e.first_name} ${e.last_name}`.trim(),
-            firstName: e.first_name || '',
-            lastName: e.last_name || '',
-            position: e.position || '',
-            client: e.client || '',
-            department: e.department || '',
-            employeeType: e.employee_type || 'Regular',
-            email: e.email || '',
-            phone: e.phone || '',
-            address: e.address || '',
-            issuedItem: e.issued_item || '',
-            badge: (e.first_name?.[0] || '').toUpperCase(),
-            color: getBadgeColor(e.first_name)
-          })));
-        }
-      });
+    fetchEmployees(searchTerm, filters);
   };
 
   const saveEmployee = () => {
@@ -561,12 +561,18 @@ const EmployeePage = () => {
       .catch(() => alert('Failed to delete employee'));
   };
 
-  const filteredEmployees = employees.filter(emp =>
-    emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (emp.position || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (emp.department || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (emp.client || '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Use employees directly since filtering is now done on the backend
+  const filteredEmployees = employees;
+
+  const handleFilterChange = (newFilters) => {
+    setFilters(newFilters);
+    fetchEmployees(searchTerm, newFilters);
+  };
+
+  const handleSearchChange = (newSearchTerm) => {
+    setSearchTerm(newSearchTerm);
+    fetchEmployees(newSearchTerm, filters);
+  };
 
   // (components moved to top-level)
 
@@ -590,13 +596,15 @@ const EmployeePage = () => {
                   type="text"
                   placeholder="Search"
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => handleSearchChange(e.target.value)}
                   className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-80"
                 />
               </div>
-              <button className="px-4 py-2 bg-gray-200 text-gray-600 rounded-lg">
-                Filter
-              </button>
+              <EmployeeFilter
+                selectedFilters={filters}
+                onFilterChange={handleFilterChange}
+                className="min-w-[120px]"
+              />
             </div>
             <button 
               onClick={() => setIsAddOpen(true)} 
@@ -608,7 +616,23 @@ const EmployeePage = () => {
         </div>
 
         <div className="flex-1 bg-white px-8 py-6 overflow-y-auto">
-          <h2 className="text-xl font-semibold text-gray-800 mb-6">Employees</h2>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-semibold text-gray-800">Employees</h2>
+            {Object.keys(filters).length > 0 && (
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-gray-600">
+                  {filteredEmployees.length} of {employees.length} employees
+                </span>
+                {Object.entries(filters).map(([key, value]) => (
+                  value && value !== 'all' && (
+                    <span key={key} className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
+                      {key}: {value}
+                    </span>
+                  )
+                ))}
+              </div>
+            )}
+          </div>
           
           <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
             <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
@@ -778,39 +802,27 @@ const EmployeePage = () => {
                     </div>
                     <div className="max-h-40 overflow-y-auto">
                       <div className="divide-y divide-gray-200">
-                        {(() => {
-                          try {
-                            const items = viewing.issuedItem ? JSON.parse(viewing.issuedItem) : [];
-                            if (!Array.isArray(items) || items.length === 0) {
-                              return (
-                                <div className="px-4 py-3 text-center text-gray-500">
-                                  No items issued
+                        {viewing.issuedEquipment && viewing.issuedEquipment.length > 0 ? (
+                          viewing.issuedEquipment.map((item, index) => (
+                            <div key={index} className="px-4 py-3">
+                              <div className="grid grid-cols-3 gap-4 items-center">
+                                <div className="text-blue-600 underline cursor-pointer font-medium">
+                                  {item.name || 'N/A'}
                                 </div>
-                              );
-                            }
-                            return items.map((item, index) => (
-                              <div key={index} className="px-4 py-3">
-                                <div className="grid grid-cols-3 gap-4 items-center">
-                                  <div className="text-blue-600 underline cursor-pointer font-medium">
-                                    {item.name || 'N/A'}
-                                  </div>
-                                  <div className="text-gray-700 text-sm leading-tight">
-                                    {item.specs || 'N/A'}
-                                  </div>
-                                  <div className="text-gray-700 text-sm">
-                                    {item.serial_number || 'N/A'}
-                                  </div>
+                                <div className="text-gray-700 text-sm leading-tight">
+                                  {item.specifications || item.specs || 'N/A'}
+                                </div>
+                                <div className="text-gray-700 text-sm">
+                                  {item.serial_number || 'N/A'}
                                 </div>
                               </div>
-                            ));
-                          } catch (e) {
-                            return (
-                              <div className="px-4 py-3 text-center text-gray-500">
-                                No items issued
-                              </div>
-                            );
-                          }
-                        })()}
+                            </div>
+                          ))
+                        ) : (
+                          <div className="px-4 py-3 text-center text-gray-500">
+                            No items issued
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

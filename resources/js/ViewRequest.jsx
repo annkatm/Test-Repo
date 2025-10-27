@@ -7,6 +7,7 @@ import SimpleConfirmModal from './components/SimpleConfirmModal.jsx';
 import SuccessModal from './components/SuccessModal';
 import ViewTransactionModal from './components/ViewTransactionModal';
 import EditTransactionModal from './components/EditTransactionModal';
+import VerifyReturnModal from './components/VerifyReturnModal';
 import { useRequestData } from './hooks/useRequestData';
 import { activityLogService } from './services/activityLogService';
 import api from './services/api';
@@ -87,9 +88,35 @@ const ViewRequest = () => {
     holderData: null
   });
 
+  const [viewReturnModal, setViewReturnModal] = useState({
+    isOpen: false,
+    returnData: null
+  });
+
   const handleSelect = (next) => {
     setView(next);
     setIsMenuOpen(false);
+  };
+
+  // Helper function to get avatar URL from employee/user data
+  const getAvatarUrl = (data) => {
+    const avatar = data.avatar_url || data.profile_photo_url || data.photo_url || data.employee_image || data.avatar || null;
+    if (!avatar) return null;
+    // If it's already a full URL, return it
+    if (avatar.includes('http') || avatar.startsWith('/storage/')) return avatar;
+    // Otherwise prepend storage path
+    return `/storage/${avatar}`;
+  };
+
+  // Helper function to get initials from name
+  const getInitials = (name) => {
+    if (!name) return '?';
+    return name
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
   };
 
   // Group pending requests by employee
@@ -102,6 +129,7 @@ const ViewRequest = () => {
           id: req.id, // Use first request ID as group ID
           full_name: employeeName,
           position: req.position || req.employee_type || 'Regular',
+          avatar_url: getAvatarUrl(req),
           requests: [],
           items: []
         };
@@ -131,6 +159,7 @@ const ViewRequest = () => {
           id: holder.id,
           full_name: employeeName,
           position: holder.position || 'N/A',
+          avatar_url: getAvatarUrl(holder),
           request_mode: holder.request_mode,
           expected_return_date: holder.expected_return_date,
           holders: [],
@@ -158,6 +187,7 @@ const ViewRequest = () => {
           id: returnItem.id,
           full_name: employeeName,
           position: returnItem.position || 'N/A',
+          avatar_url: getAvatarUrl(returnItem),
           request_mode: returnItem.request_mode,
           return_date: returnItem.return_date || returnItem.expected_return_date,
           returns: [],
@@ -186,6 +216,7 @@ const ViewRequest = () => {
         employee_name: group.full_name,
         employee_type: group.position,
         role: 'Employee',
+        avatar_url: group.avatar_url,
         requests: group.requests,
         items: group.items
       };
@@ -208,6 +239,7 @@ const ViewRequest = () => {
       employee_name: group.full_name,
       employee_type: group.position,
       role: 'Employee',
+      avatar_url: group.avatar_url,
       requests: group.requests,
       items: group.items
     };
@@ -238,6 +270,7 @@ const ViewRequest = () => {
         employee_name: group.full_name,
         employee_type: group.position,
         role: 'Employee',
+        avatar_url: group.avatar_url,
         requests: group.requests,
         items: group.items
       };
@@ -411,6 +444,23 @@ const ViewRequest = () => {
     setViewHolderModal({
       isOpen: false,
       holderData: null
+    });
+  };
+
+  const handleViewReturn = (returnId) => {
+    const returnItem = verifyReturns.find(r => r.id === returnId);
+    if (returnItem) {
+      setViewReturnModal({
+        isOpen: true,
+        returnData: returnItem
+      });
+    }
+  };
+
+  const handleCloseViewReturnModal = () => {
+    setViewReturnModal({
+      isOpen: false,
+      returnData: null
     });
   };
 
@@ -880,8 +930,23 @@ const ViewRequest = () => {
                 </div>
               )}
               
-              {/* Name */}
-              <div className="flex-1">
+              {/* Name with Avatar */}
+              <div className="flex-1 flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-semibold overflow-hidden flex-shrink-0">
+                  {group.avatar_url ? (
+                    <img 
+                      src={group.avatar_url} 
+                      alt={group.full_name} 
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.parentElement.textContent = getInitials(group.full_name);
+                      }}
+                    />
+                  ) : (
+                    getInitials(group.full_name)
+                  )}
+                </div>
                 <div className="text-base font-medium text-gray-900">{group.full_name}</div>
               </div>
               
@@ -1026,7 +1091,24 @@ const ViewRequest = () => {
                     className="border-b border-gray-100 last:border-0 hover:bg-blue-50 cursor-pointer transition-colors duration-200"
                   >
                     <td className="py-4 px-6 text-sm font-medium text-gray-900">
-                      {group.full_name}
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-semibold overflow-hidden flex-shrink-0">
+                          {group.avatar_url ? (
+                            <img 
+                              src={group.avatar_url} 
+                              alt={group.full_name} 
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                                e.target.parentElement.textContent = getInitials(group.full_name);
+                              }}
+                            />
+                          ) : (
+                            getInitials(group.full_name)
+                          )}
+                        </div>
+                        <span>{group.full_name}</span>
+                      </div>
                     </td>
                     <td className="py-4 px-6 text-sm text-gray-700">
                       {group.position}
@@ -1134,9 +1216,30 @@ const ViewRequest = () => {
                 </tr>
               ) : (
                 groupedVerifyReturns.map((group) => (
-                  <tr key={group.id} className="border-b border-gray-100 last:border-0 hover:bg-blue-50 cursor-pointer transition-colors duration-200">
+                  <tr 
+                    key={group.id} 
+                    onClick={() => handleViewReturn(group.returns[0]?.id || group.id)}
+                    className="border-b border-gray-100 last:border-0 hover:bg-blue-50 cursor-pointer transition-colors duration-200"
+                  >
                     <td className="py-4 px-6 text-sm font-medium text-gray-900">
-                      {group.full_name}
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-semibold overflow-hidden flex-shrink-0">
+                          {group.avatar_url ? (
+                            <img 
+                              src={group.avatar_url} 
+                              alt={group.full_name} 
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                                e.target.parentElement.textContent = getInitials(group.full_name);
+                              }}
+                            />
+                          ) : (
+                            getInitials(group.full_name)
+                          )}
+                        </div>
+                        <span>{group.full_name}</span>
+                      </div>
                     </td>
                     <td className="py-4 px-6 text-sm text-gray-700">
                       {group.position}
@@ -1269,6 +1372,7 @@ const ViewRequest = () => {
                 employee_name: group.full_name,
                 employee_type: group.position,
                 role: 'Employee',
+                avatar_url: group.avatar_url,
                 requests: group.requests,
                 items: group.items
               };
@@ -1303,6 +1407,13 @@ const ViewRequest = () => {
         isOpen={viewHolderModal.isOpen}
         onClose={handleCloseViewHolderModal}
         transactionData={viewHolderModal.holderData}
+      />
+
+      {/* View Return Modal */}
+      <VerifyReturnModal
+        isOpen={viewReturnModal.isOpen}
+        onClose={handleCloseViewReturnModal}
+        returnData={viewReturnModal.returnData}
       />
     </div>
   );

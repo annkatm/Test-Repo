@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { RefreshCw, Filter, Clock, Search } from 'lucide-react';
 import GlobalHeader from './components/GlobalHeader';
 import HomeSidebar from './HomeSidebar';
+import TypeFilter from './components/TypeFilter';
 
 const ActivityLogs = () => {
   const [activityLogs, setActivityLogs] = useState([]);
@@ -9,12 +10,13 @@ const ActivityLogs = () => {
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterDays, setFilterDays] = useState(30);
+  const [filterType, setFilterType] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
 
   // Fetch activity logs from API
-  const fetchActivityLogs = async (page = 1, search = '', days = 30) => {
+  const fetchActivityLogs = async (page = 1, search = '', days = 30, type = 'all') => {
     setLoading(true);
     setError(null);
     
@@ -27,6 +29,10 @@ const ActivityLogs = () => {
       
       if (search.trim()) {
         params.append('q', search.trim());
+      }
+
+      if (type && type !== 'all') {
+        params.append('type', type);
       }
 
       const response = await fetch(`/activity-logs${search.trim() ? '/search' : ''}?${params}`, {
@@ -69,27 +75,34 @@ const ActivityLogs = () => {
 
   // Handle refresh
   const handleRefresh = () => {
-    fetchActivityLogs(currentPage, searchQuery, filterDays);
+    fetchActivityLogs(currentPage, searchQuery, filterDays, filterType);
   };
 
   // Handle search
   const handleSearch = (query) => {
     setSearchQuery(query);
     setCurrentPage(1);
-    fetchActivityLogs(1, query, filterDays);
+    fetchActivityLogs(1, query, filterDays, filterType);
   };
 
   // Handle filter change
   const handleFilterChange = (days) => {
     setFilterDays(days);
     setCurrentPage(1);
-    fetchActivityLogs(1, searchQuery, days);
+    fetchActivityLogs(1, searchQuery, days, filterType);
+  };
+
+  // Handle type filter change
+  const handleTypeChange = (type) => {
+    setFilterType(type);
+    setCurrentPage(1);
+    fetchActivityLogs(1, searchQuery, filterDays, type);
   };
 
   // Handle pagination
   const handlePageChange = (page) => {
     setCurrentPage(page);
-    fetchActivityLogs(page, searchQuery, filterDays);
+    fetchActivityLogs(page, searchQuery, filterDays, filterType);
   };
 
   return (
@@ -126,10 +139,22 @@ const ActivityLogs = () => {
                   <option value={365}>Last year</option>
                 </select>
                 
-                <div className="flex items-center space-x-2 px-4 py-2 border border-blue-600 text-blue-600 rounded-lg">
-                  <Filter className="h-4 w-4" />
-                  <span className="text-sm font-medium">Filter</span>
-                </div>
+                <TypeFilter
+                  selectedType={filterType}
+                  onTypeChange={handleTypeChange}
+                  className="min-w-[160px]"
+                  options={[
+                    { value: 'all', label: 'All Types' },
+                    { value: 'transaction', label: 'Transaction' },
+                    { value: 'equipment', label: 'Equipment' },
+                    { value: 'employees', label: 'Employees' },
+                    { value: 'reports', label: 'Reports' },
+                    { value: 'role_management', label: 'Role Management' },
+                    { value: 'control_panel', label: 'Control Panel' },
+                    { value: 'activity_logs', label: 'Activity Logs' },
+                    { value: 'users', label: 'Users' }
+                  ]}
+                />
                 
                 <button 
                   onClick={() => window.location.href = '/archive'}
@@ -144,6 +169,11 @@ const ActivityLogs = () => {
             {!loading && (
               <div className="mt-4 text-sm text-gray-600">
                 Showing {activityLogs.length} of {total} activity logs
+                {filterType !== 'all' && (
+                  <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
+                    Filtered by: {filterType.charAt(0).toUpperCase() + filterType.slice(1)}
+                  </span>
+                )}
               </div>
             )}
 

@@ -35,6 +35,7 @@ class ProfileController extends Controller
                     'location' => $user->department, // Using department as location for now
                     'role' => $user->role ? $user->role->display_name : 'User',
                     'role_name' => $user->role ? $user->role->name : 'user',
+                    'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
                     'employee_id' => $user->employee_id,
                     'is_active' => $user->is_active,
                     'created_at' => $user->created_at,
@@ -120,6 +121,7 @@ class ProfileController extends Controller
                     'location' => $user->department,
                     'role' => $user->role ? $user->role->display_name : 'User',
                     'role_name' => $user->role ? $user->role->name : 'user',
+                    'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
                     'employee_id' => $user->employee_id,
                     'is_active' => $user->is_active,
                 ]
@@ -144,7 +146,8 @@ class ProfileController extends Controller
             }
 
             $validator = Validator::make($request->all(), [
-                'avatar' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048'
+                // Accept any image MIME type (jpg, png, gif, webp, svg, heic, etc.) up to 5 MB
+                'avatar' => 'required|mimetypes:image/*|max:5120'
             ]);
 
             if ($validator->fails()) {

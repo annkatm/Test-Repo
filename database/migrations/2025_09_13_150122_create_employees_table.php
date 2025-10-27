@@ -13,6 +13,7 @@ return new class extends Migration
     {
         Schema::create('employees', function (Blueprint $table) {
             $table->id();
+            $table->string('employee_image')->nullable(); // Employee profile image path
             $table->string('employee_id')->unique(); // Employee ID number
             $table->string('first_name');
             $table->string('last_name');

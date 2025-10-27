@@ -30,12 +30,24 @@ const EmployeeTaskbar = ({
     position: ""
   });
   const [originalProfile, setOriginalProfile] = useState(null);
-  const STORAGE_KEY = 'employee_profile_v1';
-
-  // Load locally saved profile first to prevent losing edits on reload
-  useEffect(() => {
+  const [originalPhotoUrl, setOriginalPhotoUrl] = useState("");
+  const [tempPhotoFile, setTempPhotoFile] = useState(null);
+  const [tempPhotoUrl, setTempPhotoUrl] = useState("");
+  const STORAGE_KEY_BASE = 'employee_profile_v1';
+  const getStorageKey = () => {
     try {
-      const savedRaw = localStorage.getItem(STORAGE_KEY);
+      const tag = (user && (user.email || user.id)) ? (user.email || user.id) : 'guest';
+      return `${STORAGE_KEY_BASE}:${tag}`;
+    } catch (_) {
+      return `${STORAGE_KEY_BASE}:guest`;
+    }
+  };
+
+  // Load locally saved profile once the authenticated user is known
+  useEffect(() => {
+    if (!isAuthenticated || !user) return;
+    try {
+      const savedRaw = localStorage.getItem(getStorageKey());
       if (savedRaw) {
         const saved = JSON.parse(savedRaw);
         if (saved?.formData) {
@@ -43,14 +55,33 @@ const EmployeeTaskbar = ({
           setOriginalProfile(saved.formData);
         }
         if (saved?.employeeName) setEmployeeName(saved.employeeName);
-        if (saved?.profileImageUrl) setProfileImageUrl(saved.profileImageUrl);
+        if (saved?.profileImageUrl && !String(saved.profileImageUrl).startsWith('blob:')) {
+          setProfileImageUrl(saved.profileImageUrl);
+        }
         if (saved?.employeeId) setEmployeeId(saved.employeeId);
       }
     } catch (_) {}
-  }, []);
+  }, [isAuthenticated, user]);
+
+  // Once the authenticated user is known, re-check the per-user cache
+  useEffect(() => {
+    if (!isAuthenticated || !user) return;
+    try {
+      const savedRaw = localStorage.getItem(getStorageKey());
+      if (savedRaw) {
+        const saved = JSON.parse(savedRaw);
+        if (saved?.profileImageUrl && !String(saved.profileImageUrl).startsWith('blob:')) {
+          setProfileImageUrl(prev => prev || saved.profileImageUrl);
+        }
+        if (saved?.formData) {
+          setFormData(prev => ({ ...saved.formData, ...prev }));
+        }
+      }
+    } catch (_) {}
+  }, [isAuthenticated, user]);
 
   useEffect(() => {
-    if (!isAuthenticated || !user || isEditing) return;
+    if (!user || isEditing) return;
 
     const derivedName = (() => {
       const first = user.first_name || user.firstName || null;
@@ -76,7 +107,15 @@ const EmployeeTaskbar = ({
     };
     setFormData(prev => ({ ...prev, ...updated }));
     setOriginalProfile(prev => prev || updated);
-  }, [isAuthenticated, user, isEditing, initialEmployeeName]);
+
+    // Prefer canonical avatar from authenticated user immediately
+    try {
+      const uAvatar = user?.avatar_url || user?.image || user?.profile_photo_url || '';
+      if (uAvatar && !String(uAvatar).startsWith('blob:')) {
+        setProfileImageUrl(prev => prev || uAvatar);
+      }
+    } catch (_) {}
+  }, [user, isEditing, initialEmployeeName]);
 
   // Load detailed employee profile from backend to reflect accurate info
   useEffect(() => {
@@ -129,6 +168,21 @@ const EmployeeTaskbar = ({
 
         if (cancelled) return;
         if (employee) {
+          // Validate the resolved employee actually belongs to the authenticated user
+          const hasEmpEmail = !!employee.email;
+          const hasUserEmail = !!authData.user.email;
+          const emailsMatch = (hasEmpEmail && hasUserEmail)
+            ? String(employee.email).toLowerCase() === String(authData.user.email).toLowerCase()
+            : true;
+          const idsMatch = !!authData.user.linked_employee_id && (employee.id === authData.user.linked_employee_id);
+          // If both emails are present but don't match, treat as mismatch even if IDs are linked
+          if (hasEmpEmail && hasUserEmail && !emailsMatch) {
+            return;
+          }
+          // Otherwise, require at least email match or id match
+          if (!emailsMatch && !idsMatch) {
+            return;
+          }
           try { setEmployeeId(employee.id || authData.user.linked_employee_id || null); } catch (_) {}
           const first = employee.first_name || user?.first_name || user?.firstName || '';
           const last = employee.last_name || user?.last_name || user?.lastName || '';
@@ -144,21 +198,35 @@ const EmployeeTaskbar = ({
             accountType: user?.role?.name || 'employee',
           };
           // Merge any locally saved edits so they persist even if backend returns old data
-          let savedLocal = null; try { savedLocal = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch (_) { savedLocal = null; }
+          let savedLocal = null; try { savedLocal = JSON.parse(localStorage.getItem(getStorageKey()) || 'null'); } catch (_) { savedLocal = null; }
           const merged = savedLocal?.formData ? { ...profile, ...savedLocal.formData } : profile;
           setFormData(prev => ({ ...prev, ...merged }));
           setOriginalProfile(merged);
           // Try to derive existing profile photo url if provided by API/user
-          const photo = employee.photo_url || employee.avatar_url || employee.profile_photo_url || user?.avatar_url || user?.profile_photo_url || "";
-          if (photo) setProfileImageUrl(photo);
+          const photo = employee.photo_url || employee.avatar_url || employee.profile_photo_url || "";
+          if (photo) {
+            // Do not override an already set user avatar
+            const url = photo.includes('http') || photo.startsWith('/storage/') ? photo : `/storage/${photo}`;
+            setProfileImageUrl(prev => prev ? prev : `${url}${url.includes('?') ? '' : `?t=${Date.now()}`}`);
+          }
         }
+
+        // Always try profile endpoint to get canonical avatar_url
+        try {
+          const profRes = await fetch('/api/profile', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
+          if (profRes.ok) {
+            const prof = await profRes.json();
+            const aurl = prof?.data?.avatar_url;
+            if (aurl) setProfileImageUrl(aurl);
+          }
+        } catch (_) {}
       } catch (_) {
         // ignore and keep existing UI defaults
       }
     };
     loadEmployee();
     return () => { cancelled = true; };
-  }, [isAuthenticated, user, isEditing, initialEmployeeName]);
+  }, [user, isEditing, initialEmployeeName]);
 
   // When opening the modal, ensure form has the latest loaded profile
   useEffect(() => {
@@ -171,21 +239,108 @@ const EmployeeTaskbar = ({
     setShowProfileMenu(!showProfileMenu);
   };
 
-  const handleMenuItemClick = (action) => {
+  const fetchFreshProfile = async () => {
+    try {
+      // 1) Get the current authenticated user from the session
+      const authRes = await fetch('/check-auth', {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        credentials: 'same-origin'
+      });
+      const authData = await authRes.json();
+      if (!authData?.authenticated || !authData.user) return false;
+
+      const authUser = authData.user;
+      // Prefer the canonical user avatar immediately
+      try {
+        const uAvatar = authUser?.avatar_url || authUser?.image || authUser?.profile_photo_url || '';
+        if (uAvatar && !String(uAvatar).startsWith('blob:')) {
+          setProfileImageUrl(uAvatar);
+        }
+      } catch (_) {}
+
+      // 2) Resolve employee from linked id or by email
+      let employee = null;
+      if (authUser.linked_employee_id) {
+        try {
+          const empRes = await fetch(`/api/employees/${authUser.linked_employee_id}`);
+          const empData = await empRes.json();
+          if (empData?.success && empData.data) employee = empData.data;
+        } catch (_) {}
+      }
+      if (!employee) {
+        try {
+          const listRes = await fetch('/api/employees');
+          const listJson = await listRes.json();
+          const list = listJson?.success ? listJson.data : listJson;
+          if (Array.isArray(list)) {
+            if (authUser.email) {
+              employee = list.find(e => (e.email || '').toLowerCase() === String(authUser.email).toLowerCase()) || employee;
+            }
+            if (!employee && authUser.employee_id) {
+              employee = list.find(e => e.employee_id === authUser.employee_id) || employee;
+            }
+          }
+        } catch (_) {}
+      }
+
+      // 3) Apply to UI if matched (validate belongs to user)
+      if (employee) {
+        const hasEmpEmail = !!employee.email;
+        const hasUserEmail = !!authUser.email;
+        const emailsMatch = (hasEmpEmail && hasUserEmail)
+          ? String(employee.email).toLowerCase() === String(authUser.email).toLowerCase()
+          : true;
+        const idsMatch = !!authUser.linked_employee_id && (employee.id === authUser.linked_employee_id);
+        if (hasEmpEmail && hasUserEmail && !emailsMatch) return true; // don't apply wrong person
+        if (!emailsMatch && !idsMatch) return true; // don't apply wrong person
+
+        const first = employee.first_name || user?.first_name || user?.firstName || '';
+        const last = employee.last_name || user?.last_name || user?.lastName || '';
+        const full = `${first} ${last}`.trim() || employee.name || authUser?.name || initialEmployeeName;
+        setEmployeeName(full);
+        const profile = {
+          firstName: first || '',
+          lastName: last || '',
+          email: employee.email || authUser?.email || '',
+          phoneNumber: employee.phone || employee.contact || '',
+          Department: employee.department || employee.Department || '',
+          position: employee.position || employee.job_title || user?.position || '',
+          accountType: authUser?.role || user?.role?.name || 'employee',
+        };
+        setFormData(prev => ({ ...prev, ...profile }));
+        setOriginalProfile(profile);
+        const photo = employee.photo_url || employee.avatar_url || employee.profile_photo_url || '';
+        if (photo) {
+          const url = photo.includes('http') || photo.startsWith('/storage/') ? photo : `/storage/${photo}`;
+          setProfileImageUrl(prev => prev ? prev : `${url}${url.includes('?') ? '' : `?t=${Date.now()}`}`);
+        }
+      }
+
+      return true;
+    } catch (_) {
+      return false;
+    }
+  };
+
+  const handleMenuItemClick = async (action) => {
     setShowProfileMenu(false);
     
     switch(action) {
       case 'personalDetails':
+        await fetchFreshProfile();
         setShowProfileModal(true);
         onPersonalDetailsClick?.();
         break;
       case 'profile':
         // Backward-compat: treat as open modal in edit mode
+        await fetchFreshProfile();
         setShowProfileModal(true);
         setIsEditing(true);
         onProfileClick?.();
         break;
       case 'profile_edit':
+        await fetchFreshProfile();
         setShowProfileModal(true);
         setIsEditing(true);
         onProfileClick?.();
@@ -204,6 +359,7 @@ const EmployeeTaskbar = ({
   const handleEdit = () => {
     // Snapshot current values for cancel
     setOriginalProfile({ ...formData });
+    setOriginalPhotoUrl(profileImageUrl || "");
     setIsEditing(true);
   };
 
@@ -213,6 +369,13 @@ const EmployeeTaskbar = ({
       setFormData(prev => ({ ...prev, ...originalProfile }));
       setEmployeeName(`${originalProfile.firstName} ${originalProfile.lastName}`.trim() || employeeName);
     }
+    // Revert avatar to the original if a temp preview exists
+    if (tempPhotoUrl) {
+      try { URL.revokeObjectURL(tempPhotoUrl); } catch (_) {}
+    }
+    setTempPhotoFile(null);
+    setTempPhotoUrl("");
+    setProfileImageUrl(originalPhotoUrl || profileImageUrl || "");
   };
 
   const handleSave = async () => {
@@ -228,38 +391,75 @@ const EmployeeTaskbar = ({
     };
     let savedRemotely = false;
     try {
-      let res = null;
+      const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+      let ok = false;
+      // Try employee update when we have an ID (expects PUT per REST)
       if (employeeId) {
         try {
-          res = await fetch(`/api/employees/${employeeId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+          const resEmp = await fetch(`/api/employees/${employeeId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf },
+            body: JSON.stringify(payload),
+            credentials: 'same-origin'
           });
-        } catch (_) { res = null; }
+          ok = resEmp.ok;
+        } catch (_) { ok = false; }
       }
-      if (!res || !res.ok) {
-        // Generic profile fallback endpoints
-        try {
-          res = await fetch('/api/profile', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-        } catch (_) { res = null; }
-      }
-      if (!res || !res.ok) {
-        try {
-          res = await fetch('/api/profile/update', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-        } catch (_) { res = null; }
-      }
-      savedRemotely = !!(res && res.ok);
+      // Also update user profile so the user object stays in sync
+      try {
+        const resProf = await fetch('/api/profile', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf },
+          body: JSON.stringify({
+            name: `${payload.first_name || formData.firstName} ${payload.last_name || formData.lastName}`.trim() || employeeName,
+            email: payload.email,
+            phone: payload.phone,
+            department: payload.department,
+            position: payload.position,
+          }),
+          credentials: 'same-origin'
+        });
+        ok = ok || resProf.ok;
+      } catch (_) { /* ignore */ }
+      savedRemotely = ok;
     } catch (_) {
       savedRemotely = false;
+    }
+
+    // If user selected a new avatar during editing, upload it now (commit)
+    if (tempPhotoFile) {
+      try {
+        const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+        const form = new FormData();
+        form.append('avatar', tempPhotoFile);
+        const resUser = await fetch('/api/profile/avatar', {
+          method: 'POST',
+          body: form,
+          credentials: 'same-origin',
+          headers: { 'X-CSRF-TOKEN': csrf },
+        });
+        if (resUser.ok) {
+          let dataUser = null; try { dataUser = await resUser.json(); } catch (_) {}
+          const finalUrl = dataUser?.data?.avatar_url || dataUser?.avatar_url || dataUser?.url || dataUser?.photo_url || dataUser?.path || '';
+          if (finalUrl) {
+            setProfileImageUrl(finalUrl);
+            try {
+              // Update user cache for header/avatar consumers
+              const storedUserRaw = localStorage.getItem('user');
+              if (storedUserRaw) {
+                const storedUser = JSON.parse(storedUserRaw);
+                storedUser.avatar_url = finalUrl;
+                localStorage.setItem('user', JSON.stringify(storedUser));
+              }
+            } catch (_) {}
+          }
+        }
+      } catch (_) { /* ignore upload failure; keep old avatar */ }
+      finally {
+        if (tempPhotoUrl) { try { URL.revokeObjectURL(tempPhotoUrl); } catch (_) {} }
+        setTempPhotoFile(null);
+        setTempPhotoUrl("");
+      }
     }
 
     // Update UI and persist locally regardless to survive reloads
@@ -269,11 +469,11 @@ const EmployeeTaskbar = ({
       const toStore = {
         formData: { ...formData },
         employeeName: newName || employeeName,
-        profileImageUrl,
+        profileImageUrl: String(profileImageUrl || '').startsWith('blob:') ? '' : profileImageUrl,
         employeeId,
         ts: Date.now(),
       };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore));
+      localStorage.setItem(getStorageKey(), JSON.stringify(toStore));
     } catch (_) {}
 
     setIsEditing(false);
@@ -308,33 +508,55 @@ const EmployeeTaskbar = ({
     try {
       setUploadingPhoto(true);
       const form = new FormData();
-      form.append('photo', file);
-      // Attempt employee-specific endpoint first if we have an id
-      let res = null;
-      if (employeeId) {
-        try {
-          res = await fetch(`/api/employees/${employeeId}/photo`, { method: 'POST', body: form });
-        } catch (_) { res = null; }
+      // backend expects 'avatar' at /api/profile/avatar
+      form.append('avatar', file);
+      // Always upload to user profile as the canonical store so it persists across logins
+      let resUser = null;
+      try {
+        const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+        resUser = await fetch('/api/profile/avatar', { 
+          method: 'POST', 
+          body: form, 
+          credentials: 'same-origin',
+          headers: { 'X-CSRF-TOKEN': csrf }
+        });
+      } catch (_) { resUser = null; }
+
+      // Choose canonical URL from the user upload if available; else fallback to employee upload response
+      let finalUrl = null;
+      if (resUser && resUser.ok) {
+        let dataUser = null; try { dataUser = await resUser.json(); } catch (_) {}
+        finalUrl = dataUser?.data?.avatar_url || dataUser?.avatar_url || dataUser?.url || dataUser?.photo_url || dataUser?.path || null;
       }
-      if (!res || !res.ok) {
-        // Fallback to a generic profile photo endpoint
-        try {
-          res = await fetch('/api/profile/photo', { method: 'POST', body: form });
-        } catch (_) { res = null; }
-      }
-      if (res && res.ok) {
-        let data = null; try { data = await res.json(); } catch (_) {}
-        const url = data?.url || data?.photo_url || data?.path || profileImageUrl;
+      if (resUser?.ok) {
         // Update UI immediately
-        const localUrl = url || URL.createObjectURL(file);
+        const localUrl = finalUrl || URL.createObjectURL(file);
         setProfileImageUrl(localUrl);
-        showSuccess('Profile photo updated');
+        // Persist for current user cache so GlobalHeader picks it up
+        try {
+          const storedUserRaw = localStorage.getItem('user');
+          if (storedUserRaw) {
+            const storedUser = JSON.parse(storedUserRaw);
+            storedUser.avatar_url = localUrl;
+            localStorage.setItem('user', JSON.stringify(storedUser));
+          }
+        } catch (_) {}
+        // Persist in employee local profile store (per-user key)
+        try {
+          const key = getStorageKey();
+          const savedRaw = localStorage.getItem(key);
+          const saved = savedRaw ? JSON.parse(savedRaw) : {};
+          saved.profileImageUrl = String(localUrl || '').startsWith('blob:') ? '' : localUrl;
+          saved.ts = Date.now();
+          localStorage.setItem(key, JSON.stringify(saved));
+        } catch (_) {}
+        // Removed immediate photo updated toast to avoid popups
         return true;
       } else {
         // Still show local preview if upload failed silently
         const localUrl = URL.createObjectURL(file);
         setProfileImageUrl(localUrl);
-        showSuccess('Profile photo updated locally');
+        // Removed immediate photo updated toast to avoid popups
         return false;
       }
     } catch (_) {
@@ -351,7 +573,18 @@ const EmployeeTaskbar = ({
   const handleAvatarFileChange = async (e) => {
     const file = e?.target?.files?.[0];
     if (!file) return;
-    await uploadProfilePhoto(file);
+    // During editing, only show a local preview and defer upload until Save
+    if (isEditing) {
+      try {
+        if (tempPhotoUrl) { try { URL.revokeObjectURL(tempPhotoUrl); } catch (_) {} }
+        const localUrl = URL.createObjectURL(file);
+        setTempPhotoFile(file);
+        setTempPhotoUrl(localUrl);
+        setProfileImageUrl(localUrl);
+      } catch (_) {}
+      return;
+    }
+    // If not editing (fallback), do nothing or perform immediate upload if desired
   };
 
   const performGlobalSearch = async (q) => {
@@ -404,7 +637,7 @@ const EmployeeTaskbar = ({
 
   return (
     <>
-      <header className="flex items-center justify-end px-10 py-6">
+      <header className="flex items-center justify-end px-4 sm:px-6 md:px-10 py-4 md:py-6">
         <div className="flex items-center space-x-4">
           
 
@@ -417,7 +650,7 @@ const EmployeeTaskbar = ({
               <span className="hidden md:block text-sm font-medium text-gray-700">
                 {employeeName}
               </span>
-              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-semibold overflow-hidden">
+              <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-semibold overflow-hidden">
                 {profileImageUrl ? (
                   <img src={profileImageUrl} alt="profile" className="w-full h-full object-cover" />
                 ) : (
@@ -515,6 +748,15 @@ const EmployeeTaskbar = ({
               <button
                 onClick={() => {
                   setShowProfileModal(false);
+                  // If a temp avatar preview exists and user closes without saving, revert to original
+                  if (tempPhotoUrl) {
+                    try { URL.revokeObjectURL(tempPhotoUrl); } catch (_) {}
+                  }
+                  if (isEditing) {
+                    setProfileImageUrl(originalPhotoUrl || profileImageUrl || "");
+                    setTempPhotoFile(null);
+                    setTempPhotoUrl("");
+                  }
                   setIsEditing(false);
                 }}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"

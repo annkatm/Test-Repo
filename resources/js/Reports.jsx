@@ -9,77 +9,159 @@ const Reports = () => {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [category, setCategory] = useState("All");
+  const [equipmentCategory, setEquipmentCategory] = useState("All");
+  const [borrowedCategory, setBorrowedCategory] = useState("All");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Sample data for comprehensive analytics
+  // API data state
   const [summary, setSummary] = useState({ 
-    total_items: 89, 
-    available_stock: 45, 
-    low_stock: 8, 
-    out_of_stock: 3,
-    total_requests: 156,
-    approved_requests: 142,
-    pending_requests: 12,
-    total_users: 84
+    total_items: 0, 
+    available_stock: 0, 
+    low_stock: 0, 
+    out_of_stock: 0,
+    total_requests: 0,
+    approved_requests: 0,
+    pending_requests: 0,
+    total_users: 0
   });
 
-  // Equipment inventory data
-  const [equipmentData] = useState([
-    { category: "Laptop", total: 45, borrowed: 32, available: 13, maintenance: 0 },
-    { category: "Printer", total: 12, borrowed: 5, available: 7, maintenance: 0 },
-    { category: "Router", total: 8, borrowed: 4, available: 4, maintenance: 0 },
-    { category: "Projector", total: 10, borrowed: 7, available: 3, maintenance: 0 },
-    { category: "Switch", total: 14, borrowed: 8, available: 6, maintenance: 0 },
-  ]);
+  const [equipmentData, setEquipmentData] = useState([]);
+  const [monthlyRequests, setMonthlyRequests] = useState([]);
+  const [topBorrowed, setTopBorrowed] = useState([]);
+  const [expensiveEquipment, setExpensiveEquipment] = useState([]);
+  const [userActivity, setUserActivity] = useState([]);
+  const [returnCompliance, setReturnCompliance] = useState([]);
+  const [adminActivity, setAdminActivity] = useState([]);
+  const [transactions, setTransactions] = useState([]);
+  const [categories, setCategories] = useState([]);
 
-  // Monthly requests data
-  const [monthlyRequests] = useState([
-    { month: "2024-06", requests: 45, approved: 35, denied: 5, returned: 30 },
-    { month: "2024-07", requests: 60, approved: 50, denied: 4, returned: 47 },
-    { month: "2024-08", requests: 55, approved: 42, denied: 6, returned: 40 },
-    { month: "2024-09", requests: 70, approved: 65, denied: 3, returned: 58 },
-    { month: "2024-10", requests: 62, approved: 54, denied: 5, returned: 46 },
-  ]);
+  // Fetch categories on component mount
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch('/api/categories');
+        const result = await response.json();
+        if (result.success && Array.isArray(result.data)) {
+          setCategories(result.data);
+        }
+      } catch (err) {
+        console.error('Error fetching categories:', err);
+      }
+    };
+    fetchCategories();
+  }, []);
 
-  // Top borrowed items
-  const [topBorrowed] = useState([
-    { item: "HP ProBook 440", borrowed: 22 },
-    { item: "Lenovo ThinkPad E14", borrowed: 18 },
-    { item: "Epson L3150", borrowed: 15 },
-    { item: "TP-Link Archer C6", borrowed: 12 },
-    { item: "BenQ MX532", borrowed: 9 },
-  ]);
+  // Fetch data from API
+  useEffect(() => {
+    const fetchReportsData = async () => {
+      setLoading(true);
+      setError('');
+      
+      try {
+        const params = new URLSearchParams();
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
+        if (searchTerm) params.append('search', searchTerm);
 
-  // User activity data
-  const [userActivity] = useState([
-    { user: "Admin A", role: "Admin", logins: 32, lastLogin: "2024-10-20" },
-    { user: "Admin B", role: "Admin", logins: 28, lastLogin: "2024-10-21" },
-    { user: "Emp_01", role: "Employee", logins: 21, lastLogin: "2024-10-21" },
-    { user: "Emp_02", role: "Employee", logins: 20, lastLogin: "2024-10-20" },
-  ]);
+        const response = await fetch(`/api/reports/overview?${params.toString()}`);
+        const result = await response.json();
 
-  // Return compliance data
-  const [returnCompliance] = useState([
-    { user: "Emp_01", borrowed: 5, returned: 5, late: 0, avgDelayDays: 0 },
-    { user: "Emp_02", borrowed: 8, returned: 7, late: 1, avgDelayDays: 2 },
-    { user: "Emp_03", borrowed: 6, returned: 4, late: 2, avgDelayDays: 3 },
-  ]);
+        if (result.success && result.data) {
+          const data = result.data;
+          
+          // Update summary
+          setSummary({
+            total_items: data.summary?.total_items || 0,
+            available_stock: data.summary?.available_stock || 0,
+            low_stock: data.summary?.low_stock || 0,
+            out_of_stock: data.summary?.out_of_stock || 0,
+            total_requests: 0,
+            approved_requests: 0,
+            pending_requests: 0,
+            total_users: 0
+          });
 
-  // Admin activity data
-  const [adminActivity] = useState([
-    { admin: "Admin A", approvals: 28, rejections: 3, stockAdds: 10, logins: 15 },
-    { admin: "Admin B", approvals: 35, rejections: 1, stockAdds: 7, logins: 17 },
-    { admin: "Admin C", approvals: 22, rejections: 2, stockAdds: 5, logins: 11 },
-  ]);
+          // Update monthly trend
+          const trendData = (data.trend || []).map(t => ({
+            month: t.month,
+            requests: t.requests || 0,
+            approved: t.completed || 0,
+            denied: 0,
+            returned: t.completed || 0
+          }));
+          console.log('Monthly Trend Data:', trendData);
+          setMonthlyRequests(trendData);
 
-  // Recent transactions
-  const [transactions] = useState([
-    { date: "2024-10-21", employee: "John Doe", item: "HP Laptop", status: "Completed", qty: 1, approvedBy: "Admin A" },
-    { date: "2024-10-20", employee: "Jane Smith", item: "Epson Printer", status: "Pending", qty: 1, approvedBy: "-" },
-    { date: "2024-10-19", employee: "Mike Johnson", item: "Router", status: "Completed", qty: 1, approvedBy: "Admin B" },
-    { date: "2024-10-18", employee: "Sarah Wilson", item: "Projector", status: "Declined", qty: 1, approvedBy: "Admin C" },
-  ]);
+          // Update transactions
+          setTransactions((data.transactions || []).map(t => ({
+            date: t.date,
+            employee: t.employee || 'Unknown',
+            item: t.item || 'Unknown',
+            status: t.status || 'Unknown',
+            qty: t.qty || 1,
+            approvedBy: t.approvedBy || '-'
+          })));
+
+          // Update top borrowed items from API
+          const borrowedItems = (data.topBorrowed || []).map(item => ({
+            item: `${item.brand || ''} ${item.item || ''}`.trim() || 'Unknown',
+            borrowed: parseInt(item.borrowed_count) || 0,
+            category: item.category || 'Uncategorized'
+          }));
+          console.log('Top Borrowed Items:', borrowedItems);
+          setTopBorrowed(borrowedItems);
+
+          // Update expensive equipment from API
+          setExpensiveEquipment((data.expensiveEquipment || []).map(item => ({
+            item: `${item.brand || ''} ${item.item || ''}`.trim() || 'Unknown',
+            value: parseFloat(item.value) || 0,
+            category: item.category || 'Uncategorized'
+          })));
+
+          // Keep sample data for other sections (can be updated when endpoints are available)
+          setEquipmentData([
+            { category: "Laptop", total: 45, borrowed: 32, available: 13, maintenance: 0 },
+            { category: "Printer", total: 12, borrowed: 5, available: 7, maintenance: 0 },
+            { category: "Router", total: 8, borrowed: 4, available: 4, maintenance: 0 },
+            { category: "Projector", total: 10, borrowed: 7, available: 3, maintenance: 0 },
+            { category: "Switch", total: 14, borrowed: 8, available: 6, maintenance: 0 },
+          ]);
+
+          // Update return compliance from API
+          const complianceData = (data.returnCompliance || []).map(item => ({
+            user: item.user || 'Unknown',
+            borrowed: parseInt(item.borrowed) || 0,
+            returned: parseInt(item.returned) || 0,
+            late: parseInt(item.late) || 0,
+            avgDelayDays: parseInt(item.avgDelayDays) || 0
+          }));
+          console.log('Return Compliance Data:', complianceData);
+          setReturnCompliance(complianceData);
+
+          // Keep sample data for user activity
+          setUserActivity([
+            { user: "Admin A", role: "Admin", logins: 32, lastLogin: "2024-10-20" },
+            { user: "Admin B", role: "Admin", logins: 28, lastLogin: "2024-10-21" },
+          ]);
+
+          setAdminActivity([
+            { admin: "Admin A", approvals: 28, rejections: 3, stockAdds: 10, logins: 15 },
+            { admin: "Admin B", approvals: 35, rejections: 1, stockAdds: 7, logins: 17 },
+          ]);
+        } else {
+          setError(result.message || 'Failed to fetch reports data');
+        }
+      } catch (err) {
+        console.error('Error fetching reports:', err);
+        setError('Failed to load reports data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchReportsData();
+  }, [startDate, endDate, searchTerm]);
 
   // Helper functions
   const getStatusColor = (status) => {
@@ -97,15 +179,25 @@ const Reports = () => {
 
   // Filter data based on search and category
   const filteredData = useMemo(() => {
+    console.log('Filtering - Borrowed Category:', borrowedCategory, 'Equipment Category:', equipmentCategory);
+    
     let filtered = {
       equipment: equipmentData,
       monthlyRequests: monthlyRequests,
-      topBorrowed: topBorrowed,
+      topBorrowed: borrowedCategory === "All" 
+        ? topBorrowed 
+        : topBorrowed.filter(item => item.category === borrowedCategory),
+      expensiveEquipment: equipmentCategory === "All" 
+        ? expensiveEquipment 
+        : expensiveEquipment.filter(item => item.category === equipmentCategory),
       userActivity: userActivity,
       returnCompliance: returnCompliance,
       adminActivity: adminActivity,
       transactions: transactions
     };
+    
+    console.log('Filtered Top Borrowed:', filtered.topBorrowed.length, 'items');
+    console.log('Filtered Expensive Equipment:', filtered.expensiveEquipment.length, 'items');
 
     // Apply search filter
     if (searchTerm) {
@@ -117,21 +209,16 @@ const Reports = () => {
     }
 
     return filtered;
-  }, [searchTerm, equipmentData, monthlyRequests, topBorrowed, userActivity, returnCompliance, adminActivity, transactions]);
+  }, [searchTerm, equipmentData, monthlyRequests, topBorrowed, expensiveEquipment, userActivity, returnCompliance, adminActivity, transactions, borrowedCategory, equipmentCategory]);
 
-  // Export functionality
+  // Export functionality using API endpoint
   const handleExport = () => {
-    const csvContent = "data:text/csv;charset=utf-8," + 
-      "Date,Employee,Item,Status,Quantity,Approved By\n" +
-      transactions.map(t => `${t.date},${t.employee},${t.item},${t.status},${t.qty},${t.approvedBy}`).join("\n");
+    const params = new URLSearchParams();
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    if (searchTerm) params.append('search', searchTerm);
     
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "reports-data.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    window.location.href = `/api/reports/export?${params.toString()}`;
   };
 
   return (
@@ -153,35 +240,35 @@ const Reports = () => {
             
             {/* Filters */}
             <div className="flex flex-wrap gap-3 items-center">
-              <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-gray-500" />
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
                   className="px-3 py-2 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-[#2262C6] focus:border-transparent"
-                />
-              </div>
-              <div className="flex items-center gap-2">
+              />
+            </div>
+            <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-gray-500" />
-                <input
-                  type="date"
-                  value={endDate}
-                  min={startDate || undefined}
-                  onChange={(e) => setEndDate(e.target.value)}
+              <input
+                type="date"
+                value={endDate}
+                min={startDate || undefined}
+                onChange={(e) => setEndDate(e.target.value)}
                   className="px-3 py-2 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-[#2262C6] focus:border-transparent"
-                />
-              </div>
+              />
+            </div>
               <div className="flex items-center gap-2">
                 <Search className="h-4 w-4 text-gray-500" />
-                <input
-                  type="text"
+              <input
+                type="text"
                   placeholder="Search..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
                   className="px-3 py-2 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-[#2262C6] focus:border-transparent"
-                />
-              </div>
+              />
+            </div>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
@@ -197,16 +284,34 @@ const Reports = () => {
                 onClick={handleExport}
                 className="flex items-center gap-2 px-4 py-2 bg-[#2262C6] text-white rounded-lg hover:bg-[#1e40af] transition-colors text-sm font-medium"
               >
-                <Download className="h-4 w-4" />
-                Export CSV
-              </button>
-            </div>
+              <Download className="h-4 w-4" />
+              Export CSV
+            </button>
+          </div>
           </div>
         </header>
 
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto p-6 space-y-8">
+          {/* Loading State */}
+          {loading && (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#2262C6]"></div>
+              <span className="ml-3 text-gray-600">Loading reports data...</span>
+            </div>
+          )}
+
+          {/* Error State */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+              <p className="font-medium">Error loading reports</p>
+              <p className="text-sm mt-1">{error}</p>
+            </div>
+          )}
+
           {/* Summary Cards */}
+          {!loading && !error && (
+            <>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
               <div className="flex items-center gap-3">
@@ -285,183 +390,297 @@ const Reports = () => {
               </h2>
               
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Equipment Usage Chart */}
+                {/* Most Expensive Equipment Chart */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                  <h3 className="text-lg font-semibold mb-4 text-gray-800">Equipment Usage by Category</h3>
-                  <div className="h-64 flex items-end justify-between gap-2">
-                    {filteredData.equipment.map((item, index) => (
-                      <div key={index} className="flex flex-col items-center flex-1">
-                        <div
-                          className="bg-[#2262C6] rounded-t w-full mb-2 transition-all duration-500 hover:bg-[#1e40af]"
-                          style={{ height: `${(item.borrowed / Math.max(1, Math.max(...filteredData.equipment.map(e => e.borrowed)))) * 200}px` }}
-                        ></div>
-                        <span className="text-xs text-gray-600 text-center">{item.category}</span>
-                        <span className="text-xs font-semibold">{item.borrowed}</span>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                    <h3 className="text-lg font-semibold text-gray-800">Most Expensive Equipment</h3>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-600">Category:</span>
+                      <select
+                        value={equipmentCategory}
+                        onChange={(e) => setEquipmentCategory(e.target.value)}
+                        className="px-3 py-1 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-[#2262C6] focus:border-transparent bg-white min-w-[120px]"
+                      >
+                        <option value="All">All</option>
+                        {categories.map((cat) => (
+                          <option key={cat.id} value={cat.name}>
+                            {cat.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+              <div className="h-64 flex items-end justify-between gap-2">
+                    {filteredData.expensiveEquipment.length === 0 ? (
+                      <div className="w-full h-full flex items-center justify-center text-gray-400">
+                        <p>No equipment data available</p>
                       </div>
-                    ))}
+                    ) : (
+                      filteredData.expensiveEquipment.map((item, index) => {
+                      const maxValue = Math.max(...filteredData.expensiveEquipment.map(e => e.value), 1);
+                      const height = (item.value / maxValue) * 200;
+                      const getColorClass = (value) => {
+                        if (value >= 20000) return "bg-red-500";
+                        if (value >= 10000) return "bg-orange-500";
+                        if (value >= 5000) return "bg-yellow-500";
+                        return "bg-[#2262C6]";
+                      };
+                      
+                      return (
+                  <div key={index} className="flex flex-col items-center flex-1">
+                    <div
+                            className={`${getColorClass(item.value)} rounded-t w-full mb-2 transition-all duration-500 hover:opacity-80`}
+                            style={{ height: `${height}px` }}
+                            title={`₱${item.value.toLocaleString()}`}
+                    ></div>
+                          <span className="text-xs text-gray-600 text-center leading-tight">{item.item}</span>
+                          <span className="text-xs font-semibold text-[#2262C6]">₱{(item.value / 1000).toFixed(0)}k</span>
+                        </div>
+                      );
+                    })
+                    )}
+                  </div>
+                  <div className="mt-4 flex justify-center">
+                    <div className="flex items-center gap-4 text-xs">
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 bg-red-500 rounded"></div>
+                        <span className="text-gray-600">₱20k+</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 bg-orange-500 rounded"></div>
+                        <span className="text-gray-600">₱10k-20k</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 bg-yellow-500 rounded"></div>
+                        <span className="text-gray-600">₱5k-10k</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 bg-[#2262C6] rounded"></div>
+                        <span className="text-gray-600">Under ₱5k</span>
+              </div>
+                </div>
+              </div>
+            </div>
+
+                {/* Top Borrowed Items Pie Chart */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                    <h3 className="text-lg font-semibold text-gray-800">Top Borrowed Items</h3>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-600">Category:</span>
+                      <select
+                        value={borrowedCategory}
+                        onChange={(e) => setBorrowedCategory(e.target.value)}
+                        className="px-3 py-1 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-[#2262C6] focus:border-transparent bg-white min-w-[120px]"
+                      >
+                        <option value="All">All</option>
+                        {categories.map((cat) => (
+                          <option key={cat.id} value={cat.name}>
+                            {cat.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+              <div className="flex items-center justify-center h-64">
+                {filteredData.topBorrowed.length === 0 ? (
+                  <div className="text-center text-gray-400">
+                    <p>No borrowed items data available</p>
+                    <p className="text-sm mt-2">Transactions will appear here once equipment is borrowed</p>
+                  </div>
+                ) : (
+                <div className="relative w-48 h-48">
+                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                    <circle
+                      cx="50"
+                      cy="50"
+                      r="40"
+                      fill="none"
+                      stroke="#e5e7eb"
+                      strokeWidth="8"
+                    />
+                    {(() => {
+                          const total = filteredData.topBorrowed.reduce((sum, item) => sum + item.borrowed, 0) || 1;
+                      let offset = 0;
+                          const colors = ['#2262C6', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe'];
+                          
+                          return filteredData.topBorrowed.map((item, idx) => {
+                            const percentage = Math.round((item.borrowed / total) * 100);
+                        const dash = `${percentage * 2.51} ${100 * 2.51}`;
+                        const circle = (
+                          <circle
+                            key={idx}
+                            cx="50"
+                            cy="50"
+                            r="40"
+                            fill="none"
+                                stroke={colors[idx % colors.length]}
+                            strokeWidth="8"
+                            strokeDasharray={dash}
+                            strokeDashoffset={`-${offset}`}
+                          />
+                        );
+                        offset += percentage * 2.51;
+                        return circle;
+                      });
+                    })()}
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="text-center">
+                          <div className="text-2xl font-bold text-gray-900">
+                            {filteredData.topBorrowed.reduce((s, i) => s + i.borrowed, 0)}
+                          </div>
+                          <div className="text-xs text-gray-500">Total Borrowed</div>
+                    </div>
                   </div>
                 </div>
-
-                {/* Top Borrowed Items */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                  <h3 className="text-lg font-semibold mb-4 text-gray-800">Top Borrowed Items</h3>
-                  <div className="space-y-3">
-                    {filteredData.topBorrowed.map((item, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-[#2262C6] text-white rounded-full flex items-center justify-center text-sm font-semibold">
-                            {index + 1}
+                )}
+              </div>
+                  <div className="mt-4 max-h-40 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+                    <div className="space-y-2 pr-2">
+                      {filteredData.topBorrowed.map((item, index) => {
+                        const colors = ['#2262C6', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe'];
+                        const total = filteredData.topBorrowed.reduce((sum, i) => sum + i.borrowed, 0);
+                        const percentage = Math.round((item.borrowed / total) * 100);
+                        
+                        return (
+                          <div key={index} className="flex items-center justify-between py-1">
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="w-3 h-3 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: colors[index % colors.length] }}
+                    ></div>
+                              <span className="text-sm text-gray-600 truncate">{item.item}</span>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <span className="text-sm font-semibold text-gray-800">{item.borrowed}</span>
+                              <span className="text-xs text-gray-500 ml-1">({percentage}%)</span>
+                            </div>
                           </div>
-                          <span className="font-medium text-gray-800">{item.item}</span>
-                        </div>
-                        <span className="text-[#2262C6] font-semibold">{item.borrowed}</span>
-                      </div>
-                    ))}
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>
             </section>
           )}
 
-          {/* Users & Activity Section */}
-          {(category === "All" || category === "Users") && (
+          {/* System Trends & Compliance Section */}
+          {(category === "All" || category === "Users" || category === "Requests") && (
             <section className="space-y-6">
               <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
-                <Users className="h-5 w-5 text-[#2262C6]" />
-                Users & Activity
+                <TrendingUp className="h-5 w-5 text-[#2262C6]" />
+                System Trends & Compliance
               </h2>
               
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* User Activity */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                  <h3 className="text-lg font-semibold mb-4 text-gray-800">User Login Activity</h3>
-                  <div className="space-y-3">
-                    {filteredData.userActivity.map((user, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div>
-                          <div className="font-medium text-gray-800">{user.user}</div>
-                          <div className="text-sm text-gray-500">{user.role}</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-[#2262C6] font-semibold">{user.logins} logins</div>
-                          <div className="text-xs text-gray-500">{user.lastLogin}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
                 {/* Return Compliance */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                   <h3 className="text-lg font-semibold mb-4 text-gray-800">Return Compliance</h3>
                   <div className="space-y-3">
-                    {filteredData.returnCompliance.map((user, index) => (
-                      <div key={index} className="p-3 bg-gray-50 rounded-lg">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-medium text-gray-800">{user.user}</span>
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            user.late === 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                          }`}>
-                            {user.late === 0 ? 'Compliant' : `${user.late} late`}
-                          </span>
-                        </div>
-                        <div className="text-sm text-gray-600">
-                          Borrowed: {user.borrowed} | Returned: {user.returned} | Avg Delay: {user.avgDelayDays} days
-                        </div>
+                    {filteredData.returnCompliance.length === 0 ? (
+                      <div className="text-center py-8 text-gray-400">
+                        <p>No return compliance data available</p>
+                        <p className="text-sm mt-2">Data will appear once employees borrow and return equipment</p>
                       </div>
-                    ))}
+                    ) : (
+                      filteredData.returnCompliance.map((user, index) => (
+                        <div key={index} className="p-3 bg-gray-50 rounded-lg">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-medium text-gray-800">{user.user}</span>
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              user.late === 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                            }`}>
+                              {user.late === 0 ? 'Compliant' : `${user.late} late`}
+                            </span>
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            Borrowed: {user.borrowed} | Returned: {user.returned} | Avg Delay: {user.avgDelayDays} days
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
-                </div>
-              </div>
-            </section>
-          )}
+            </div>
 
-          {/* Requests & Trends Section */}
-          {(category === "All" || category === "Requests") && (
-            <section className="space-y-6">
-              <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-[#2262C6]" />
-                Requests & Trends
-              </h2>
-              
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Monthly Trends */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                   <h3 className="text-lg font-semibold mb-4 text-gray-800">Monthly Request Trends</h3>
-                  <div className="h-64 relative">
-                    <svg className="w-full h-full" viewBox="0 0 400 200">
-                      <defs>
-                        <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                          <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#f3f4f6" strokeWidth="1"/>
-                        </pattern>
-                      </defs>
-                      <rect width="100%" height="100%" fill="url(#grid)" />
-                      
+              <div className="h-64 relative">
+                {filteredData.monthlyRequests.length === 0 ? (
+                  <div className="w-full h-full flex items-center justify-center text-gray-400">
+                    <div className="text-center">
+                      <p>No monthly trend data available</p>
+                      <p className="text-sm mt-2">Trends will appear as requests are made</p>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                <svg className="w-full h-full" viewBox="0 0 400 200">
+                  <defs>
+                    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#f3f4f6" strokeWidth="1"/>
+                    </pattern>
+                  </defs>
+                  <rect width="100%" height="100%" fill="url(#grid)" />
+                  
                       {/* Requests line */}
-                      <polyline
-                        fill="none"
+                  <polyline
+                    fill="none"
                         stroke="#2262C6"
-                        strokeWidth="3"
+                    strokeWidth="3"
                         points={filteredData.monthlyRequests.map((point, index) => 
                           `${index * 60 + 30},${200 - (point.requests / Math.max(1, Math.max(...filteredData.monthlyRequests.map(p => p.requests)))) * 180}`
-                        ).join(' ')}
-                      />
-                      
+                    ).join(' ')}
+                  />
+                  
                       {/* Approved line */}
-                      <polyline
-                        fill="none"
+                  <polyline
+                    fill="none"
                         stroke="#10b981"
-                        strokeWidth="3"
+                    strokeWidth="3"
                         points={filteredData.monthlyRequests.map((point, index) => 
                           `${index * 60 + 30},${200 - (point.approved / Math.max(1, Math.max(...filteredData.monthlyRequests.map(p => p.approved)))) * 180}`
-                        ).join(' ')}
+                    ).join(' ')}
                       />
-                    </svg>
+                      
+                  {/* Data point markers */}
+                  {filteredData.monthlyRequests.map((point, index) => {
+                    const maxRequests = Math.max(1, Math.max(...filteredData.monthlyRequests.map(p => p.requests)));
+                    const maxApproved = Math.max(1, Math.max(...filteredData.monthlyRequests.map(p => p.approved)));
+                    const requestY = 200 - (point.requests / maxRequests) * 180;
+                    const approvedY = 200 - (point.approved / maxApproved) * 180;
+                    const x = index * 60 + 30;
                     
-                    {/* Legend */}
-                    <div className="absolute bottom-0 left-0 flex gap-4">
-                      <div className="flex items-center gap-2">
+                    return (
+                      <g key={index}>
+                        <circle cx={x} cy={requestY} r="4" fill="#2262C6" />
+                        <circle cx={x} cy={approvedY} r="4" fill="#10b981" />
+                        <text x={x} y="195" fontSize="10" fill="#6b7280" textAnchor="middle">
+                          {point.month ? new Date(point.month + '-01').toLocaleDateString('en-US', { month: 'short' }) : ''}
+                        </text>
+                      </g>
+                    );
+                  })}
+                </svg>
+              
+              {/* Legend */}
+                    <div className="absolute top-0 right-0 flex gap-4 bg-white/80 backdrop-blur-sm px-3 py-2 rounded-lg">
+                <div className="flex items-center gap-2">
                         <div className="w-3 h-0.5 bg-[#2262C6]"></div>
                         <span className="text-xs text-gray-600">Requests</span>
-                      </div>
-                      <div className="flex items-center gap-2">
+                </div>
+                <div className="flex items-center gap-2">
                         <div className="w-3 h-0.5 bg-green-500"></div>
                         <span className="text-xs text-gray-600">Approved</span>
                       </div>
-                    </div>
-                  </div>
                 </div>
-
-                {/* Admin Activity */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                  <h3 className="text-lg font-semibold mb-4 text-gray-800">Admin Activity</h3>
-                  <div className="space-y-3">
-                    {filteredData.adminActivity.map((admin, index) => (
-                      <div key={index} className="p-3 bg-gray-50 rounded-lg">
-                        <div className="font-medium text-gray-800 mb-2">{admin.admin}</div>
-                        <div className="grid grid-cols-2 gap-2 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Approvals:</span>
-                            <span className="text-green-600 font-semibold">{admin.approvals}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Rejections:</span>
-                            <span className="text-red-600 font-semibold">{admin.rejections}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Stock Adds:</span>
-                            <span className="text-blue-600 font-semibold">{admin.stockAdds}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Logins:</span>
-                            <span className="text-gray-800 font-semibold">{admin.logins}</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                </>
+                )}
               </div>
+            </div>
+          </div>
             </section>
           )}
 
@@ -473,8 +692,8 @@ const Reports = () => {
             </h2>
             
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
                       <th className="text-left py-3 px-4 font-medium text-gray-600">Date</th>
@@ -483,8 +702,8 @@ const Reports = () => {
                       <th className="text-left py-3 px-4 font-medium text-gray-600">Status</th>
                       <th className="text-left py-3 px-4 font-medium text-gray-600">Qty</th>
                       <th className="text-left py-3 px-4 font-medium text-gray-600">Approved By</th>
-                    </tr>
-                  </thead>
+                  </tr>
+                </thead>
                   <tbody className="divide-y divide-gray-200">
                     {filteredData.transactions.map((transaction, index) => (
                       <tr key={index} className="hover:bg-gray-50">
@@ -492,19 +711,21 @@ const Reports = () => {
                         <td className="py-3 px-4 text-gray-900">{transaction.employee}</td>
                         <td className="py-3 px-4 text-gray-900">{transaction.item}</td>
                         <td className="py-3 px-4">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(transaction.status)}`}>
-                            {transaction.status}
-                          </span>
-                        </td>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(transaction.status)}`}>
+                          {transaction.status}
+                        </span>
+                      </td>
                         <td className="py-3 px-4 text-gray-900">{transaction.qty}</td>
                         <td className="py-3 px-4 text-gray-900">{transaction.approvedBy}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
+          </div>
           </section>
+          </>
+          )}
         </main>
       </div>
     </div>

@@ -46,6 +46,18 @@ const EmployeeDashboard = ({
     fetchUserData();
   }, []);
 
+  // Listen for navigation events (e.g., from ApprovedTransactions after return)
+  useEffect(() => {
+    const onNavigate = (e) => {
+      const target = e?.detail?.menu;
+      if (typeof target === 'string') {
+        setActiveMenu(target);
+      }
+    };
+    window.addEventListener('ireply:navigate', onNavigate);
+    return () => window.removeEventListener('ireply:navigate', onNavigate);
+  }, []);
+
   const handleMenuClick = (label) => {
     setActiveMenu(label);
   };
@@ -109,7 +121,7 @@ const EmployeeDashboard = ({
 
   return (
     <AppProvider>
-    <div className="min-h-screen bg-white w-full pl-60">
+    <div className="min-h-screen overflow-x-hidden bg-white w-full pl-0 md:pl-60">
       {/* Employee Sidebar Component */}
       <EmployeeSidebar 
         activeMenu={activeMenu}
@@ -117,7 +129,7 @@ const EmployeeDashboard = ({
       />
   
       {/* Main Content Area with Employee Taskbar */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-h-0">
         <Employetaskbar 
           onSearch={handleSearch}
           employeeName={employeeName}
@@ -128,7 +140,7 @@ const EmployeeDashboard = ({
           onLogoutClick={handleLogoutClick}
         />
   
-        <div className="flex-1 p-6 bg-white">
+        <div className="flex-1 min-h-0 overflow-auto p-4 sm:p-6 bg-white">
           {renderContent()}
         </div>
       </div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import ExchangePanel from './ExchangePanel.jsx';
 
 // Props now accept dynamic data instead of hardcoded examples
 // - approvedTransactions: [{ date, item, status, exchangeItems?: [...] }]
@@ -35,12 +36,14 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
   const [pageSize, setPageSize] = useState(10); // number-only sorting/display count
   const [selectedUnit, setSelectedUnit] = useState(null);
   const [showUnitConfirmModal, setShowUnitConfirmModal] = useState(false);
+  const [displayList, setDisplayList] = useState(() => Array.isArray(approvedTransactions) ? approvedTransactions : []);
   const [chosenUnit, setChosenUnit] = useState(() => {
     try {
       const saved = localStorage.getItem('approved_selected_unit');
       return saved ? JSON.parse(saved) : null;
     } catch (_) { return null; }
   });
+  const [returnTxId, setReturnTxId] = useState(null);
 
   // Keep chosenUnit in sync if changed by another tab/process
   useEffect(() => {
@@ -70,14 +73,242 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
     }
   }, [showBrowseLaptopsModal]);
 
-  const totalPages = Math.max(1, Math.ceil((approvedTransactions?.length || 0) / pageSize));
+  useEffect(() => {
+    try {
+      const src = Array.isArray(approvedTransactions) ? approvedTransactions : [];
+      const mapped = src.map((t, i) => {
+        const dateSrc = t?.created_at || t?.expected_start_date || t?.start_date || t?.date || null;
+        const date = dateSrc
+          ? new Date(dateSrc).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
+          : new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+        const rawStatus = String(t?.status ?? '').trim().toLowerCase();
+        const status = (!rawStatus || rawStatus === '-' || /approved|released|borrowed|active/.test(rawStatus))
+          ? 'Approved'
+          : (t?.status || 'Approved');
+        return {
+          id: t?.id ?? t?.transaction_id ?? t?.request_id ?? t?.transactionID ?? t?.trans_id ?? t?.trx_id ?? t?.uuid ?? t?.pivot?.transaction_id ?? null,
+          date,
+          item: (
+            t?.category_name || t?.category || t?.equipment_category || t?.equipment_type || t?.type || t?.item_type ||
+            (t?.equipment && (t?.equipment?.category_name || t?.equipment?.category?.name || t?.equipment?.type)) ||
+            t?.equipment_name || t?.item || '-'
+          ),
+          status,
+          equipment_id: t?.equipment_id || t?.equipment?.id || null,
+          brand: t?.brand || t?.equipment?.brand || t?.equipment_brand || null,
+          model: t?.model || t?.equipment?.model || t?.equipment_model || null,
+          equipment: t?.equipment || t?.equipment_details || null,
+          exchangeItems: Array.isArray(t?.exchangeItems) ? t.exchangeItems : [],
+        };
+      });
+      setDisplayList(mapped);
+    } catch (_) {}
+  }, [approvedTransactions]);
+
+  // Always fetch approved list so we get category/type fields from backend
+  useEffect(() => {
+    let cancelled = false;
+    const fetchApproved = async () => {
+      try {
+        const res = await fetch('/api/transactions/approved', { credentials: 'same-origin' });
+        const json = await res.json().catch(() => ({}));
+        const list = Array.isArray(json) ? json : (json && json.data && Array.isArray(json.data) ? json.data : []);
+        const mapped = (list || []).map((t, i) => {
+          const dateSrc = t?.created_at || t?.expected_start_date || t?.start_date || t?.date || null;
+          const date = dateSrc
+            ? new Date(dateSrc).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
+            : new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+          const rawStatus = String(t?.status ?? '').trim().toLowerCase();
+          const status = (!rawStatus || rawStatus === '-' || /approved|released|borrowed|active/.test(rawStatus))
+            ? 'Approved'
+            : (t?.status || 'Approved');
+          return {
+            id: t?.id ?? t?.transaction_id ?? t?.request_id ?? t?.transactionID ?? t?.trans_id ?? t?.trx_id ?? t?.uuid ?? t?.pivot?.transaction_id ?? (i + 1),
+            date,
+            item: (
+              t?.category_name || t?.category || t?.equipment_category || t?.equipment_type || t?.type || t?.item_type ||
+              (t?.equipment && (t?.equipment?.category_name || t?.equipment?.category?.name || t?.equipment?.type)) ||
+              t?.equipment_name || t?.item || '-'
+            ),
+            status,
+            equipment_id: t?.equipment_id || t?.equipment?.id || null,
+            brand: t?.brand || t?.equipment?.brand || t?.equipment_brand || null,
+            model: t?.model || t?.equipment?.model || t?.equipment_model || null,
+            equipment: t?.equipment || t?.equipment_details || null,
+            exchangeItems: Array.isArray(t?.exchangeItems) ? t.exchangeItems : [],
+          };
+        });
+        if (!cancelled) setDisplayList(mapped);
+      } catch (_) { }
+    };
+    fetchApproved();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Listen for external changes to approved list and refresh from backend
+  useEffect(() => {
+    const refresh = async () => {
+      try {
+        const res = await fetch('/api/transactions/approved', { credentials: 'same-origin' });
+        const json = await res.json().catch(() => ({}));
+        const list = Array.isArray(json) ? json : (json && json.data && Array.isArray(json.data) ? json.data : []);
+        const mapped = (list || []).map((t, i) => {
+          const dateSrc = t?.created_at || t?.expected_start_date || t?.start_date || t?.date || null;
+          const date = dateSrc
+            ? new Date(dateSrc).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
+            : new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+          const rawStatus = String(t?.status ?? '').trim().toLowerCase();
+          const status = (!rawStatus || rawStatus === '-' || /approved|released|borrowed|active/.test(rawStatus))
+            ? 'Approved'
+            : (t?.status || 'Approved');
+          return {
+            id: t?.id ?? t?.transaction_id ?? t?.request_id ?? i + 1,
+            date,
+            item: (
+              t?.category_name || t?.category || t?.equipment_category || t?.equipment_type || t?.type || t?.item_type ||
+              (t?.equipment && (t?.equipment?.category_name || t?.equipment?.category?.name || t?.equipment?.type)) ||
+              t?.equipment_name || t?.item || '-'
+            ),
+            status,
+            equipment_id: t?.equipment_id || t?.equipment?.id || null,
+            brand: t?.brand || t?.equipment?.brand || t?.equipment_brand || null,
+            model: t?.model || t?.equipment?.model || t?.equipment_model || null,
+            equipment: t?.equipment || t?.equipment_details || null,
+            exchangeItems: Array.isArray(t?.exchangeItems) ? t.exchangeItems : [],
+          };
+        }).filter(r => r.date);
+        setDisplayList(mapped);
+      } catch (_) { }
+    };
+    const handler = () => refresh();
+    window.addEventListener('ireply:approved:changed', handler);
+    return () => window.removeEventListener('ireply:approved:changed', handler);
+  }, []);
+
+  const totalPages = Math.max(1, Math.ceil((displayList?.length || 0) / pageSize));
   const paginated = useMemo(() => {
     const start = (page - 1) * pageSize;
     const end = start + pageSize;
-    return (approvedTransactions || []).slice(start, end);
-  }, [approvedTransactions, page, pageSize]);
+    return (displayList || []).slice(start, end);
+  }, [displayList, page, pageSize]);
 
-  const selectedTransactionData = selectedRow !== null ? approvedTransactions[selectedRow] : null;
+  const selectedTransactionData = selectedRow !== null ? displayList[selectedRow] : null;
+
+  const resolveItemType = (t) => {
+    // Direct category/type fields first
+    const direct = (
+      t?.type ||
+      t?.category ||
+      t?.category_name ||
+      t?.equipment_type ||
+      t?.item_type ||
+      t?.equipment_category ||
+      (t?.equipment && (t?.equipment.type || t?.equipment.category || t?.equipment.category_name))
+    );
+    if (direct && String(direct).trim()) return String(direct);
+
+    // Infer from names/descriptions
+    const parts = [
+      t?.item,
+      t?.equipment_name,
+      t?.model,
+      t?.description,
+      t?.brand,
+      t?.equipment?.name,
+      t?.equipment?.model,
+      t?.equipment?.specs,
+      t?.equipment?.description,
+    ].filter(Boolean).join(' ').toLowerCase();
+
+    const matchKeyword = (s) => {
+      if (!s) return null;
+      if (/\blaptop|notebook\b/.test(s)) return 'Laptop';
+      if (/\bmouse|mice\b/.test(s)) return 'Mouse';
+      if (/\bkeyboard\b/.test(s)) return 'Keyboard';
+      if (/\bmonitor|display\b/.test(s)) return 'Monitor';
+      if (/\bprojector\b/.test(s)) return 'Projector';
+      if (/\bprinter\b/.test(s)) return 'Printer';
+      if (/\bscanner\b/.test(s)) return 'Scanner';
+      if (/\bwebcam|camera\b/.test(s)) return 'Webcam';
+      if (/\bheadset|headphone\b/.test(s)) return 'Headset';
+      if (/\bspeaker\b/.test(s)) return 'Speaker';
+      if (/\brouter\b/.test(s)) return 'Router';
+      if (/\bswitch\b/.test(s)) return 'Network Switch';
+      if (/\bcable\b/.test(s)) return 'Cable';
+      if (/\badapter|dongle\b/.test(s)) return 'Adapter';
+      if (/\bdocking station|dock\b/.test(s)) return 'Docking Station';
+      return null;
+    };
+    const kw = matchKeyword(parts);
+    if (kw) return kw;
+
+    // Brand-based default guesses when nothing else exists
+    const brand = (t?.brand || t?.equipment?.brand || '').toLowerCase();
+    const brandMap = {
+      lenovo: 'Laptop', dell: 'Laptop', hp: 'Laptop', acer: 'Laptop', asus: 'Laptop', apple: 'Laptop',
+      msi: 'Laptop', huawei: 'Laptop', gigabyte: 'Laptop',
+      lg: 'Monitor', samsung: 'Monitor', aoc: 'Monitor', viewsonic: 'Monitor', benq: 'Monitor', philips: 'Monitor',
+      logitech: 'Mouse', rapoo: 'Mouse', razer: 'Mouse', a4tech: 'Mouse', redragon: 'Mouse', steelseries: 'Mouse'
+    };
+    if (brand && brandMap[brand]) return brandMap[brand];
+
+    // Also map when the ITEM text itself is a brand
+    const nameOnly = (t?.item || t?.equipment_name || '').toLowerCase().trim();
+    if (nameOnly && brandMap[nameOnly]) return brandMap[nameOnly];
+    if (/\blg\b/.test(nameOnly)) return 'Monitor';
+    if (/\blogitech\b/.test(nameOnly)) return 'Mouse';
+    if (/\blogistic\b/.test(nameOnly)) return 'Keyboard';
+
+    // Fallback to visible names
+    return t?.equipment_name || t?.item || '-';
+  };
+
+  // Resolve a transaction ID robustly from a transaction-like object
+  const resolveTxId = async (tx) => {
+    if (!tx) return null;
+    const direct = tx?.id || tx?.transaction_id || tx?.request_id || tx?.transactionID || tx?.trans_id || tx?.trx_id || tx?.uuid || tx?.pivot?.transaction_id;
+    if (direct) return direct;
+    // Fallback: query approved list and match
+    try {
+      const res = await fetch('/api/transactions/approved', { credentials: 'same-origin' });
+      const json = await res.json().catch(() => ({}));
+      const list = Array.isArray(json) ? json : (json && json.data && Array.isArray(json.data) ? json.data : []);
+      const eqId = tx?.equipment_id || tx?.equipment?.id || null;
+      const name = (tx?.equipment_name || tx?.item || '').toLowerCase();
+      const found = (list || []).find((t) => {
+        const candId = t?.id || t?.transaction_id || t?.request_id || t?.transactionID || t?.trans_id || t?.trx_id || t?.uuid || t?.pivot?.transaction_id;
+        if (!candId) return false;
+        const cEq = t?.equipment_id || t?.equipment?.id || null;
+        const cName = (t?.equipment_name || t?.item || '').toLowerCase();
+        const statusOk = String(t?.status || 'Approved').toLowerCase().includes('approved');
+        return statusOk && ((eqId && cEq && String(eqId) === String(cEq)) || (name && cName && name === cName));
+      });
+      return found ? (found.id || found.transaction_id || found.request_id || found.transactionID || found.trans_id || found.trx_id || found.uuid || found?.pivot?.transaction_id) : null;
+    } catch (_) {
+      return null;
+    }
+  };
+
+  const handleMarkReleased = async (tx) => {
+    const txId = await resolveTxId(tx || selectedTransactionData);
+    if (!txId) return;
+    if (actionLoading) return;
+    setActionLoading(true);
+    try {
+      const res = await fetch(`/api/transactions/${txId}/release`, { method: 'POST', headers: { 'Accept': 'application/json' }, credentials: 'same-origin' });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || `HTTP ${res.status}`);
+      }
+      setDisplayList((prev) => (prev || []).map((t) => (String(t.id) === String(txId) ? { ...t, status: 'Released' } : t)));
+      try { window.dispatchEvent(new CustomEvent('ireply:approved:changed')); } catch (_) {}
+      logActivity('Approved: Marked as Released', 'success');
+    } catch (_) {
+      setDisplayList((prev) => (prev || []).map((t) => (String(t.id) === String(txId) ? { ...t, status: 'Released' } : t)));
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
@@ -123,6 +354,17 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
         throw new Error(text || `HTTP ${res.status}`);
       }
 
+      // Notify other pages that the previous equipment became available again
+      try {
+        const prevEquipId = selectedTransactionData?.equipment_id;
+        if (prevEquipId) {
+          window.dispatchEvent(new CustomEvent('ireply:equipment:restore', { detail: { equipment_id: prevEquipId } }));
+        }
+      } catch (_) { }
+
+      // Refresh the approved list UI
+      try { window.dispatchEvent(new CustomEvent('ireply:approved:changed')); } catch (_) {}
+
       setShowExchangeConfirmModal(false);
       setSelectedRow(null);
       onBack();
@@ -135,7 +377,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
+    <div className="h-full min-h-0 bg-White p-4 sm:p-6 lg:p-8">
       {actionLoading && (
         <div className="fixed inset-0 z-[100] grid place-items-center bg-black/30">
           <div className="h-12 w-12 border-4 border-white/60 border-t-blue-600 rounded-full animate-spin"></div>
@@ -306,10 +548,10 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-[1600px] mx-auto px-2 sm:px-4">
         {/* Header Row - Title and Back Button */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 -mt-2">
-          <h1 className="text-2xl sm:text-3xl font-bold text-[#2262C6]">Approved</h1>
+          <h1 className="text-2xl sm:text-3xl xl:text-4xl font-bold text-[#2262C6]">Approved</h1>
           <div className="flex items-center gap-3">
             <button
               onClick={() => { logActivity('Approved: Back to transactions', 'info'); onBack(); }}
@@ -320,60 +562,62 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8 items-stretch">
           {/* Left Column - Table */}
           <div className={`${selectedRow !== null ? 'lg:col-span-8' : 'lg:col-span-12'}`}>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="bg-white rounded-xl shadow-lg border border-gray-300 overflow-hidden">
               {/* Table Header - Hidden on mobile, visible on tablet+ */}
-              <div className="hidden sm:grid grid-cols-12 bg-gray-50 text-gray-700 font-semibold text-base py-4 px-4 sm:px-6 border-b border-gray-200">
-                <div className="col-span-3">Date</div>
-                <div className="col-span-6">Item</div>
-                <div className="col-span-3">Status</div>
+              <div className="hidden sm:grid grid-cols-12 bg-gray-50 text-gray-700 font-semibold text-base lg:text-lg py-4 xl:py-5 px-4 sm:px-6 border-b border-gray-200">
+                <div className="col-span-3 text-center">Date</div>
+                <div className="col-span-6 text-center">Item</div>
+                <div className="col-span-3 text-center">Status</div>
               </div>
 
-              {/* Scrollable Table Rows Container */}
-              <div className="overflow-y-auto h-[400px] sm:h-[500px] lg:h-[600px] bg-white">
+              {/* Scrollable Table Rows Container */
+              }
+              <div className="overflow-y-auto h-[50vh] sm:h-[55vh] lg:h-[360px] xl:h-[420px] bg-white [&::-webkit-scrollbar]:hidden">
                 <div className="divide-y divide-gray-100">
-                  {(approvedTransactions || []).map((transaction, index) => (
-                    <div
-                      key={index}
-                      onClick={() => { setSelectedRow(index); logActivity(`Approved: Selected row ${index + 1} (${transaction.item})`, 'info'); }}
-                      className={`grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-0 items-start sm:items-center py-4 sm:py-6 px-4 sm:px-6 transition-colors cursor-pointer ${selectedRow === index ? 'border-l-4 border-blue-600' : ''
-                        }`}
-                    >
-                      {/* Mobile layout */}
-                      <div className="sm:hidden space-y-2">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="text-xs text-gray-500 mb-1">Date</p>
-                            <p className="text-gray-800 text-base font-semibold">{transaction.date}</p>
+                  {(displayList || []).map((transaction, index) => {
+                    const globalIndex = index;
+                    return (
+                      <div
+                        key={globalIndex}
+                        onClick={() => { setSelectedRow(globalIndex); logActivity(`Approved: Selected row ${globalIndex + 1} (${transaction.item})`, 'info'); }}
+                        className={`grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-0 items-start sm:items-center py-4 sm:py-6 xl:py-7 px-4 sm:px-6 transition-colors cursor-pointer ${selectedRow === globalIndex ? 'border-l-4 border-blue-600' : ''
+                          }`}
+                      >
+                        {/* Mobile layout */}
+                        <div className="sm:hidden space-y-2">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Date</p>
+                              <p className="text-gray-800 text-base font-semibold">{transaction.date}</p>
+                            </div>
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200">
+                              {transaction.status}
+                            </span>
                           </div>
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200">
-                            {transaction.status}
-                          </span>
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Item</p>
+                            <p className="text-gray-800 text-base font-semibold">{resolveItemType(transaction)}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1">Item</p>
-                          <p className="text-gray-800 text-base font-semibold">{transaction.item}</p>
-                        </div>
-                      </div>
-
-                      {/* Desktop layout */}
-                      <div className="hidden sm:contents">
-                        <div className="col-span-3 text-gray-800 text-base font-semibold">
-                          {transaction.date}
-                        </div>
-                        <div className="col-span-6 text-gray-800 text-base font-semibold">
-                          {transaction.item}
-                        </div>
-                        <div className="col-span-3">
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200">
-                            {transaction.status}
-                          </span>
+                        <div className="hidden sm:contents">
+                          <div className="col-span-3 text-gray-800 text-base lg:text-lg font-semibold text-center">
+                            {transaction.date}
+                          </div>
+                          <div className="col-span-6 text-gray-800 text-base lg:text-lg font-semibold text-center">
+                            {resolveItemType(transaction)}
+                          </div>
+                          <div className="col-span-3 flex justify-center">
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200">
+                              {transaction.status}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -394,65 +638,22 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
             />
 
             {/* Panel content */}
-            <div className="absolute right-0 top-0 bottom-0 w-full sm:w-96 lg:w-auto lg:relative bg-gray-50 lg:bg-transparent overflow-y-auto p-4 sm:p-6 lg:p-0">
-              <div className="flex flex-col space-y-8">
+            <div className="absolute right-0 top-0 bottom-0 w-full sm:w-96 lg:w-[360px] xl:w-[420px] lg:relative bg-gray-50 lg:bg-transparent overflow-y-auto p-4 sm:p-6 lg:p-0 h-full min-h-0">
+              <div className="h-full min-h-0 flex flex-col">
                 {/* Exchange Card */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
-                  {/* Header with X button */}
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-lg font-semibold text-gray-800">Exchange</h3>
-                    <button
-                      onClick={() => setSelectedRow(null)}
-                      className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-
-                  {/* Dynamic exchange items based on selected row */}
-                  <div className="space-y-4 mb-6">
-                    {selectedTransactionData?.exchangeItems.map((item, index) => (
-                      <div key={index} className="flex items-start gap-3">
-                        <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-2xl flex-shrink-0">
-                          {item.icon}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="font-semibold text-gray-800">{item.name}</div>
-                          <div className="text-xs text-gray-500">{item.brand}</div>
-                          <div className="text-xs text-gray-600 mt-1">{item.details}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => { setShowReturnModal(true); logActivity('Approved: Clicked Return Now', 'return'); }}
-                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium shadow-md transform transition-all duration-300 hover:scale-105 hover:shadow-xl hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                    >
-                      Return Now
-                    </button>
-                    <button
-                      onClick={() => { setShowBrowseLaptopsModal(true); logActivity('Approved: Clicked Exchange', 'exchange'); }}
-                      className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium shadow-md transform transition-all duration-300 hover:scale-105 hover:shadow-xl hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-300"
-                    >
-                      Exchange
-                    </button>
-                  </div>
-                </div>
-
-                {/* Borrowed Stat Card */}
-                <button onClick={() => setIsBorrowedOpen(true)} className="rounded-xl bg-white text-gray-900 p-6 h-48 w-full border border-gray-200 text-left hover:shadow-md transition">
-                  <div className="flex justify-between items-start mb-4">
-                    <span className="text-sm font-medium">Item Currently Borrowed</span>
-                    <div className="w-10 h-10 flex items-center justify-center bg-gray-100 rounded-md">
-                      📦
-                    </div>
-                  </div>
-                  <div className="text-5xl font-bold">{transactionStats?.borrowed || 0}</div>
-                </button>
+                <ExchangePanel
+                  transaction={selectedTransactionData}
+                  onClose={() => setSelectedRow(null)}
+                  onReturnNow={async () => { 
+                    const tid = await resolveTxId(selectedTransactionData);
+                    setReturnTxId(tid || null);
+                    setShowReturnModal(true); 
+                    logActivity('Approved: Clicked Return Now', 'return'); 
+                  }}
+                  onOpenBrowse={() => { setShowBrowseLaptopsModal(true); logActivity('Approved: Clicked Exchange', 'exchange'); }}
+                  className="flex-1"
+                />
+                
               </div>
             </div>
           </div>
@@ -494,16 +695,58 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                 Cancel
               </button>
               <button
-                onClick={() => {
+                onClick={async () => {
                   if (actionLoading) return;
                   setActionLoading(true);
-                  setTimeout(() => {
+                  try {
+                    const txId = returnTxId || await resolveTxId(selectedTransactionData);
+                    if (!txId) {
+                      alert('Missing transaction information. Please select a transaction and try again.');
+                      setShowReturnModal(false);
+                      return;
+                    }
+                    const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+                    const res = await fetch(`/api/transactions/${txId}/return`, {
+                      method: 'POST',
+                      headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrf,
+                      },
+                      credentials: 'same-origin',
+                      body: JSON.stringify({}),
+                    });
+                    if (!res.ok) {
+                      const text = await res.text();
+                      throw new Error(text || `HTTP ${res.status}`);
+                    }
                     setShowReturnModal(false);
                     setSelectedRow(null);
                     logActivity('Approved: Confirmed Return', 'success');
+                    try {
+                      const equipId = selectedTransactionData?.equipment_id;
+                      if (equipId) {
+                        window.dispatchEvent(new CustomEvent('ireply:equipment:restore', { detail: { equipment_id: equipId } }));
+                      }
+                    } catch (_) { }
+                    try {
+                      const payload = {
+                        id: selectedTransactionData?.id,
+                        item: selectedTransactionData?.item,
+                        date: new Date().toISOString(),
+                      };
+                      window.dispatchEvent(new CustomEvent('ireply:returned:add', { detail: payload }));
+                    } catch (_) { }
+                    try {
+                      window.dispatchEvent(new CustomEvent('ireply:navigate', { detail: { menu: 'Returned Items' } }));
+                    } catch (_) { }
                     onBack();
+                  } catch (err) {
+                    console.error(err);
+                    alert('Failed to mark item as returned. Please try again.');
+                  } finally {
                     setActionLoading(false);
-                  }, 1000);
+                  }
                 }}
                 disabled={actionLoading}
                 className="px-5 py-2 bg-blue-600 text-white rounded-lg font-medium shadow-md hover:bg-blue-700 hover:shadow-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed"

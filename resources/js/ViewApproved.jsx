@@ -5,6 +5,7 @@ import HomeSidebar from './HomeSidebar';
 import ConfirmModal from './components/ConfirmModal.jsx';
 import PrintReceipt from './components/PrintReceipt.jsx';
 import ViewTransactionModal from './components/ViewTransactionModal';
+import VerifyReturnModal from './components/VerifyReturnModal';
 import { transactionService, apiUtils } from './services/api.js';
 import api from './services/api';
 
@@ -56,6 +57,11 @@ const ViewApproved = () => {
   const [viewHolderModal, setViewHolderModal] = useState({
     isOpen: false,
     holderData: null
+  });
+
+  const [viewReturnModal, setViewReturnModal] = useState({
+    isOpen: false,
+    returnData: null
   });
 
   // Track clicked items
@@ -410,6 +416,9 @@ const ViewApproved = () => {
           
           allItems.push({
             equipment_name: request.equipment_name || tx?.equipment_name || tx?.equipment?.name || 'N/A',
+            category_name: request.category_name || tx?.category_name || 'N/A',
+            brand: request.brand || tx?.brand || 'N/A',
+            model: request.model || tx?.model || 'N/A',
             serial_number: serialNumber || 'N/A',
             date_released: tx?.release_date || tx?.released_at || tx?.created_at || new Date().toISOString(),
             date_returned: tx?.return_date || tx?.returned_at || null
@@ -431,6 +440,9 @@ const ViewApproved = () => {
           
           allItems.push({
             equipment_name: request.equipment_name || 'N/A',
+            category_name: request.category_name || 'N/A',
+            brand: request.brand || 'N/A',
+            model: request.model || 'N/A',
             serial_number: serialNumber || 'N/A',
             date_released: request?.release_date || request?.created_at || new Date().toISOString(),
             date_returned: request?.return_date || request?.returned_at || null
@@ -500,6 +512,23 @@ const ViewApproved = () => {
     setViewHolderModal({
       isOpen: false,
       holderData: null
+    });
+  };
+
+  const handleViewReturn = (returnId) => {
+    const returnItem = verifyReturns.find(r => r.id === returnId);
+    if (returnItem) {
+      setViewReturnModal({
+        isOpen: true,
+        returnData: returnItem
+      });
+    }
+  };
+
+  const handleCloseViewReturnModal = () => {
+    setViewReturnModal({
+      isOpen: false,
+      returnData: null
     });
   };
 
@@ -821,12 +850,8 @@ const ViewApproved = () => {
                       groupedVerifyReturns.map((group) => (
                         <tr 
                           key={group.id}
-                          onClick={() => handleRowClick(group.id, 'verifyReturn')}
-                          className={`border-b last:border-0 cursor-pointer transition-colors duration-200 ${
-                            isItemClicked(group.id, 'verifyReturn') 
-                              ? 'bg-gray-200 hover:bg-blue-50' 
-                              : 'hover:bg-blue-50'
-                          }`}
+                          onClick={() => handleViewReturn(group.returns[0]?.id || group.id)}
+                          className="border-b last:border-0 cursor-pointer transition-colors duration-200 hover:bg-blue-50"
                         >
                           <td className="py-3 px-3">{group.full_name}</td>
                           <td className="py-3 px-3">{group.position}</td>
@@ -878,6 +903,13 @@ const ViewApproved = () => {
         isOpen={viewHolderModal.isOpen}
         onClose={handleCloseViewHolderModal}
         transactionData={viewHolderModal.holderData}
+      />
+
+      {/* View Return Modal */}
+      <VerifyReturnModal
+        isOpen={viewReturnModal.isOpen}
+        onClose={handleCloseViewReturnModal}
+        returnData={viewReturnModal.returnData}
       />
 
     </div>

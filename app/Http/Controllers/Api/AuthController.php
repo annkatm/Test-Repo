@@ -134,6 +134,8 @@ class AuthController extends Controller
     {
         $user = $request->user();
         $user->load(['role', 'userPermissions']);
+        // Attach a computed avatar_url for frontend convenience
+        $user->avatar_url = $user->avatar ? asset('storage/' . $user->avatar) : null;
 
         return response()->json([
             'success' => true,

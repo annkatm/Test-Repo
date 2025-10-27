@@ -17,6 +17,7 @@ class ActivityLogController extends Controller
         $userId = $request->get('user_id');
         $modelType = $request->get('model_type');
         $modelId = $request->get('model_id');
+        $type = $request->get('type'); // New type filter
         $days = $request->get('days', 30);
         $perPage = $request->get('per_page', 15);
 
@@ -28,7 +29,8 @@ class ActivityLogController extends Controller
             $modelType,
             $modelId,
             $days,
-            $perPage
+            $perPage,
+            $type
         );
 
         return response()->json($result);

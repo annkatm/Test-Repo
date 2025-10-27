@@ -3,7 +3,7 @@ import HomeSidebar from './HomeSidebar';
 import { Copy, Plus, Minus, X, ChevronRight, ArrowLeft, Grid3X3, Search } from 'lucide-react';
 import GlobalHeader from './components/GlobalHeader';
 
-// Add custom scrollbar styles
+// Add custom scrollbar styles and animations
 const scrollbarStyles = `
   .select-scrollbar {
     scrollbar-width: thin;
@@ -22,6 +22,34 @@ const scrollbarStyles = `
   }
   .select-scrollbar::-webkit-scrollbar-thumb:hover {
     background: #2563EB;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.9) translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  .animate-fadeIn {
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .animate-scaleIn {
+    animation: scaleIn 0.4s ease-out;
   }
 `;
 
@@ -389,9 +417,8 @@ const AddStocks = () => {
                         <td className="py-4 px-6">
                           <span className={`px-3 py-1 rounded-full text-xs font-medium
                             ${item.status === 'available' ? 'bg-green-100 text-green-800' : ''}
-                            ${item.status === 'in_use' ? 'bg-blue-100 text-blue-800' : ''}
-                            ${item.status === 'maintenance' ? 'bg-yellow-100 text-yellow-800' : ''}
-                            ${item.status === 'retired' ? 'bg-gray-100 text-gray-800' : ''}
+                            ${item.status === 'borrowed' ? 'bg-blue-100 text-blue-800' : ''}
+                            ${item.status === 'issued' ? 'bg-orange-100 text-orange-800' : ''}
                           `}>
                             {item.status.replace('_', ' ')}
                           </span>
@@ -496,17 +523,22 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
               // Count how many units exist (dynamic count)
               existing_count: 1,
               available_count: item.status === 'available' ? 1 : 0,
-              in_use_count: item.status === 'in_use' ? 1 : 0,
+              borrowed_count: item.status === 'borrowed' ? 1 : 0,
+              issued_count: item.status === 'issued' ? 1 : 0,
               items: [item] // Keep track of all items
             };
           } else {
             // Increment count for each additional item with same name/brand
             acc[key].existing_count += 1;
+            // Increment status counts
             if (item.status === 'available') {
               acc[key].available_count += 1;
             }
-            if (item.status === 'in_use') {
-              acc[key].in_use_count += 1;
+            if (item.status === 'borrowed') {
+              acc[key].borrowed_count += 1;
+            }
+            if (item.status === 'issued') {
+              acc[key].issued_count += 1;
             }
             acc[key].items.push(item);
           }
@@ -723,8 +755,11 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
                     <div className="text-sm text-gray-500">{product.specifications}</div>
                     <div className="text-xs text-gray-400 mt-1">
                       Available: {product.available_count || 0}/{product.existing_count || 0}
-                      {product.in_use_count > 0 && (
-                        <span className="ml-2 text-orange-600">({product.in_use_count} in use)</span>
+                      {product.borrowed_count > 0 && (
+                        <span className="ml-2 text-blue-600">({product.borrowed_count} borrowed)</span>
+                      )}
+                      {product.issued_count > 0 && (
+                        <span className="ml-2 text-orange-600">({product.issued_count} issued)</span>
                       )}
                     </div>
                   </div>
@@ -815,7 +850,7 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
 
             {/* Receipt Upload */}
             <div className="mb-6">
-              <label className="text-sm text-gray-600 mb-2 block">Description</label>
+              <label className="text-sm text-gray-600 mb-2 block">Receipt</label>
               <div 
                 className={`h-36 w-full border-2 border-dashed rounded-lg ${
                   receipt ? 'border-blue-300' : 'border-gray-300'
@@ -1061,17 +1096,18 @@ const AddItemModal = ({ onClose, categories = [], onSuccess }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-xl w-[880px] max-w-[95vw] p-8">
-        <button 
-          onClick={onClose} 
-          className="absolute right-4 top-4 text-gray-500 hover:text-blue-600"
-          type="button"
-        >
-          <X className="h-6 w-6" />
-        </button>
-        <h3 className="text-xl font-bold text-blue-600 text-center">Add Equipment</h3>
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+        <div className="relative bg-white rounded-2xl shadow-xl w-[880px] max-w-[95vw] p-8">
+          <button 
+            onClick={onClose} 
+            className="absolute right-4 top-4 text-gray-500 hover:text-blue-600"
+            type="button"
+          >
+            <X className="h-6 w-6" />
+          </button>
+          <h3 className="text-xl font-bold text-blue-600 text-center">Add Equipment</h3>
 
         <form onSubmit={handleSubmit} className="mt-6">
           <div className="grid grid-cols-2 gap-8">
@@ -1357,7 +1393,26 @@ const AddItemModal = ({ onClose, categories = [], onSuccess }) => {
             </button>
           </div>
         </form>
+        </div>
       </div>
-    </div>
+
+      {/* Success Popup */}
+      {showSuccess && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center animate-fadeIn">
+          <div className="absolute inset-0 bg-black/50 transition-opacity duration-300" />
+          <div className="relative bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 transform transition-all duration-500 animate-scaleIn">
+            <div className="flex flex-col items-center">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4 animate-bounce">
+                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">Success!</h3>
+              <p className="text-gray-600 text-center">Equipment has been added successfully.</p>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
