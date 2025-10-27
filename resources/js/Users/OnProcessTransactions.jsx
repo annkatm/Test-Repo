@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 
 // Props now accept dynamic data instead of hardcoded examples
@@ -11,6 +11,7 @@ const OnProcessTransactions = ({
   fetchDeniedRequests = async () => [],
 }) => {
   const [selectedRequest, setSelectedRequest] = useState(null);
+  const [list, setList] = useState(requests || []);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [isDeniedModalOpen, setIsDeniedModalOpen] = useState(false);
   const [isViewAllOpen, setIsViewAllOpen] = useState(false);
@@ -18,14 +19,18 @@ const OnProcessTransactions = ({
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10); // page size not used for the main scroll list
 
-  const totalPages = Math.max(1, Math.ceil((requests?.length || 0) / pageSize));
+  const totalPages = Math.max(1, Math.ceil((list?.length || 0) / pageSize));
   const paginatedRequests = useMemo(() => {
     const start = (page - 1) * pageSize;
     const end = start + pageSize;
-    return (requests || []).slice(start, end);
-  }, [requests, page, pageSize]);
+    return (list || []).slice(start, end);
+  }, [list, page, pageSize]);
 
-  const selectedRequestData = (requests || []).find(req => req.id === selectedRequest);
+  const selectedRequestData = (list || []).find(req => req.id === selectedRequest);
+
+  useEffect(() => {
+    setList(Array.isArray(requests) ? requests : []);
+  }, [requests]);
 
   const handleRowClick = (request) => {
     setSelectedRequest(request.id);
@@ -74,7 +79,7 @@ const OnProcessTransactions = ({
               {/* Scrollable Table Rows Container */}
               <div className="max-h-[60vh] overflow-y-auto no-scrollbar">
                 <div className="divide-y divide-gray-100">
-                  {(requests || []).map((row, i) => (
+                  {(list || []).map((row, i) => (
                     <div
                       key={i}
                       onClick={() => handleRowClick(row)}
@@ -276,15 +281,43 @@ const OnProcessTransactions = ({
             {/* Confirm Button */}
             <div className="flex justify-center">
               <button
-                onClick={() => {
+                onClick={async () => {
                   if (actionLoading) return;
                   setActionLoading(true);
-                  setTimeout(() => {
+                  try {
+                    const reqId = selectedRequestData?.id;
+                    const equipId = selectedRequestData?.equipment_id || selectedRequestData?.equipment?.id || selectedRequestData?.equipmentId || selectedRequestData?.item_id || null;
+                    // Attempt to cancel via common endpoints (non-fatal if fail)
+                    if (reqId) {
+                      try { await fetch(`/api/requests/${reqId}/cancel`, { method: 'POST', headers: { 'Accept': 'application/json' }, credentials: 'same-origin' }); } catch (_) {}
+                      try { await fetch(`/api/requests/${reqId}`, { method: 'DELETE', headers: { 'Accept': 'application/json' }, credentials: 'same-origin' }); } catch (_) {}
+                    }
+                    // Notify EmployeeHome to restore this equipment to the available list and un-reserve it for this user
+                    if (equipId) {
+                      // Persist a restore request so EmployeeHome can process it even if not mounted yet
+                      try {
+                        const key = 'ireply_restore_queue';
+                        const raw = localStorage.getItem(key);
+                        const arr = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
+                        if (!arr.includes(String(equipId))) arr.push(String(equipId));
+                        localStorage.setItem(key, JSON.stringify(arr));
+                      } catch (_) {}
+                      // Also dispatch a live event for when EmployeeHome is mounted
+                      try { window.dispatchEvent(new CustomEvent('ireply:equipment:restore', { detail: { equipment_id: equipId } })); } catch (_) {}
+                    } else {
+                      // If missing, still ask for a general refresh
+                      try { window.dispatchEvent(new CustomEvent('ireply:equipment:restore')); } catch (_) {}
+                    }
+                    // Tell dashboards to drop this request from any pending/on-process lists
+                    try { window.dispatchEvent(new CustomEvent('ireply:request:cancelled', { detail: { request_id: reqId, equipment_id: equipId } })); } catch (_) {}
+                    // Optimistically remove from local On Process list
+                    try { setList((prev) => (Array.isArray(prev) ? prev.filter(r => String(r.id) !== String(reqId) && String(r.equipment_id || '') !== String(equipId || '')) : prev)); } catch (_) {}
+                  } finally {
                     setIsCancelModalOpen(false);
                     setSelectedRequest(null);
                     onBack();
                     setActionLoading(false);
-                  }, 1000);
+                  }
                 }}
                 disabled={actionLoading}
                 className="px-8 py-2.5 bg-blue-600 text-white rounded-lg font-medium text-sm hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"

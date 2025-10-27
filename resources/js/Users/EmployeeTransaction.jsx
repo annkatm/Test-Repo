@@ -46,6 +46,13 @@ const EmployeeTransaction = () => {
   const [isOverdueOpen, setIsOverdueOpen] = useState(false);
   const [borrowedItems, setBorrowedItems] = useState([]);
   const [overdueItems, setOverdueItems] = useState([]);
+  // Track locally-cancelled requests to immediately hide them from On Process
+  const [cancelledReqIds, setCancelledReqIds] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem('ireply_cancelled_req_ids') || '[]'); } catch (_) { return []; }
+  });
+  const [cancelledEquipIds, setCancelledEquipIds] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem('ireply_cancelled_equip_ids') || '[]'); } catch (_) { return []; }
+  });
 
   const showToast = (message, variant = 'info', ttl = 4500) => {
     const id = Date.now() + Math.random();
@@ -71,6 +78,67 @@ const EmployeeTransaction = () => {
       const saved = JSON.parse(localStorage.getItem('employee_activities') || '[]');
       if (Array.isArray(saved)) setActivities(saved);
     } catch (_) { }
+  }, []);
+
+  // Listen for request-cancelled events to update pending list immediately
+  useEffect(() => {
+    const onCancelled = (e) => {
+      const reqId = e?.detail?.request_id;
+      const equipId = e?.detail?.equipment_id;
+      if (!reqId && !equipId) return;
+      if (reqId) {
+        setCancelledReqIds((prev) => {
+          const next = Array.from(new Set([...(Array.isArray(prev) ? prev : []), String(reqId)]));
+          try { sessionStorage.setItem('ireply_cancelled_req_ids', JSON.stringify(next)); } catch (_) {}
+          return next;
+        });
+      }
+      if (equipId) {
+        setCancelledEquipIds((prev) => {
+          const next = Array.from(new Set([...(Array.isArray(prev) ? prev : []), String(equipId)]));
+          try { sessionStorage.setItem('ireply_cancelled_equip_ids', JSON.stringify(next)); } catch (_) {}
+          return next;
+        });
+      }
+      setPendingTransactions((prev) => (
+        Array.isArray(prev)
+          ? prev.filter((r) => {
+              const byReq = reqId ? String(r.id) !== String(reqId) : true;
+              const byEquip = equipId ? String(r.equipment_id || '') !== String(equipId) : true;
+              return byReq && byEquip;
+            })
+          : prev
+      ));
+      try { showToast('Request cancelled', 'warning'); } catch (_) {}
+      // Fallback: refresh pending from server shortly after
+      setTimeout(() => { try { fetchPendingTransactions(); } catch (_) {} }, 300);
+    };
+    window.addEventListener('ireply:request:cancelled', onCancelled);
+    const onCreated = (e) => {
+      const d = e?.detail || {};
+      if (!d || (!d.id && !d.equipment_id)) return;
+      setPendingTransactions((prev) => {
+        const list = Array.isArray(prev) ? prev : [];
+        const exists = list.some((r) => (d.id && String(r.id) === String(d.id)) || (d.equipment_id && String(r.equipment_id || '') === String(d.equipment_id)));
+        if (exists) return list;
+        return [{
+          id: d.id || Date.now(),
+          created_at: d.created_at || new Date().toISOString(),
+          expected_start_date: d.expected_start_date || null,
+          expected_end_date: d.expected_end_date || null,
+          equipment_id: d.equipment_id || null,
+          equipment_name: d.equipment_name || d.item || 'Item',
+          item: d.equipment_name || d.item || 'Item',
+          status: d.status || 'Pending',
+        }, ...list];
+      });
+      try { showToast('Request created', 'success'); } catch (_) {}
+    };
+    window.addEventListener('ireply:request:created', onCreated);
+    return () => {
+      window.removeEventListener('ireply:request:cancelled', onCancelled);
+      window.removeEventListener('ireply:request:created', onCreated);
+    };
   }, []);
 
   const logActivity = (message, variant = 'info') => {
@@ -352,14 +420,45 @@ const EmployeeTransaction = () => {
 
   const fetchPendingTransactions = async () => {
     try {
-      const response = await fetch('/api/requests?status=pending');
-      const data = await response.json();
+      // Try direct pending endpoint first
+      let list = [];
+      try {
+        const response = await fetch('/api/requests?status=pending');
+        const data = await response.json();
+        if (data && Array.isArray(data)) list = data;
+        else if (data && Array.isArray(data.data)) list = data.data;
+      } catch (_) {}
 
-      if (data.success && Array.isArray(data.data)) {
-        setPendingTransactions(data.data);
-      } else {
-        setPendingTransactions([]);
+      // Fallback: fetch all requests and filter to pending-like statuses
+      if (!Array.isArray(list) || list.length === 0) {
+        try {
+          const res2 = await fetch('/api/requests');
+          const j2 = await res2.json();
+          const all = Array.isArray(j2) ? j2 : (Array.isArray(j2?.data) ? j2.data : []);
+          const pendingLike = (all || []).filter((r) => {
+            const s = String(r?.status || '').toLowerCase();
+            // treat these as "on process"
+            return /(pending|processing|in\s*process|in_process|awaiting|waiting|review|on\s*process|requested|submitted|open)/.test(s);
+          });
+          list = pendingLike;
+        } catch (_) {}
       }
+
+      // Map minimal fields expected by UI
+      const mapped = (Array.isArray(list) ? list : []).map((t, index) => ({
+        id: t?.id || index + 1,
+        created_at: t?.created_at || t?.date || null,
+        expected_start_date: t?.expected_start_date || t?.start_date || t?.requested_start || t?.start || null,
+        expected_end_date: t?.expected_end_date || t?.return_date || t?.due_date || t?.expected_return_date || t?.end || null,
+        item: t?.equipment_name || t?.item || t?.name || '-',
+        equipment_name: t?.equipment_name || t?.item || t?.name || '-',
+        status: t?.status || 'Pending',
+        equipment_id: t?.equipment_id || t?.equipment?.id || t?.item_id || null,
+        equipment: t?.equipment || t?.equipment_details || t?.equipment_info || null,
+        type: t?.type || t?.category || t?.category_name || t?.equipment_type || t?.item_type || (t?.equipment && (t?.equipment.type || t?.equipment.category || t?.equipment.category_name)) || null,
+      }));
+
+      setPendingTransactions(mapped);
     } catch (error) {
       console.error('Failed to fetch pending requests:', error);
       setPendingTransactions([]);
@@ -706,11 +805,17 @@ const EmployeeTransaction = () => {
 
   // Show full On Process list when requested
   if (showPendings) {
-    const requestsData = (pendingTransactions || []).map((t, index) => {
+    const visiblePending = (pendingTransactions || []).filter((t) => {
+      const idOk = cancelledReqIds.includes(String(t?.id)) ? false : true;
+      const eqOk = cancelledEquipIds.includes(String(t?.equipment_id || '')) ? false : true;
+      return idOk && eqOk;
+    });
+    const requestsData = visiblePending.map((t, index) => {
       const dsrc = t?.created_at || t?.expected_start_date || null;
       const date = dsrc ? new Date(dsrc).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '';
       return {
         id: t?.id || index + 1,
+        equipment_id: t?.equipment_id || t?.equipment?.id || null,
         date: date || '-',
         item: t?.equipment_name || t?.item || '-',
         status: t?.status || 'Pending',
@@ -775,7 +880,8 @@ const EmployeeTransaction = () => {
           </div>
 
           <div className="divide-y divide-gray-100">
-            {pendingTransactions.length > 0 ? [...pendingTransactions]
+            {(pendingTransactions.filter((t) => !cancelledReqIds.includes(String(t?.id)) && !cancelledEquipIds.includes(String(t?.equipment_id || ''))).length > 0) ? [...pendingTransactions]
+              .filter((t) => !cancelledReqIds.includes(String(t?.id)) && !cancelledEquipIds.includes(String(t?.equipment_id || '')))
               .sort((a, b) => {
                 const aDate = new Date(a.created_at || a.expected_start_date || 0).getTime();
                 const bDate = new Date(b.created_at || b.expected_start_date || 0).getTime();
@@ -832,8 +938,9 @@ const EmployeeTransaction = () => {
                 </div>
               </div>
             )) : (
-              <>
-              </>
+              <div className="px-6 py-6 text-sm text-gray-500">
+                No requests are currently in process.
+              </div>
             )}
           </div>
         </div>

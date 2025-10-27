@@ -220,6 +220,44 @@ const EmployeeHome = () => {
     return () => window.removeEventListener('ireply:equipment:restore', handler);
   }, []);
 
+  // On mount, process any queued restore requests from other views (e.g., OnProcessTransactions cancel)
+  useEffect(() => {
+    (async () => {
+      try {
+        const key = 'ireply_restore_queue';
+        const raw = localStorage.getItem(key);
+        const arr = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
+        if (!arr || arr.length === 0) return;
+        // Clear queue first to avoid double-processing if anything throws below
+        try { localStorage.setItem(key, JSON.stringify([])); } catch (_) {}
+
+        for (const id of arr) {
+          try { removeReservedId(id); } catch (_) {}
+          try {
+            const res = await fetch(`/api/equipment/${id}`);
+            const data = await res.json();
+            const item = data?.data || data;
+            if (item && (!item.status || item.status === 'available')) {
+              setEquipment((prev) => {
+                if (Array.isArray(prev) && prev.some((x) => String(x.id) === String(item.id))) return prev;
+                return [item, ...(Array.isArray(prev) ? prev : [])];
+              });
+            }
+          } catch (_e) {
+            // If single fetch fails, refresh available list once
+            try {
+              const res = await fetch('/api/equipment?per_page=100&status=available');
+              const data = await res.json();
+              let equipmentData = [];
+              if (Array.isArray(data)) equipmentData = data; else if (data?.data?.data) equipmentData = data.data.data; else if (Array.isArray(data?.data)) equipmentData = data.data;
+              setEquipment(equipmentData || []);
+            } catch (_) {}
+          }
+        }
+      } catch (_) { /* ignore */ }
+    })();
+  }, []);
+
   // Group equipment units into products (same brand/name/specs)
   const getGroupedEquipment = () => {
     const groups = {};
@@ -609,6 +647,18 @@ const EmployeeHome = () => {
 
           if (ok) {
             logActivity(`Request submitted: ${group.name} (${unit.id})`, 'success');
+            try {
+              const newReq = {
+                id: data?.data?.id || data?.id || null,
+                equipment_id: unit.id,
+                equipment_name: group.name || unit.name || unit.brand || 'Item',
+                created_at: new Date().toISOString(),
+                expected_start_date: startDate,
+                expected_end_date: returnDate,
+                status: 'Pending',
+              };
+              window.dispatchEvent(new CustomEvent('ireply:request:created', { detail: newReq }));
+            } catch (_) {}
           } else {
             const msg = data?.message || data?.error || `HTTP ${response.status}`;
             logActivity(`Request failed: ${group.name} (${unit.id}) - ${msg}`, 'warning');
