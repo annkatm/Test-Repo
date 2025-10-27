@@ -113,7 +113,7 @@ const EmployeePage = () => {
   };
 
   const validatePhone = (phone) => {
-    const phoneRegex = /^[\+]?[1-9][\d]{0,15}$/;
+    const phoneRegex = /^[0-9]{11}$/;
     return phoneRegex.test(phone.replace(/[\s\-\(\)]/g, ''));
   };
 
