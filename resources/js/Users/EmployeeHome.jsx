@@ -642,7 +642,14 @@ const EmployeeHome = () => {
             data = { success: false, message: 'Invalid JSON response', parseErr: String(parseErr) };
           }
           console.log('Response status:', response.status, 'Response data:', data);
-          const ok = response.ok && (data?.success === true || data?.status === 'success');
+          const ok = (
+            response.ok && (
+              data?.success === true ||
+              data?.status === 'success' ||
+              typeof (data?.data?.id) !== 'undefined' ||
+              typeof (data?.id) !== 'undefined'
+            )
+          );
           results.push({ success: ok, status: response.status, data, unitId: unit.id, unit, groupKey: group.groupKey });
 
           if (ok) {
@@ -658,6 +665,14 @@ const EmployeeHome = () => {
                 status: 'Pending',
               };
               window.dispatchEvent(new CustomEvent('ireply:request:created', { detail: newReq }));
+              // Persist to a queue so other views can process later if not mounted
+              try {
+                const key = 'ireply_created_queue';
+                const raw = localStorage.getItem(key);
+                const arr = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
+                arr.push(newReq);
+                localStorage.setItem(key, JSON.stringify(arr));
+              } catch (_) {}
             } catch (_) {}
           } else {
             const msg = data?.message || data?.error || `HTTP ${response.status}`;

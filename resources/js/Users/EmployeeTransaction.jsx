@@ -80,6 +80,29 @@ const EmployeeTransaction = () => {
     } catch (_) { }
   }, []);
 
+  // On mount, process any created-requests queued by EmployeeHome (in case this view wasn't mounted during submission)
+  useEffect(() => {
+    try {
+      const key = 'ireply_created_queue';
+      const raw = localStorage.getItem(key);
+      const arr = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
+      if (!arr || arr.length === 0) return;
+      // Clear queue first to avoid duplicates
+      try { localStorage.setItem(key, JSON.stringify([])); } catch (_) {}
+      setPendingTransactions((prev) => {
+        const list = Array.isArray(prev) ? prev : [];
+        const next = [...arr, ...list].filter((item, idx, self) => {
+          // de-dupe by id or equipment_id
+          const id = String(item?.id || '');
+          const eq = String(item?.equipment_id || '');
+          const firstIdx = self.findIndex(x => String(x?.id || '') === id || String(x?.equipment_id || '') === eq);
+          return firstIdx === idx;
+        });
+        return next;
+      });
+    } catch (_) { /* ignore */ }
+  }, []);
+
   // Listen for request-cancelled events to update pending list immediately
   useEffect(() => {
     const onCancelled = (e) => {
@@ -117,6 +140,21 @@ const EmployeeTransaction = () => {
     const onCreated = (e) => {
       const d = e?.detail || {};
       if (!d || (!d.id && !d.equipment_id)) return;
+      // Un-ignore this request/equipment if it was previously cancelled
+      if (d.id) {
+        setCancelledReqIds((prev) => {
+          const next = (Array.isArray(prev) ? prev : []).filter((x) => String(x) !== String(d.id));
+          try { sessionStorage.setItem('ireply_cancelled_req_ids', JSON.stringify(next)); } catch (_) {}
+          return next;
+        });
+      }
+      if (d.equipment_id) {
+        setCancelledEquipIds((prev) => {
+          const next = (Array.isArray(prev) ? prev : []).filter((x) => String(x) !== String(d.equipment_id));
+          try { sessionStorage.setItem('ireply_cancelled_equip_ids', JSON.stringify(next)); } catch (_) {}
+          return next;
+        });
+      }
       setPendingTransactions((prev) => {
         const list = Array.isArray(prev) ? prev : [];
         const exists = list.some((r) => (d.id && String(r.id) === String(d.id)) || (d.equipment_id && String(r.equipment_id || '') === String(d.equipment_id)));
