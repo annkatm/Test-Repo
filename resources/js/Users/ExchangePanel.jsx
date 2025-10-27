@@ -14,17 +14,10 @@ const ExchangePanel = ({
   const equipmentBase = transaction?.equipment || {};
   const equipment = { ...equipmentBase, ...(fetchedEquipment || {}) };
 
-  // Fetch missing equipment details (image, description, price) if we only have an id
+  // Always fetch equipment details (image, description, price) when we have an id
   useEffect(() => {
     const id = transaction?.equipment_id || transaction?.equipment?.id;
     if (!id) return;
-    // If we already have image/description/price, skip fetch
-    const hasKeyDetails = Boolean(
-      equipmentBase?.image || equipmentBase?.image_url || equipmentBase?.photo_url ||
-      equipmentBase?.description || equipmentBase?.details ||
-      equipmentBase?.price || equipmentBase?.cost
-    );
-    if (hasKeyDetails) return;
     let cancelled = false;
     (async () => {
       try {
@@ -71,6 +64,8 @@ const ExchangePanel = ({
     ? new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(Number(priceRaw))
     : null;
   const imageUrl = equipment?.image_url || equipment?.image || equipment?.photo_url || transaction?.image || transaction?.image_url || null;
+  const displayTitle = itemBrandOrName || 'Item';
+  const displaySub = null;
   const baseDetails = {
     Brand: transaction?.brand || equipment?.brand,
     Model: transaction?.model || equipment?.model,
@@ -125,26 +120,20 @@ const ExchangePanel = ({
         </button>
       </div>
 
-      {/* Item summary */}
-      <div className="mb-4">
-        <div className="text-sm text-gray-500">Item</div>
-        <div className="text-base font-semibold text-gray-900">{categoryLabel || 'Item'}</div>
-      </div>
+      {/* Removed Item summary per request */}
 
-      {/* Brand card with image */}
+      {/* Item card with image */}
       <div className="flex items-start gap-3 mb-4">
         <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
           {imageUrl ? (
-            <img src={imageUrl} alt={itemBrandOrName} className="w-full h-full object-cover" />
+            <img src={imageUrl} alt={displayTitle} className="w-full h-full object-cover" />
           ) : (
             <span role="img" aria-label="item" className="text-2xl">💻</span>
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="font-semibold text-gray-800">{itemBrandOrName}</div>
-          {categoryLabel ? (
-            <div className="text-xs text-gray-500">{categoryLabel}</div>
-          ) : null}
+          <div className="font-semibold text-gray-800">{displayTitle}</div>
+          {/* Subtitle removed per request */}
         </div>
       </div>
 
@@ -181,9 +170,7 @@ const ExchangePanel = ({
               </div>
             ))}
           </div>
-        ) : (
-          <div className="text-sm text-gray-500">No additional details available.</div>
-        )}
+        ) : null}
       </div>
 
       {/* Removed duplicate items list to avoid repeating Item/Lenovo */}

@@ -247,7 +247,6 @@ const EmployeeTransaction = () => {
       const res = await fetch('/api/requests?status=denied');
       const data = await res.json();
 
-      console.log('Denied requests response:', data); // Debug log
 
       if (data.success && Array.isArray(data.data)) {
         const mapped = data.data.map((r, idx) => ({
