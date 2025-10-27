@@ -421,6 +421,8 @@ const EmployeeTransaction = () => {
         console.log('[EmployeeTransaction] Approved fetch result count:', finalList.length, finalList.slice(0, 3));
       } catch (_) {}
       setTransactions(finalList);
+      // Ensure the dashboard 'Item Currently Borrowed' reflects approved items count
+      try { setTransactionStats((prev) => ({ ...prev, borrowed: Array.isArray(finalList) ? finalList.length : 0 })); } catch (_) {}
     } catch (error) {
       console.error('Failed to fetch approved transactions:', error);
       setTransactions([]);
@@ -510,6 +512,8 @@ const EmployeeTransaction = () => {
         if (data.success && Array.isArray(data.data)) {
           if (transactions.length === 0) {
             setTransactions(data.data);
+            // Sync borrowed count to approved/current-holder items length when using fallback
+            try { setTransactionStats((prev) => ({ ...prev, borrowed: Array.isArray(data.data) ? data.data.length : 0 })); } catch (_) {}
           }
         }
       } catch (error) {
