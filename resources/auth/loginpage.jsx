@@ -85,8 +85,8 @@ const LoginPage = ({ onAuthSuccess }) => {
         const sessionCookie = document.cookie.split(';').find(cookie => cookie.trim().startsWith('laravel-session='));
         console.log('Session cookie after login:', sessionCookie || 'NOT FOUND');
         
-        // Redirect to dashboard
-        window.location.href = '/dashboard';
+        // Redirect to the actual redirected URL instead of hardcoding /dashboard
+        window.location.href = response.url || '/dashboard';
         return;
       }
       

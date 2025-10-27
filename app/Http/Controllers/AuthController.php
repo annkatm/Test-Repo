@@ -217,6 +217,9 @@ class AuthController extends Controller
             $role = $user->role;
             $userPerm = $user->userPermissions;
             
+            // Determine redirect route based on role
+            $redirectRoute = $this->getRedirectRouteForRole($role);
+            
             return response()->json([
                 'success' => true,
                 'message' => 'Login successful',
@@ -234,7 +237,7 @@ class AuthController extends Controller
                     'is_active' => $user->is_active,
                     'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
                 ],
-                'redirect' => route('dashboard')
+                'redirect' => route($redirectRoute)
             ]);
         }
         

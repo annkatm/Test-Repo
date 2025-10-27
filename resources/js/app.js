@@ -146,8 +146,23 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Define onAuthSuccess callback
             const handleAuthSuccess = () => {
-                console.log('Authentication successful, redirecting to dashboard...');
-                window.location.href = '/dashboard';
+                console.log('Authentication successful, checking user role for redirect...');
+                // Fetch user data to determine appropriate redirect
+                fetch('/login-data')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success && data.redirect) {
+                            window.location.href = data.redirect;
+                        } else {
+                            // Fallback to dashboard
+                            window.location.href = '/dashboard';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching login data:', error);
+                        // Fallback to dashboard
+                        window.location.href = '/dashboard';
+                    });
             };
             
             root.render(React.createElement(LoginPage, { onAuthSuccess: handleAuthSuccess }));
