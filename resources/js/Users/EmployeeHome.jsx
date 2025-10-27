@@ -12,6 +12,25 @@ const EmployeeHome = () => {
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [returnDate, setReturnDate] = useState(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
 
+  // Per-user localStorage helpers
+  const getUserTag = () => {
+    try {
+      const raw = localStorage.getItem('user');
+      if (raw) { const u = JSON.parse(raw); return u?.id || u?.email || 'guest'; }
+    } catch (_) {}
+    return 'guest';
+  };
+  const userKey = (base) => `${base}:${getUserTag()}`;
+  const migrateKeyIfNeeded = (base) => {
+    try {
+      const scoped = userKey(base);
+      const cur = localStorage.getItem(scoped);
+      if (cur) return; // already scoped
+      const legacy = localStorage.getItem(base);
+      if (legacy != null) localStorage.setItem(scoped, legacy);
+    } catch (_) {}
+  };
+
   const isLaptopCategory = (categoryId) => {
     const cat = categories.find(c => String(c.id) === String(categoryId));
     return (cat?.name || '').toLowerCase() === 'laptop';
@@ -55,17 +74,19 @@ const EmployeeHome = () => {
 
   const logActivity = (message, variant = 'info') => {
     try {
-      const prev = JSON.parse(localStorage.getItem('employee_activities') || '[]');
+      migrateKeyIfNeeded('employee_activities');
+      const prev = JSON.parse(localStorage.getItem(userKey('employee_activities')) || '[]');
       const entry = { id: Date.now(), message, variant, time: new Date().toISOString() };
       const next = [entry, ...(Array.isArray(prev) ? prev : [])].slice(0, 50);
-      localStorage.setItem('employee_activities', JSON.stringify(next));
+      localStorage.setItem(userKey('employee_activities'), JSON.stringify(next));
     } catch (_) {}
   };
 
   // Keep a per-user local list of reserved equipment IDs so they stay hidden after request submission
   const getReservedIds = () => {
     try {
-      const raw = localStorage.getItem('employee_reserved_equipment_ids') || '[]';
+      migrateKeyIfNeeded('employee_reserved_equipment_ids');
+      const raw = localStorage.getItem(userKey('employee_reserved_equipment_ids')) || '[]';
       const arr = JSON.parse(raw);
       return Array.isArray(arr) ? new Set(arr.map(String)) : new Set();
     } catch (_) { return new Set(); }
@@ -74,14 +95,14 @@ const EmployeeHome = () => {
     try {
       const cur = getReservedIds();
       for (const id of ids) cur.add(String(id));
-      localStorage.setItem('employee_reserved_equipment_ids', JSON.stringify(Array.from(cur)));
+      localStorage.setItem(userKey('employee_reserved_equipment_ids'), JSON.stringify(Array.from(cur)));
     } catch (_) {}
   };
   const removeReservedId = (id) => {
     try {
       const cur = getReservedIds();
       cur.delete(String(id));
-      localStorage.setItem('employee_reserved_equipment_ids', JSON.stringify(Array.from(cur)));
+      localStorage.setItem(userKey('employee_reserved_equipment_ids'), JSON.stringify(Array.from(cur)));
     } catch (_) {}
   };
   const filterOutReserved = (list) => {
