@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Mail;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\AuthController;
@@ -17,6 +18,28 @@ Route::get('/login-data', [AuthController::class, 'getLoginData'])->name('login.
 Route::get('/csrf-token', function () {
     return response()->json(['csrf_token' => csrf_token()]);
 })->name('csrf.token');
+
+// Password reset routes - API routes are in api.php to avoid CSRF
+Route::get('/reset-password', function () {
+    return view('reset-password');
+})->name('password.reset');
+
+// Test email route
+Route::get('/test-email', function () {
+    try {
+        Mail::send('emails.password-reset', [
+            'url' => 'http://localhost/reset-password?token=test&email=test@test.com',
+            'token' => 'test123',
+            'email' => 'test@test.com'
+        ], function ($m) {
+            $m->to('bhozkalbert8@gmail.com')
+              ->subject('Test Password Reset');
+        });
+        return 'Email sent successfully! Check your inbox at bhozkalbert8@gmail.com';
+    } catch (\Exception $e) {
+        return 'Error: ' . $e->getMessage();
+    }
+});
 
 // Protected routes (require authentication)
 Route::middleware(['auth'])->group(function () {

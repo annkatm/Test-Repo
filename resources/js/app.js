@@ -16,6 +16,7 @@ import ControlPanel from './ControlPanel.jsx';
 import Reports from './Reports.jsx';
 import Archive from './Archive.jsx';
 import LoginPage from './auth/loginpage.jsx';
+import ResetPassword from './auth/ResetPassword.jsx';
 import ToastContainer from './components/ToastContainer.jsx';
 import { replaceAlert } from './utils/toastUtils.js';
 
@@ -133,6 +134,21 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('Toast system initialized');
     } catch (error) {
         console.error('Failed to initialize toast system:', error);
+    }
+    
+    // Check for reset-password-root (for reset password page)
+    const resetPasswordContainer = document.getElementById('reset-password-root');
+    console.log('reset-password-root element found:', resetPasswordContainer);
+    
+    if (resetPasswordContainer) {
+        try {
+            console.log('Initializing ResetPassword component');
+            const root = createRoot(resetPasswordContainer);
+            root.render(React.createElement(ResetPassword));
+            console.log('ResetPassword component rendered successfully');
+        } catch (error) {
+            console.error('Error rendering ResetPassword component:', error);
+        }
     }
     
     // Check for login-root (for login page)

@@ -36,14 +36,12 @@ const PasswordInput = ({ value, onChange, onKeyPress, disabled, showPassword, on
 const ForgotPasswordModal = ({ 
   isOpen, 
   onClose, 
-  step, 
-  username, 
-  message, 
-  onUsernameChange, 
-  onMessageChange, 
-  onGoToStep1, 
-  onGoToStep2, 
-  onSendMessage 
+  email,
+  onEmailChange,
+  onSendReset,
+  isLoading,
+  error,
+  success
 }) => {
   if (!isOpen) return null;
 
@@ -56,60 +54,70 @@ const ForgotPasswordModal = ({
         }
       }}
     >
-      <div className="bg-white rounded-3xl p-10 w-[90%] max-w-[550px] shadow-2xl">
-        {step === 1 ? (
-          <div>
-            <h2 className="text-center text-gray-800 mb-8 font-semibold text-3xl">Forgot Password</h2>
-            <label htmlFor="username" className="block text-gray-800 font-semibold mb-2.5 text-base text-left">
-              Username
-            </label>
-            <input
-              type="text"
-              id="username"
-              placeholder="Enter your username"
-              value={username}
-              onChange={onUsernameChange}
-              className="w-full p-4 rounded-xl border border-gray-300 text-base mb-5 box-border font-sans"
-            />
+      <div className="bg-white/10 backdrop-blur-sm rounded-3xl p-10 w-[90%] max-w-[550px] shadow-2xl border border-white/20">
+        {!success ? (
+          <>
+            <h2 className="text-center text-white mb-4 font-bold text-3xl">Forgot Password</h2>
+            <p className="text-center text-white/80 mb-6 text-sm">
+              Enter your email address and we'll send you a link to reset your password.
+            </p>
+            
+            <form onSubmit={onSendReset}>
+              <input
+                type="email"
+                id="reset-email"
+                placeholder="Enter your email address"
+                value={email}
+                onChange={onEmailChange}
+                className="w-full h-14 rounded-full px-5 border-none bg-[#f1f6ff] text-base mb-5 shadow-md outline-none focus:shadow-lg disabled:opacity-60"
+                disabled={isLoading}
+                required
+              />
+              
+              {error && (
+                <div className="bg-red-500/20 border border-red-400/30 rounded-full p-3 mb-5 text-red-200 text-sm backdrop-blur-sm">
+                  {error}
+                </div>
+              )}
+
             <button 
-              className="w-full py-3 px-5 rounded-xl font-bold text-[15px] border-none cursor-pointer transition-all bg-[#5b4cff] text-white mb-4 hover:bg-[#4a3dd6]"
-              onClick={onGoToStep2}
+                type="submit"
+                className="w-full h-14 rounded-full font-bold bg-[#1E437B] border-none text-base tracking-wider shadow-lg text-white cursor-pointer transition-colors hover:bg-[#15325d] disabled:opacity-60 disabled:cursor-not-allowed mb-4"
+                disabled={isLoading}
             >
-              Send Inquiry
+                {isLoading ? 'SENDING...' : 'SEND RESET LINK'}
             </button>
+            </form>
+            
             <div className="text-center mt-4">
-              <a onClick={onGoToStep2} className="text-[#5b4cff] no-underline text-[15px] cursor-pointer hover:underline">
-                Other Concern?
-              </a>
+              <button onClick={onClose} className="text-white/80 no-underline text-sm cursor-pointer hover:text-white hover:underline">
+                Cancel
+              </button>
             </div>
-          </div>
+          </>
         ) : (
           <div>
-            <h2 className="text-center text-gray-800 mb-8 font-semibold text-3xl">Forgot Password</h2>
-            <label htmlFor="message" className="block text-gray-800 font-semibold mb-2.5 text-base text-left">
-              Your Message
-            </label>
-            <textarea
-              id="message"
-              placeholder="Write your concern here..."
-              value={message}
-              onChange={onMessageChange}
-              className="w-full p-4 rounded-xl border border-gray-300 text-base mb-5 box-border font-sans min-h-[120px] resize-y"
-            />
-            <div className="flex gap-4 mt-5">
-              <button 
-                className="bg-white text-gray-800 w-auto py-3 px-6 rounded-xl font-bold text-[15px] border border-gray-300 cursor-pointer transition-all hover:bg-gray-50 hover:border-gray-400"
-                onClick={onGoToStep1}
-              >
-                Back
-              </button>
-              <button
-                className="flex-1 py-3 px-5 rounded-xl font-bold text-[15px] border-none cursor-pointer transition-all bg-[#5b4cff] text-white hover:bg-[#4a3dd6]"
-                onClick={onSendMessage}
-              >
-                Send Message
-              </button>
+            <div className="text-center mb-6">
+              <div className="mx-auto w-16 h-16 bg-green-500/20 backdrop-blur-sm rounded-full flex items-center justify-center mb-4 border border-green-400/30">
+                <svg className="w-10 h-10 text-green-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h2 className="text-center text-white mb-4 font-bold text-2xl">
+                Check Your Email
+              </h2>
+              <p className="text-white/80 text-sm mb-2">
+                We've sent a password reset link to
+              </p>
+              <p className="text-white font-semibold mb-6">{email}</p>
             </div>
+            
+            <button
+              onClick={onClose}
+              className="w-full h-14 rounded-full font-bold bg-[#1E437B] border-none text-base tracking-wider shadow-lg text-white cursor-pointer transition-colors hover:bg-[#15325d]"
+            >
+              CLOSE
+            </button>
           </div>
         )}
       </div>
@@ -124,9 +132,10 @@ const LoginPage = ({ onAuthSuccess }) => {
   const [errors, setErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
   const [showModal, setShowModal] = useState(false);
-  const [modalStep, setModalStep] = useState(1);
-  const [forgotUsername, setForgotUsername] = useState('');
-  const [forgotMessage, setForgotMessage] = useState('');
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [modalLoading, setModalLoading] = useState(false);
+  const [modalError, setModalError] = useState('');
+  const [resetSuccess, setResetSuccess] = useState(false);
 
   const validateForm = () => {
     const newErrors = {};
@@ -254,32 +263,73 @@ const LoginPage = ({ onAuthSuccess }) => {
   const openForgotPasswordModal = (e) => {
     e.preventDefault();
     setShowModal(true);
-    setModalStep(1);
+    setResetSuccess(false);
+    setModalError('');
+    setForgotEmail('');
   };
 
   const closeForgotPasswordModal = () => {
     setShowModal(false);
-    setForgotUsername('');
-    setForgotMessage('');
-    setModalStep(1);
+    setForgotEmail('');
+    setResetSuccess(false);
+    setModalError('');
   };
 
-  const goToStep2 = () => {
-    setModalStep(2);
-  };
-
-  const goToStep1 = () => {
-    setModalStep(1);
-  };
-
-  const sendForgotPasswordMessage = () => {
-    if (!forgotMessage.trim()) {
-      alert('Please write your concern.');
+  const handleForgotPassword = async (e) => {
+    if (e) e.preventDefault();
+    
+    if (!forgotEmail.trim()) {
+      setModalError('Email is required');
       return;
     }
-    // Here you can add API call to send the message
-    alert('Your message has been sent! We will contact you soon.');
-    closeForgotPasswordModal();
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(forgotEmail.trim())) {
+      setModalError('Please enter a valid email address');
+      return;
+    }
+
+    setModalLoading(true);
+    setModalError('');
+
+    try {
+      let csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || null;
+      
+      if (!csrfToken) {
+        const tokenResponse = await fetch('/csrf-token', {
+          credentials: 'same-origin'
+        });
+        if (tokenResponse.ok) {
+          const tokenData = await tokenResponse.json();
+          csrfToken = tokenData.csrf_token;
+        }
+      }
+
+      const response = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({ email: forgotEmail.trim() }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setResetSuccess(true);
+      } else {
+        if (response.status === 429) {
+          setModalError('Too many password reset attempts. Please wait before trying again.');
+        } else {
+          setModalError(data.message || 'Failed to send reset link');
+        }
+      }
+    } catch (error) {
+      console.error('Forgot password error:', error);
+      setModalError('Network error. Please try again.');
+    } finally {
+      setModalLoading(false);
+    }
   };
 
   return (
@@ -343,14 +393,12 @@ const LoginPage = ({ onAuthSuccess }) => {
       <ForgotPasswordModal
         isOpen={showModal}
         onClose={closeForgotPasswordModal}
-        step={modalStep}
-        username={forgotUsername}
-        message={forgotMessage}
-        onUsernameChange={(e) => setForgotUsername(e.target.value)}
-        onMessageChange={(e) => setForgotMessage(e.target.value)}
-        onGoToStep1={goToStep1}
-        onGoToStep2={goToStep2}
-        onSendMessage={sendForgotPasswordMessage}
+        email={forgotEmail}
+        onEmailChange={(e) => setForgotEmail(e.target.value)}
+        onSendReset={handleForgotPassword}
+        isLoading={modalLoading}
+        error={modalError}
+        success={resetSuccess}
       />
     </>
   );

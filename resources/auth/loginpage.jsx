@@ -8,9 +8,10 @@ const LoginPage = ({ onAuthSuccess }) => {
   const [errors, setErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
   const [showModal, setShowModal] = useState(false);
-  const [modalStep, setModalStep] = useState(1);
-  const [forgotUsername, setForgotUsername] = useState('');
-  const [forgotMessage, setForgotMessage] = useState('');
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [resetSuccess, setResetSuccess] = useState(false);
+  const [modalLoading, setModalLoading] = useState(false);
+  const [modalError, setModalError] = useState('');
 
   const validateForm = () => {
     const newErrors = {};
@@ -40,11 +41,9 @@ const LoginPage = ({ onAuthSuccess }) => {
     setErrors({});
     
     try {
-      // Get CSRF token from meta tag or fetch from server
       let csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || null;
       
       if (!csrfToken) {
-        // Fetch CSRF token from server
         const tokenResponse = await fetch('/csrf-token', {
           credentials: 'same-origin'
         });
@@ -60,7 +59,6 @@ const LoginPage = ({ onAuthSuccess }) => {
         throw new Error('CSRF token is required');
       }
 
-      // Create form data instead of JSON
       const formData = new FormData();
       formData.append('email', email.trim());
       formData.append('password', password);
@@ -71,41 +69,20 @@ const LoginPage = ({ onAuthSuccess }) => {
         headers: {
           'X-CSRF-TOKEN': csrfToken,
         },
-        credentials: 'same-origin', // Include cookies for session authentication
+        credentials: 'same-origin',
         body: formData,
       });
 
-      // Check if the response is a redirect (status 302)
       if (response.redirected || response.status === 302) {
-        // Login was successful and we were redirected
         console.log('Login successful - redirected to dashboard');
-        console.log('Cookies after login:', document.cookie);
-        
-        // Check if session cookie is now available
-        const sessionCookie = document.cookie.split(';').find(cookie => cookie.trim().startsWith('laravel-session='));
-        console.log('Session cookie after login:', sessionCookie || 'NOT FOUND');
-        
-        // Redirect to the actual redirected URL instead of hardcoding /dashboard
         window.location.href = response.url || '/dashboard';
         return;
       }
       
-      // If it's a JSON response, handle it normally
       const data = await response.json();
-      
-      // Debug: Log the response
-      console.log('Login response:', data);
-      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-      console.log('Cookies after login:', document.cookie);
 
       if (data.success) {
-        // Store user data in localStorage for frontend use
         localStorage.setItem('user', JSON.stringify(data.user));
-        
-        // Debug: Check if session cookie is now available
-        const sessionCookie = document.cookie.split(';').find(cookie => cookie.trim().startsWith('laravel-session='));
-        console.log('Session cookie after login:', sessionCookie || 'NOT FOUND');
-        
         onAuthSuccess();
       } else {
         setErrors({ general: data.message || 'Login failed. Please try again.' });
@@ -131,32 +108,70 @@ const LoginPage = ({ onAuthSuccess }) => {
   const openForgotPasswordModal = (e) => {
     e.preventDefault();
     setShowModal(true);
-    setModalStep(1);
+    setResetSuccess(false);
+    setModalError('');
+    setForgotEmail('');
   };
 
   const closeForgotPasswordModal = () => {
     setShowModal(false);
-    setForgotUsername('');
-    setForgotMessage('');
-    setModalStep(1);
+    setForgotEmail('');
+    setResetSuccess(false);
+    setModalError('');
   };
 
-  const goToStep2 = () => {
-    setModalStep(2);
-  };
-
-  const goToStep1 = () => {
-    setModalStep(1);
-  };
-
-  const sendForgotPasswordMessage = () => {
-    if (!forgotMessage.trim()) {
-      alert('Please write your concern.');
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    
+    if (!forgotEmail.trim()) {
+      setModalError('Email is required');
       return;
     }
-    // Here you can add API call to send the message
-    alert('Your message has been sent! We will contact you soon.');
-    closeForgotPasswordModal();
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(forgotEmail.trim())) {
+      setModalError('Please enter a valid email address');
+      return;
+    }
+
+    setModalLoading(true);
+    setModalError('');
+
+    try {
+      let csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || null;
+      
+      if (!csrfToken) {
+        const tokenResponse = await fetch('/csrf-token', {
+          credentials: 'same-origin'
+        });
+        if (tokenResponse.ok) {
+          const tokenData = await tokenResponse.json();
+          csrfToken = tokenData.csrf_token;
+        }
+      }
+
+      const response = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': csrfToken,
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({ email: forgotEmail.trim() }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setResetSuccess(true);
+      } else {
+        setModalError(data.message || 'Failed to send reset link');
+      }
+    } catch (error) {
+      console.error('Forgot password error:', error);
+      setModalError('Network error. Please try again.');
+    } finally {
+      setModalLoading(false);
+    }
   };
 
   return (
@@ -243,76 +258,75 @@ const LoginPage = ({ onAuthSuccess }) => {
           }}
         >
           <div className="bg-white rounded-3xl p-10 w-[90%] max-w-[550px] shadow-2xl relative">
-            {/* Step 1: Username */}
-            {modalStep === 1 && (
-              <div>
+            {!resetSuccess ? (
+              <>
                 <h2 className="text-center text-gray-800 mb-8 font-semibold text-3xl">
                   Forgot Password
                 </h2>
-                <label 
-                  htmlFor="username"
-                  className="block text-gray-800 font-semibold mb-2.5 text-base text-left"
-                >
-                  Username
-                </label>
-                <input
-                  type="text"
-                  id="username"
-                  placeholder="Enter your username"
-                  value={forgotUsername}
-                  onChange={(e) => setForgotUsername(e.target.value)}
-                  className="w-full p-4 px-5 rounded-xl border border-gray-300 text-base mb-5 box-border font-sans placeholder:text-gray-400"
-                />
-                <button 
-                  onClick={goToStep2}
-                  className="w-full py-3 px-5 rounded-xl font-bold text-base border-none cursor-pointer transition-all bg-[#5b4cff] text-white mb-4 hover:bg-[#4a3dd6]"
-                >
-                  Send Inquiry
-                </button>
+                
+                <form onSubmit={handleForgotPassword}>
+                  <label 
+                    htmlFor="reset-email"
+                    className="block text-gray-800 font-semibold mb-2.5 text-base text-left"
+                  >
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    id="reset-email"
+                    placeholder="Enter your email address"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    className="w-full p-4 px-5 rounded-xl border border-gray-300 text-base mb-5 box-border font-sans placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#5b4cff]"
+                    disabled={modalLoading}
+                  />
+                  
+                  {modalError && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-5 text-red-700 text-sm">
+                      {modalError}
+                    </div>
+                  )}
+
+                  <button 
+                    type="submit"
+                    disabled={modalLoading}
+                    className="w-full py-3 px-5 rounded-xl font-bold text-base border-none cursor-pointer transition-all bg-[#5b4cff] text-white hover:bg-[#4a3dd6] disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {modalLoading ? 'Sending...' : 'Send Reset Link'}
+                  </button>
+                </form>
+                
                 <div className="text-center mt-4">
-                  <a 
-                    onClick={goToStep2}
+                  <button
+                    onClick={closeForgotPasswordModal}
                     className="text-[#5b4cff] no-underline text-base cursor-pointer hover:underline"
                   >
-                    Other Concern?
-                  </a>
+                    Cancel
+                  </button>
                 </div>
-              </div>
-            )}
-
-            {/* Step 2: Message */}
-            {modalStep === 2 && (
+              </>
+            ) : (
               <div>
-                <h2 className="text-center text-gray-800 mb-8 font-semibold text-3xl">
-                  Forgot Password
-                </h2>
-                <label 
-                  htmlFor="message"
-                  className="block text-gray-800 font-semibold mb-2.5 text-base text-left"
-                >
-                  Your Message
-                </label>
-                <textarea
-                  id="message"
-                  placeholder="Write your concern here..."
-                  value={forgotMessage}
-                  onChange={(e) => setForgotMessage(e.target.value)}
-                  className="w-full p-4 px-5 rounded-xl border border-gray-300 text-base mb-5 box-border font-sans min-h-[120px] resize-y placeholder:text-gray-400"
-                />
-                <div className="flex gap-4 mt-5">
-                  <button 
-                    onClick={goToStep1}
-                    className="py-3 px-6 rounded-xl font-bold text-base border border-gray-300 cursor-pointer transition-all bg-white text-gray-800 hover:bg-gray-50 hover:border-gray-400"
-                  >
-                    Back
-                  </button>
-                  <button
-                    onClick={sendForgotPasswordMessage}
-                    className="flex-1 py-3 px-5 rounded-xl font-bold text-base border-none cursor-pointer transition-all bg-[#5b4cff] text-white hover:bg-[#4a3dd6]"
-                  >
-                    Send Message
-                  </button>
+                <div className="text-center mb-6">
+                  <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                    <svg className="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <h2 className="text-center text-gray-800 mb-4 font-semibold text-2xl">
+                    Check Your Email
+                  </h2>
+                  <p className="text-gray-600 text-base">
+                    We've sent a password reset link to <span className="font-semibold">{forgotEmail}</span>
+                  </p>
                 </div>
+                
+                <button
+                  onClick={closeForgotPasswordModal}
+                  className="w-full py-3 px-5 rounded-xl font-bold text-base border-none cursor-pointer transition-all bg-[#5b4cff] text-white hover:bg-[#4a3dd6]"
+                >
+                  Close
+                </button>
               </div>
             )}
           </div>

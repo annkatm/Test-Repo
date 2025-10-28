@@ -2,16 +2,22 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Mail;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\RequestController;
 use App\Http\Controllers\Api\EquipmentController;
 use App\Http\Controllers\Api\ActivityLogController;
 use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\AuthController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
 });
+
+// Password reset API routes
+Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword']);
+Route::post('/auth/reset-password', [AuthController::class, 'resetPassword']);
 
 // Employee routes
 Route::get('/employees', [EmployeeController::class, 'index']);
