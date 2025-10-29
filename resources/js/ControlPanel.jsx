@@ -19,7 +19,6 @@ const ControlPanel = () => {
 
   const [showCategoryModal, setShowCategoryModal] = React.useState(false);
   const [catName, setCatName] = React.useState('');
-  const [catDesc, setCatDesc] = React.useState('');
   const [catImage, setCatImage] = React.useState(null);
   const [catError, setCatError] = React.useState('');
   const [catLoading, setCatLoading] = React.useState(false);
@@ -176,7 +175,6 @@ const ControlPanel = () => {
     try {
       const form = new FormData();
       form.append('name', catName.trim());
-      form.append('description', catDesc.trim());
       form.append('image', catImage);
       const res = await fetch('/api/categories', {
         method: 'POST',
@@ -195,7 +193,7 @@ const ControlPanel = () => {
       }
       if (data.success) {
         setShowCategoryModal(false);
-        setCatName(''); setCatDesc(''); setCatImage(null); setCatError('');
+        setCatName(''); setCatImage(null); setCatError('');
         setShowSuccess(true);
         setTimeout(() => setShowSuccess(false), 3000); // Hide after 3 seconds
       } else {
@@ -267,10 +265,6 @@ const ControlPanel = () => {
                   <div className="mb-4">
                     <label className="block text-[12px] text-gray-600 mb-1">Name*</label>
                     <input type="text" value={catName} onChange={e => setCatName(e.target.value)} className="w-full px-3 py-2 rounded-md bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" required />
-                  </div>
-                  <div className="mb-4">
-                    <label className="block text-[12px] text-gray-600 mb-1">Description</label>
-                    <input type="text" value={catDesc} onChange={e => setCatDesc(e.target.value)} className="w-full px-3 py-2 rounded-md bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   </div>
 
                   {/* Existing Categories header with toggle */}

@@ -351,6 +351,33 @@ const EmployeePage = () => {
     };
   }, []);
 
+  // Transform issued equipment when both issuedEquipment and availableEquipment are loaded
+  useEffect(() => {
+    if (editing && issuedEquipment.length > 0 && availableEquipment.length > 0) {
+      const transformedEquipment = issuedEquipment.map(eq => {
+        // Find the matching equipment in availableEquipment to get full details
+        const matchingEquipment = availableEquipment.find(availEq => 
+          availEq.id === eq.id || 
+          (availEq.name === eq.name && availEq.brand === eq.brand)
+        );
+        
+        return {
+          id: eq.id,
+          name: eq.name,
+          brand: eq.brand || eq.name,
+          specifications: eq.specs || 'No specifications',
+          item_image: matchingEquipment?.item_image || eq.item_image || null,
+          category: matchingEquipment?.category || eq.category || null,
+          status: eq.status || 'available',
+          specKey: `${eq.brand || eq.name || 'Unknown'}-${eq.specs || 'No specs'}`,
+          serial_numbers: eq.serial_numbers || [],
+          available_count: eq.available_count || 0
+        };
+      });
+      setIssuedEquipment(transformedEquipment);
+    }
+  }, [editing, availableEquipment]);
+
   const addEquipmentToIssued = (equipment) => {
     // Check if already added (check by the grouped equipment's unique key)
     const specKey = `${equipment.brand || equipment.name || 'Unknown'}-${equipment.specifications || equipment.description || 'No specs'}`;
@@ -585,25 +612,16 @@ const EmployeePage = () => {
       issuedItem: emp.issuedItem || ''
     });
     
+    // Load available equipment to get images and full details
+    loadAvailableEquipment();
+    
     // Load issued equipment if exists
     if (emp.issuedItem) {
       try {
         const parsedEquipment = JSON.parse(emp.issuedItem);
         if (Array.isArray(parsedEquipment)) {
-          // Transform the saved data back to the expected UI format
-          const transformedEquipment = parsedEquipment.map(eq => ({
-            id: eq.id,
-            name: eq.name,
-            brand: eq.brand || eq.name, // Use brand if available, otherwise use name
-            specifications: eq.specs || 'No specifications',
-            item_image: eq.item_image || null,
-            category: eq.category || null,
-            status: eq.status || 'available',
-            specKey: `${eq.brand || eq.name || 'Unknown'}-${eq.specs || 'No specs'}`,
-            serial_numbers: eq.serial_numbers || [],
-            available_count: eq.available_count || 0
-          }));
-          setIssuedEquipment(transformedEquipment);
+          // Store the parsed equipment for later processing
+          setIssuedEquipment(parsedEquipment);
         }
       } catch (e) {
         console.error('Error parsing issued equipment:', e);
