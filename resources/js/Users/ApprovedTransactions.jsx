@@ -181,13 +181,20 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
         if (!cancelled) setDisplayList(mapped);
       } catch (_) { }
     };
-    fetchApproved();
+    // Only fetch if no data provided via props
+    if (!approvedTransactions || approvedTransactions.length === 0) {
+      fetchApproved();
+    }
     return () => { cancelled = true; };
-  }, []);
+  }, [approvedTransactions]);
 
   // Listen for external changes to approved list and refresh from backend
   useEffect(() => {
     const refresh = async () => {
+      // If we already have a list from props, prefer it and skip fetching
+      if (approvedTransactions && approvedTransactions.length > 0) {
+        return;
+      }
       try {
         const res = await fetch('/api/transactions/approved', { credentials: 'same-origin' });
         const json = await res.json().catch(() => ({}));
@@ -225,7 +232,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
     const handler = () => refresh();
     window.addEventListener('ireply:approved:changed', handler);
     return () => window.removeEventListener('ireply:approved:changed', handler);
-  }, []);
+  }, [approvedTransactions]);
 
   const totalPages = Math.max(1, Math.ceil((displayList?.length || 0) / pageSize));
   const paginated = useMemo(() => {
@@ -326,9 +333,178 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
         const statusOk = /approved|released|borrowed|active/.test(s) || !s;
         return statusOk && ((eqId && cEq && String(eqId) === String(cEq)) || (name && cName && name === cName));
       });
-      return found ? (found.id || found.transaction_id || found.request_id || found.transactionID || found.trans_id || found.trx_id || found.uuid || found?.pivot?.transaction_id) : null;
+      if (found) return (found.id || found.transaction_id || found.request_id || found.transactionID || found.trans_id || found.trx_id || found.uuid || found?.pivot?.transaction_id);
     } catch (_) {
-      return null;
+      // continue
+    }
+
+    // Fallback 2: generic transactions endpoint
+    try {
+      const res2 = await fetch('/api/transactions', { credentials: 'same-origin' });
+      const j2 = await res2.json().catch(() => ({}));
+      const raw2 = Array.isArray(j2) ? j2 : (Array.isArray(j2?.data) ? j2.data : (Array.isArray(j2?.data?.data) ? j2.data.data : []));
+      const eqId = tx?.equipment_id || tx?.equipment?.id || null;
+      const name = (tx?.match_name || tx?.equipment_name || tx?.item || '').toLowerCase();
+      const allowed = ['approved', 'released', 'borrowed', 'active'];
+      const found2 = (raw2 || []).find((t) => {
+        const s = String(t?.status || '').toLowerCase();
+        if (!(allowed.includes(s) || !s)) return false;
+        const cEq = t?.equipment_id || t?.equipment?.id || null;
+        const cName = (t?.equipment_name || t?.item || t?.name || '').toLowerCase();
+        return (eqId && cEq && String(eqId) === String(cEq)) || (name && cName && name === cName);
+      });
+      if (found2) return (found2.id || found2.transaction_id || found2.request_id || found2.transactionID || found2.trans_id || found2.trx_id || found2.uuid || found2?.pivot?.transaction_id);
+    } catch (_) { /* continue */ }
+
+    // Fallback 3: current holders endpoint
+    try {
+      const res3 = await fetch('/api/employees/current-holders', { credentials: 'same-origin' });
+      const j3 = await res3.json().catch(() => ({}));
+      const list3 = Array.isArray(j3) ? j3 : (Array.isArray(j3?.data) ? j3.data : []);
+      const eqId = tx?.equipment_id || tx?.equipment?.id || null;
+      const name = (tx?.match_name || tx?.equipment_name || tx?.item || '').toLowerCase();
+      const found3 = (list3 || []).find((t) => {
+        const cEq = t?.equipment_id || t?.equipment?.id || null;
+        const cName = (t?.equipment_name || t?.item || t?.name || '').toLowerCase();
+        return (eqId && cEq && String(eqId) === String(cEq)) || (name && cName && name === cName);
+      });
+      if (found3) return (found3.id || found3.transaction_id || found3.request_id || found3.transactionID || found3.trans_id || found3.trx_id || found3.uuid || found3?.pivot?.transaction_id);
+    } catch (_) { /* continue */ }
+
+    // Fallback 4: approved requests (map to transaction-like id if available)
+    try {
+      const res4 = await fetch('/api/requests?status=approved', { credentials: 'same-origin' });
+      const j4 = await res4.json().catch(() => ({}));
+      const reqs = Array.isArray(j4) ? j4 : (Array.isArray(j4?.data) ? j4.data : []);
+      const eqId = tx?.equipment_id || tx?.equipment?.id || null;
+      const name = (tx?.match_name || tx?.equipment_name || tx?.item || '').toLowerCase();
+      const found4 = (reqs || []).find((t) => {
+        const cEq = t?.equipment_id || t?.equipment?.id || null;
+        const cName = (t?.equipment_name || t?.item || t?.name || '').toLowerCase();
+        return (eqId && cEq && String(eqId) === String(cEq)) || (name && cName && name === cName);
+      });
+      if (found4) return (found4.transaction_id || found4.id || found4.request_id);
+    } catch (_) { /* continue */ }
+
+    return null;
+  };
+
+  // Perform the return request, update UI, and navigate to Returned Items
+  const performReturn = async (tx) => {
+    if (actionLoading) return;
+    setActionLoading(true);
+    try {
+      const candidate = tx || selectedTransactionData;
+      const txId = await resolveTxId(candidate);
+      if (!txId) {
+        try { console.warn('[performReturn] Missing txId. Candidate tx:', candidate); } catch (_) {}
+        const label = candidate?.equipment_name || candidate?.item || candidate?.match_name || 'Item';
+        alert(`Missing transaction information for "${label}". Please select the transaction row and try again.`);
+        setShowReturnModal(false);
+        setActionLoading(false);
+        return;
+      }
+
+      // First, check the transaction status
+      const statusCheckRes = await fetch(`/api/transactions/${txId}`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        credentials: 'same-origin',
+      });
+
+      if (!statusCheckRes.ok) {
+        let errorMsg = 'Failed to verify transaction status';
+        try {
+          const errorData = await statusCheckRes.json();
+          errorMsg = errorData.message || errorMsg;
+        } catch (_) {}
+        alert(`Error: ${errorMsg}`);
+        setActionLoading(false);
+        return;
+      }
+
+      const transactionData = await statusCheckRes.json();
+      if (transactionData.status !== 'released') {
+        alert('This item cannot be returned because it is not currently marked as released.');
+        setActionLoading(false);
+        return;
+      }
+
+      // If we get here, the transaction exists and is in 'released' status
+      const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+      const res = await fetch(`/api/transactions/${txId}/return`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': csrf,
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          return_condition: 'good_condition',
+          return_notes: ''
+        }),
+      });
+
+      if (!res.ok) {
+        let errorMsg = 'Failed to process return';
+        try {
+          const errorData = await res.json();
+          errorMsg = errorData.message || errorMsg;
+        } catch (_) {}
+        alert(`Return failed: ${errorMsg}`);
+        setActionLoading(false);
+        return;
+      }
+      
+      // Success - log activity
+      logActivity('Approved: Item Returned Successfully', 'success');
+      
+      // Dispatch event to restore equipment to available status
+      try {
+        const equipId = (tx || selectedTransactionData)?.equipment_id;
+        if (equipId) {
+          window.dispatchEvent(new CustomEvent('ireply:equipment:restore', { detail: { equipment_id: equipId } }));
+        } else {
+          // Fallback: ask Transaction page to refresh available equipment
+          window.dispatchEvent(new CustomEvent('ireply:equipment:restore'));
+        }
+      } catch (_) { }
+      
+      // Prepare return item payload with properly formatted date
+      const now = new Date();
+      const returnedItem = {
+        id: (tx || selectedTransactionData)?.id || (tx || selectedTransactionData)?.tx_id || Date.now(),
+        item: (tx || selectedTransactionData)?.item || (tx || selectedTransactionData)?.equipment_name || (tx || selectedTransactionData)?.match_name || 'Item',
+        equipment_name: (tx || selectedTransactionData)?.equipment_name || (tx || selectedTransactionData)?.item || (tx || selectedTransactionData)?.match_name || 'Item',
+        date: now.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
+        status: 'Returned'
+      };
+      
+      // First, add the item to returned items (dispatch event FIRST before navigation)
+      try {
+        window.dispatchEvent(new CustomEvent('ireply:returned:add', { detail: returnedItem }));
+      } catch (_) { }
+      
+      // Refresh the approved list to remove the returned item
+      try {
+        window.dispatchEvent(new CustomEvent('ireply:approved:changed'));
+      } catch (_) { }
+      
+      // Close modal and reset state
+      setShowReturnModal(false);
+      setSelectedRow(null);
+      setActionLoading(false);
+      
+      // Success notification only; no auto-navigation
+      alert('Item returned successfully! The unit is now available in Item Categories.');
+    } catch (err) {
+      console.error('[performReturn] error', err);
+      alert('An error occurred while returning the item. Please try again.');
+      setActionLoading(false);
     }
   };
 
@@ -688,10 +864,8 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                   transaction={selectedTransactionData}
                   onClose={() => setSelectedRow(null)}
                   onReturnNow={async () => { 
-                    const tid = selectedTransactionData?.tx_id || selectedTransactionData?.id || await resolveTxId(selectedTransactionData);
-                    setReturnTxId(tid || null);
-                    setShowReturnModal(true); 
-                    logActivity('Approved: Clicked Return Now', 'return'); 
+                    logActivity('Approved: Clicked Return Now', 'return');
+                    await performReturn(selectedTransactionData);
                   }}
                   onOpenBrowse={() => { setShowBrowseLaptopsModal(true); logActivity('Approved: Clicked Exchange', 'exchange'); }}
                   className="flex-1"
@@ -713,7 +887,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
 
             {/* Dynamic Item List */}
             <div className="space-y-4 mb-6">
-              {selectedTransactionData.exchangeItems.map((item, index) => (
+              {Array.isArray(selectedTransactionData.exchangeItems) && selectedTransactionData.exchangeItems.map((item, index) => (
                 <div
                   key={index}
                   className="flex items-start gap-4 pb-4 border-b border-gray-100 last:border-0"
@@ -738,59 +912,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                 Cancel
               </button>
               <button
-                onClick={async () => {
-                  if (actionLoading) return;
-                  setActionLoading(true);
-                  try {
-                    const txId = returnTxId || selectedTransactionData?.tx_id || selectedTransactionData?.id || await resolveTxId(selectedTransactionData);
-                    if (!txId) {
-                      alert('Missing transaction information. Please select a transaction and try again.');
-                      setShowReturnModal(false);
-                      return;
-                    }
-                    const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-                    const res = await fetch(`/api/transactions/${txId}/return`, {
-                      method: 'POST',
-                      headers: {
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': csrf,
-                      },
-                      credentials: 'same-origin',
-                      body: JSON.stringify({}),
-                    });
-                    if (!res.ok) {
-                      const text = await res.text();
-                      throw new Error(text || `HTTP ${res.status}`);
-                    }
-                    setShowReturnModal(false);
-                    setSelectedRow(null);
-                    logActivity('Approved: Confirmed Return', 'success');
-                    try {
-                      const equipId = selectedTransactionData?.equipment_id;
-                      if (equipId) {
-                        window.dispatchEvent(new CustomEvent('ireply:equipment:restore', { detail: { equipment_id: equipId } }));
-                      }
-                    } catch (_) { }
-                    try {
-                      const payload = {
-                        id: selectedTransactionData?.id,
-                        item: selectedTransactionData?.item,
-                        date: new Date().toISOString(),
-                      };
-                      window.dispatchEvent(new CustomEvent('ireply:returned:add', { detail: payload }));
-                    } catch (_) { }
-                    try {
-                      window.dispatchEvent(new CustomEvent('ireply:navigate', { detail: { menu: 'Returned Items' } }));
-                    } catch (_) { }
-                    onBack();
-                  } catch (err) {
-                    console.error(err);
-                    alert('Failed to mark item as returned. Please try again.');
-                  } finally {
-                    setActionLoading(false);
-                  }
-                }}
+                onClick={async () => { await performReturn(selectedTransactionData); }}
                 disabled={actionLoading}
                 className="px-5 py-2 bg-blue-600 text-white rounded-lg font-medium shadow-md hover:bg-blue-700 hover:shadow-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed"
               >

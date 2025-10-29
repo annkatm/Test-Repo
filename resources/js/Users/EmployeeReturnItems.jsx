@@ -62,16 +62,31 @@ const ReturnItems = () => {
   useEffect(() => {
     const onReturnedAdd = (e) => {
       const d = e?.detail || {};
+      console.log('[EmployeeReturnItems] Received ireply:returned:add event:', d);
       const entry = {
         id: d.id || Date.now(),
         date: d.date || new Date().toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }),
-        item: d.item || "Item",
-        status: "Returned",
+        item: d.item || d.equipment_name || "Item",
+        status: d.status || "Returned",
       };
-      setData((prev) => [entry, ...(prev || [])]);
+      console.log('[EmployeeReturnItems] Adding entry:', entry);
+      setData((prev) => {
+        const exists = (prev || []).some(item => String(item.id) === String(entry.id));
+        if (exists) {
+          console.log('[EmployeeReturnItems] Item already exists, skipping');
+          return prev;
+        }
+        const updated = [entry, ...(prev || [])];
+        console.log('[EmployeeReturnItems] Updated data:', updated);
+        return updated;
+      });
     };
     window.addEventListener('ireply:returned:add', onReturnedAdd);
-    return () => window.removeEventListener('ireply:returned:add', onReturnedAdd);
+    console.log('[EmployeeReturnItems] Event listener registered for ireply:returned:add');
+    return () => {
+      window.removeEventListener('ireply:returned:add', onReturnedAdd);
+      console.log('[EmployeeReturnItems] Event listener removed');
+    };
   }, []);
 
   // 🔍 Filter by search term
