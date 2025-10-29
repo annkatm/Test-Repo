@@ -289,8 +289,11 @@ const OnProcessTransactions = ({
                     const equipId = selectedRequestData?.equipment_id || selectedRequestData?.equipment?.id || selectedRequestData?.equipmentId || selectedRequestData?.item_id || null;
                     // Attempt to cancel via common endpoints (non-fatal if fail)
                     if (reqId) {
-                      try { await fetch(`/api/requests/${reqId}/cancel`, { method: 'POST', headers: { 'Accept': 'application/json' }, credentials: 'same-origin' }); } catch (_) {}
-                      try { await fetch(`/api/requests/${reqId}`, { method: 'DELETE', headers: { 'Accept': 'application/json' }, credentials: 'same-origin' }); } catch (_) {}
+                      const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                      const baseHeaders = { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
+                      const headers = csrf ? { ...baseHeaders, 'X-CSRF-TOKEN': csrf } : baseHeaders;
+                      try { await fetch(`/api/requests/${reqId}/cancel`, { method: 'POST', headers, credentials: 'same-origin' }); } catch (_) {}
+                      try { await fetch(`/api/requests/${reqId}`, { method: 'DELETE', headers, credentials: 'same-origin' }); } catch (_) {}
                     }
                     // Notify EmployeeHome to restore this equipment to the available list and un-reserve it for this user
                     if (equipId) {

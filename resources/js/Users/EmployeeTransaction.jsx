@@ -393,7 +393,7 @@ const EmployeeTransaction = () => {
   // 🔍 Filter by search term
   const filteredData = useMemo(() => {
     return historyData.filter((item) =>
-      item.item.toLowerCase().includes(searchTerm.toLowerCase())
+      (item?.item || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [historyData, searchTerm]);
 
@@ -402,8 +402,8 @@ const EmployeeTransaction = () => {
     return [...filteredData].sort((a, b) => {
       if (sortOption === "date-asc") return new Date(a.date) - new Date(b.date);
       if (sortOption === "date-desc") return new Date(b.date) - new Date(a.date);
-      if (sortOption === "item-asc") return a.item.localeCompare(b.item);
-      if (sortOption === "item-desc") return b.item.localeCompare(a.item);
+      if (sortOption === "item-asc") return (a?.item || '').localeCompare(b?.item || '');
+      if (sortOption === "item-desc") return (b?.item || '').localeCompare(a?.item || '');
       return 0;
     });
   }, [filteredData, sortOption]);
@@ -505,44 +505,60 @@ const EmployeeTransaction = () => {
 
   const fetchApprovedTransactions = async () => {
     try {
-      const response = await fetch('/api/transactions/approved', { credentials: 'same-origin' });
-      const data = await response.json().catch(() => ({}));
-      let list = [];
-      if (Array.isArray(data)) {
-        list = data;
-      } else if (data && Array.isArray(data.data)) {
-        list = data.data;
-      } else if (data && data.data && Array.isArray(data.data.data)) {
-        list = data.data.data;
+      // 1) Fetch from approved endpoint
+      const respApproved = await fetch('/api/transactions/approved', { credentials: 'same-origin' });
+      const jsonApproved = await respApproved.json().catch(() => ({}));
+      const listApproved = Array.isArray(jsonApproved)
+        ? jsonApproved
+        : (Array.isArray(jsonApproved?.data)
+          ? jsonApproved.data
+          : (Array.isArray(jsonApproved?.data?.data) ? jsonApproved.data.data : []));
+
+      // 2) Fetch from generic transactions and filter approved-like
+      let listGeneric = [];
+      try {
+        const res2 = await fetch('/api/transactions', { credentials: 'same-origin' });
+        const j2 = await res2.json().catch(() => ({}));
+        const raw2 = Array.isArray(j2) ? j2 : (Array.isArray(j2?.data) ? j2.data : (Array.isArray(j2?.data?.data) ? j2.data.data : []));
+        const allowed = ['approved', 'released', 'borrowed', 'active'];
+        listGeneric = (raw2 || []).filter(t => allowed.includes(String(t?.status || '').toLowerCase()));
+      } catch (_) {}
+
+      // Merge approved + generic and de-duplicate
+      let merged = [...(Array.isArray(listApproved) ? listApproved : []), ...(Array.isArray(listGeneric) ? listGeneric : [])];
+      if (merged.length > 0) {
+        const seen = new Set();
+        merged = merged.filter((t) => {
+          const id = t?.id ?? t?.transaction_id ?? t?.request_id ?? null;
+          const eq = t?.equipment_id ?? t?.equipment?.id ?? null;
+          // Only de-duplicate when BOTH id and equipment_id exist and are non-empty
+          if (id != null && id !== '' && eq != null && eq !== '') {
+            const key = `${String(id)}::${String(eq)}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          }
+          // Otherwise, keep the entry to avoid accidental collapsing
+          return true;
+        });
       }
 
-      // Fallback: try generic transactions endpoint and filter likely approved/active statuses
-      if (!Array.isArray(list) || list.length === 0) {
-        try {
-          const res2 = await fetch('/api/transactions', { credentials: 'same-origin' });
-          const j2 = await res2.json().catch(() => ({}));
-          let alt = Array.isArray(j2) ? j2 : (Array.isArray(j2?.data) ? j2.data : (Array.isArray(j2?.data?.data) ? j2.data.data : []));
-          const allowed = ['approved', 'released', 'borrowed', 'active'];
-          list = (alt || []).filter(t => allowed.includes(String(t?.status || '').toLowerCase()));
-        } catch (_) {}
-      }
-
-      // Last fallback: current holders
-      if (!Array.isArray(list) || list.length === 0) {
+      // 3) Fallback to current holders if still empty
+      if (!Array.isArray(merged) || merged.length === 0) {
         try {
           const res3 = await fetch('/api/employees/current-holders', { credentials: 'same-origin' });
           const j3 = await res3.json().catch(() => ({}));
-          list = Array.isArray(j3) ? j3 : (Array.isArray(j3?.data) ? j3.data : []);
+          merged = Array.isArray(j3) ? j3 : (Array.isArray(j3?.data) ? j3.data : []);
         } catch (_) {}
       }
 
-      // Additional fallback: approved requests (many systems record approval here before transaction record exists)
-      if (!Array.isArray(list) || list.length === 0) {
+      // 4) Additional fallback to approved requests
+      if (!Array.isArray(merged) || merged.length === 0) {
         try {
           const res4 = await fetch('/api/requests?status=approved', { credentials: 'same-origin' });
           const j4 = await res4.json().catch(() => ({}));
           const reqs = Array.isArray(j4) ? j4 : (Array.isArray(j4?.data) ? j4.data : []);
-          list = (reqs || []).map(r => ({
+          merged = (reqs || []).map(r => ({
             id: r.id,
             equipment_id: r.equipment_id || r.equipment?.id,
             equipment_name: r.equipment_name || r.item || '-',
@@ -553,7 +569,7 @@ const EmployeeTransaction = () => {
         } catch (_) {}
       }
 
-      const finalList = Array.isArray(list) ? list : [];
+      const finalList = Array.isArray(merged) ? merged : [];
       try {
         console.log('[EmployeeTransaction] Approved fetch result count:', finalList.length, finalList.slice(0, 3));
       } catch (_) {}
@@ -813,9 +829,12 @@ const EmployeeTransaction = () => {
           ? new Date(dsrc).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
           : new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
         return {
-          id: t?.id,
+          // Use any available identifier to ensure Return works
+          id: t?.id ?? t?.transaction_id ?? t?.request_id ?? t?.transactionID ?? t?.trans_id ?? t?.trx_id ?? t?.uuid ?? t?.pivot?.transaction_id ?? null,
+          tx_id: t?.id ?? t?.transaction_id ?? t?.request_id ?? t?.transactionID ?? t?.trans_id ?? t?.trx_id ?? t?.uuid ?? t?.pivot?.transaction_id ?? null,
           date,
           item: t?.equipment_name || t?.item || '-',
+          match_name: t?.equipment_name || t?.item || '-',
           status: t?.status || '-',
           equipment_id: t?.equipment_id || t?.equipment?.id || null,
           brand: t?.brand || t?.equipment?.brand || null,
@@ -899,6 +918,7 @@ const EmployeeTransaction = () => {
               <button
                 onClick={async () => {
                   await fetchDeniedRequests(); // Refresh denied requests immediately
+                  await fetchPendingTransactions(); // Ensure fresh pending data for the full view
                   logActivity('Opened On Process view', 'info');
                   setShowPendings(true);
                 }}
@@ -988,8 +1008,9 @@ const EmployeeTransaction = () => {
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-[#2262C6]">Approved</h2>
               <button
-                onClick={() => {
+                onClick={async () => {
                   setSelectedRow(null);
+                  await fetchApprovedTransactions();
                   setCurrentView('approved');
                   logActivity('Opened Approved view', 'info');
                 }}
@@ -1119,17 +1140,13 @@ const EmployeeTransaction = () => {
                 <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center">📦</div>
                 <div>
                   <div className="font-semibold text-gray-900">Currently Borrowed</div>
-                  <div className="text-sm text-gray-600">Total items: {Array.isArray(borrowedItems) ? borrowedItems.length : (transactionStats?.borrowed || 0)}</div>
+                  <div className="text-sm text-gray-600">Total items: {transactionStats?.borrowed || 0}</div>
                 </div>
               </div>
               <div className="space-y-3 max-h-96 overflow-y-auto">
                 {(borrowedItems || []).map((it, i) => (
                   <div key={it.id || i} className="border border-gray-200 rounded-lg p-3">
                     <div className="font-semibold text-gray-900">{it.equipment_name || it.item || '-'}</div>
-                    <div className="text-sm text-gray-600">Request No.: {it.request_number || '-'}</div>
-                    <div className="text-sm text-gray-600">Start: {it.expected_start_date ? new Date(it.expected_start_date).toLocaleDateString('en-US') : (it.start_date ? new Date(it.start_date).toLocaleDateString('en-US') : '-')}</div>
-                    <div className="text-sm text-gray-600">Due: {it.expected_end_date ? new Date(it.expected_end_date).toLocaleDateString('en-US') : '-'}</div>
-                    <div className="text-xs text-gray-500">Status: {it.status || 'Borrowed'}</div>
                   </div>
                 ))}
                 {(!borrowedItems || borrowedItems.length === 0) && (
@@ -1166,9 +1183,6 @@ const EmployeeTransaction = () => {
                 {(overdueItems || []).map((it, i) => (
                   <div key={it.id || i} className="border border-gray-200 rounded-lg p-3">
                     <div className="font-semibold text-gray-900">{it.equipment_name || it.item || '-'}</div>
-                    <div className="text-sm text-gray-600">Request No.: {it.request_number || '-'}</div>
-                    <div className="text-sm text-gray-600">Due: {it.expected_end_date ? new Date(it.expected_end_date).toLocaleDateString('en-US') : '-'}</div>
-                    <div className="text-xs text-red-600">Overdue</div>
                   </div>
                 ))}
                 {(!overdueItems || overdueItems.length === 0) && (
