@@ -13,90 +13,48 @@ const ReturnItems = () => {
   // Sample data
   const historyData = data;
 
-  // Helper to normalize records
-  const normalize = (r, idx = 0) => {
-    const dateRaw = r?.return_date || r?.updated_at || r?.created_at || r?.date || null;
-    let dateStr = "";
-    try {
-      dateStr = dateRaw ? new Date(dateRaw).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }) : "";
-    } catch (_) {
-      dateStr = String(dateRaw || "");
-    }
-    return {
-      id: r?.id ?? r?.transaction_id ?? r?.request_id ?? r?.trx_id ?? r?.uuid ?? (idx + 1),
-      date: dateStr,
-      item: r?.equipment_name || r?.item || r?.title || r?.name || "Item",
-      status: r?.status || (r?.return_date ? "Returned" : "Returned"),
-    };
-  };
-
-  // Fetch all pages from a Laravel-style paginated endpoint
-  const fetchAllPages = async (url) => {
-    const out = [];
-    let nextUrl = url;
-    for (let i = 0; i < 20 && nextUrl; i++) { // hard limit to avoid infinite loops
-      const res = await fetch(nextUrl, { credentials: 'same-origin' });
-      const json = await res.json().catch(() => ({}));
-      const list = Array.isArray(json)
-        ? json
-        : (Array.isArray(json?.data?.data) ? json.data.data : (Array.isArray(json?.data) ? json.data : []));
-      out.push(...(list || []));
-      nextUrl = json?.links?.next || json?.next_page_url || null;
-    }
-    return out;
-  };
-
-  const loadAllReturns = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      // Primary: history filtered to returned
-      let items = await fetchAllPages('/api/transactions/history?status=returned');
-      if (!Array.isArray(items) || items.length === 0) {
-        // Fallback: full history
-        items = await fetchAllPages('/api/transactions/history');
-      }
-      if (!Array.isArray(items) || items.length === 0) {
-        // Fallback: transactions then filter returned
-        const all = await fetchAllPages('/api/transactions');
-        items = (all || []).filter(r => String(r?.status || '').toLowerCase() === 'returned' || !!r?.return_date);
-      }
-      const mapped = (items || []).map((r, idx) => normalize(r, idx));
-      setData(mapped);
-    } catch (e) {
-      setError("Failed to load items");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    // Flush any queued returned items persisted by other views
-    try {
-      const raw = localStorage.getItem('employee_return_items_queue');
-      const queued = raw ? JSON.parse(raw) : [];
-      if (Array.isArray(queued) && queued.length > 0) {
-        const normalized = queued.map((d, idx) => ({
-          id: d.id || Date.now() + idx,
-          date: d.date || new Date().toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }),
-          item: d.item || d.equipment_name || "Item",
-          status: d.status || "Returned",
-        }));
-        setData((prev) => {
-          const existing = new Set((prev || []).map(x => String(x.id)));
-          const merged = [
-            ...normalized.filter(x => !existing.has(String(x.id))),
-            ...(prev || [])
-          ];
-          return merged;
-        });
-        // Clear the queue after consuming
-        localStorage.removeItem('employee_return_items_queue');
-      }
-    } catch (_) { }
-
     let cancelled = false;
-    loadAllReturns();
+    const fetchData = async () => {
+      setLoading(true);
+      setError("");
+      try {
+        let url = "/api/transactions/history?status=returned";
+        let res = await fetch(url);
+        let json = await res.json().catch(() => ({}));
+        let list = Array.isArray(json) ? json : (json && json.data && Array.isArray(json.data) ? json.data : []);
+
+        if (!Array.isArray(list) || list.length === 0) {
+          url = "/api/transactions/history";
+          res = await fetch(url);
+          json = await res.json().catch(() => ({}));
+          list = Array.isArray(json) ? json : (json && json.data && Array.isArray(json.data) ? json.data : []);
+        }
+
+        const mapped = (list || []).map((r, idx) => {
+          const dateRaw = r?.return_date || r?.updated_at || r?.created_at || r?.date || null;
+          let dateStr = "";
+          try {
+            dateStr = dateRaw ? new Date(dateRaw).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }) : "";
+          } catch (_) {
+            dateStr = String(dateRaw || "");
+          }
+          return {
+            id: r?.id ?? idx + 1,
+            date: dateStr,
+            item: r?.equipment_name || r?.item || r?.title || "Item",
+            status: r?.status || (r?.return_date ? "Returned" : "Returned"),
+          };
+        });
+
+        if (!cancelled) setData(mapped);
+      } catch (e) {
+        if (!cancelled) setError("Failed to load items");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    fetchData();
     return () => { cancelled = true; };
   }, []);
 
@@ -124,16 +82,9 @@ const ReturnItems = () => {
       });
     };
     window.addEventListener('ireply:returned:add', onReturnedAdd);
-    // Also refresh when other parts of the app indicate changes
-    const onApprovedChanged = () => loadAllReturns();
-    const onEquipmentRestore = () => loadAllReturns();
-    window.addEventListener('ireply:approved:changed', onApprovedChanged);
-    window.addEventListener('ireply:equipment:restore', onEquipmentRestore);
     console.log('[EmployeeReturnItems] Event listener registered for ireply:returned:add');
     return () => {
       window.removeEventListener('ireply:returned:add', onReturnedAdd);
-      window.removeEventListener('ireply:approved:changed', onApprovedChanged);
-      window.removeEventListener('ireply:equipment:restore', onEquipmentRestore);
       console.log('[EmployeeReturnItems] Event listener removed');
     };
   }, []);
@@ -169,12 +120,6 @@ const ReturnItems = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-blue-600">Return Items</h1>
-        <button
-          onClick={loadAllReturns}
-          className="px-3 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 border border-blue-600"
-        >
-          Refresh
-        </button>
       </div>
 
       {/* 🔍 Search Bar */}
@@ -322,14 +267,12 @@ const ReturnItems = () => {
           <select
             value={itemsPerPage}
             onChange={(e) => {
-              const v = e.target.value === 'all' ? (sortedData.length || 1) : Number(e.target.value);
-              setItemsPerPage(v);
+              setItemsPerPage(Number(e.target.value));
               setCurrentPage(1);
             }}
             className="border border-gray-300 rounded-md text-sm px-2 py-1 focus:ring-2 focus:ring-blue-400 focus:outline-none"
           >
-            <option value="all">All</option>
-            {[5, 10, 15, 20, 30, 40, 50, 100].map((n) => (
+            {[5, 10, 15, 20, 30, 40, 50].map((n) => (
               <option key={n} value={n}>
                 {n}
               </option>
