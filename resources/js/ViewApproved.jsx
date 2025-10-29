@@ -532,6 +532,61 @@ const ViewApproved = () => {
     });
   };
 
+  const handleConfirmReturn = async (returnData) => {
+    try {
+      // Get the transaction ID
+      const transactionId = returnData.id || returnData.transaction_id;
+      
+      if (!transactionId) {
+        console.error('Transaction ID not found');
+        alert('Transaction ID not found');
+        return;
+      }
+
+      // First, check the transaction status
+      const statusCheck = await api.get(`/transactions/${transactionId}`);
+      const currentStatus = statusCheck.data?.data?.status || statusCheck.data?.status;
+      
+      console.log('Current transaction status:', currentStatus);
+      
+      // If transaction is still released, return it first
+      if (currentStatus === 'released') {
+        console.log('Transaction still released, returning first...');
+        const returnResponse = await api.post(`/transactions/${transactionId}/return`, {
+          return_condition: 'good_condition',
+          return_notes: 'Returned and verified'
+        });
+        
+        if (!returnResponse.data.success) {
+          throw new Error('Failed to return transaction');
+        }
+        console.log('Transaction returned successfully');
+      }
+      
+      // Now verify the return to complete the transaction
+      const verifyResponse = await api.post(`/transactions/${transactionId}/verify-return`, {
+        verification_notes: 'Return verified and completed'
+      });
+      
+      if (verifyResponse.data.success) {
+        // Close the modal
+        handleCloseViewReturnModal();
+        
+        // Refresh the data to update the lists
+        await fetchData();
+        
+        // Show success message
+        alert('Return verified successfully! Transaction completed.');
+      } else {
+        throw new Error(verifyResponse.data.message || 'Failed to verify return');
+      }
+    } catch (error) {
+      console.error('Error verifying return:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to verify return';
+      alert(`Error: ${errorMessage}`);
+    }
+  };
+
   return (
      <div className="h-screen overflow-hidden bg-white flex">
       <div className="flex-shrink-0">
@@ -564,7 +619,7 @@ const ViewApproved = () => {
                 <div className="bg-gradient-to-b from-[#0064FF] to-[#003C99] text-white rounded-2xl p-3 shadow flex flex-col h-26">
                   <h4 className="text-sm uppercase tracking-wider opacity-80">New Approved</h4>
                   <div className="mt-2 flex items-center justify-between">
-                    <p className="text-5xl font-bold">{loading ? '...' : dashboardStats.new_requests}</p>
+                    <p className="text-5xl font-bold">{loading ? '...' : groupedApproved.length}</p>
                     <Clock className="w-8 h-8 text-white/70" />
                   </div>
                 </div>
@@ -578,7 +633,7 @@ const ViewApproved = () => {
                 <div className="bg-gray-100 rounded-2xl p-6 shadow flex flex-col h-26">
                   <h4 className="text-sm font-semibold text-gray-600">Verify Return</h4>
                   <div className="mt-2 flex items-center justify-between">
-                    <p className="text-2xl font-bold text-gray-900">{loading ? '...' : dashboardStats.verify_returns}</p>
+                    <p className="text-2xl font-bold text-gray-900">{loading ? '...' : groupedVerifyReturns.length}</p>
                     <CheckCircle className="w-8 h-8 text-gray-500" />
                   </div>
                 </div>
@@ -910,6 +965,7 @@ const ViewApproved = () => {
         isOpen={viewReturnModal.isOpen}
         onClose={handleCloseViewReturnModal}
         returnData={viewReturnModal.returnData}
+        onConfirmReturn={handleConfirmReturn}
       />
 
     </div>
