@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Models\Transaction;
@@ -415,12 +416,25 @@ class TransactionController extends Controller
             if ($transaction->equipment_id) {
                 DB::table('equipment')
                     ->where('id', $transaction->equipment_id)
-                    ->update(['status' => 'available']);
+                    ->update([
+                        'status' => 'available',
+                        'updated_at' => now()
+                    ]);
+            }
+
+            // Get updated equipment info
+            $equipment = null;
+            if ($transaction->equipment_id) {
+                $equipment = DB::table('equipment')->where('id', $transaction->equipment_id)->first();
             }
 
             return response()->json([
                 'success' => true,
-                'message' => 'Transaction returned successfully'
+                'message' => 'Transaction returned successfully. Equipment is now available.',
+                'data' => [
+                    'transaction_id' => $id,
+                    'equipment' => $equipment
+                ]
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -473,6 +487,73 @@ class TransactionController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error creating exchange request: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Verify and complete a returned transaction
+     */
+    public function verifyReturn(Request $request, $id)
+    {
+        try {
+            $transaction = DB::table('transactions')->where('id', $id)->first();
+            
+            if (!$transaction) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Transaction not found'
+                ], 404);
+            }
+
+            if ($transaction->status !== 'returned') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Only returned transactions can be verified'
+                ], 400);
+            }
+
+            $validatedData = $request->validate([
+                'verification_notes' => 'nullable|string|max:500'
+            ]);
+
+            // Update transaction to completed status
+            DB::table('transactions')->where('id', $id)->update([
+                'status' => 'completed',
+                'verified_by' => Auth::id(),
+                'verified_at' => now(),
+                'verification_notes' => $validatedData['verification_notes'] ?? null,
+                'updated_at' => now()
+            ]);
+
+            // Ensure equipment status is available (should already be, but double-check)
+            if ($transaction->equipment_id) {
+                DB::table('equipment')
+                    ->where('id', $transaction->equipment_id)
+                    ->update([
+                        'status' => 'available',
+                        'updated_at' => now()
+                    ]);
+            }
+
+            // Get updated equipment info
+            $equipment = null;
+            if ($transaction->equipment_id) {
+                $equipment = DB::table('equipment')->where('id', $transaction->equipment_id)->first();
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Return verified and transaction completed successfully. Equipment is now available for new requests.',
+                'data' => [
+                    'transaction_id' => $id,
+                    'equipment' => $equipment
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error verifying return: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -666,9 +747,9 @@ class TransactionController extends Controller
     public function dashboard()
     {
         try {
-            // Count new requests (pending status)
+            // Count new approved requests (approved status - ready for release)
             $newRequests = DB::table('requests')
-                ->where('status', 'pending')
+                ->where('status', 'approved')
                 ->count();
 
             // Count current holders (released transactions)
@@ -1051,8 +1132,8 @@ class TransactionController extends Controller
             if (isset($validatedData['released_by'])) {
                 $updateData['released_by'] = $validatedData['released_by'];
             } else {
-                // Set a default user ID or leave null if not required
-                $updateData['released_by'] = 1; // Default admin user, you may want to get this from auth
+                // Use currently authenticated user's ID
+                $updateData['released_by'] = Auth::id();
             }
 
             DB::table('transactions')->where('id', $id)->update($updateData);

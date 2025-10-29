@@ -169,9 +169,9 @@ class RequestController extends Controller
             // Check if employee already has a pending request for this equipment
             $existingRequest = DB::table('requests')
                 ->where('employee_id', $validated['employee_id'])
-                                              ->where('equipment_id', $validated['equipment_id'])
-                                              ->where('status', 'pending')
-                                              ->exists();
+                ->where('equipment_id', $validated['equipment_id'])
+                ->where('status', 'pending')
+                ->exists();
 
             if ($existingRequest) {
                 // Instead of failing, return the existing pending request to keep UX smooth
@@ -181,7 +181,7 @@ class RequestController extends Controller
                     ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
                     ->where('requests.employee_id', $validated['employee_id'])
                     ->where('requests.equipment_id', $validated['equipment_id'])
-                    ->where('requests.status', 'pending')
+                    ->where('status', 'pending')
                     ->select(
                         'requests.*',
                         DB::raw("CONCAT(COALESCE(employees.first_name, ''), ' ', COALESCE(employees.last_name, '')) as full_name"),
@@ -198,6 +198,20 @@ class RequestController extends Controller
                     'data' => $existing,
                     'message' => 'A pending request for this equipment already exists. Returning existing record.'
                 ]);
+            }
+
+            // Check if employee currently has this equipment borrowed (active transaction)
+            $activeTransaction = DB::table('transactions')
+                ->where('employee_id', $validated['employee_id'])
+                ->where('equipment_id', $validated['equipment_id'])
+                ->where('status', 'released')
+                ->exists();
+
+            if ($activeTransaction) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You currently have this equipment. Please return it first before requesting again.'
+                ], 422);
             }
 
             // Generate request number
@@ -457,7 +471,7 @@ class RequestController extends Controller
                 // Update request status
                 DB::table('requests')->where('id', $id)->update([
                     'status' => 'approved',
-                    'approved_by' => 1, // Default admin user, you may want to get this from auth
+                    'approved_by' => Auth::id(), // Use currently authenticated user's ID
                     'approved_at' => now(),
                     'approval_notes' => $validated['approval_notes'] ?? null,
                     'updated_at' => now(),
@@ -474,7 +488,7 @@ class RequestController extends Controller
                 
                 DB::table('transactions')->insert([
                     'transaction_number' => $transactionNumber,
-                    'user_id' => 1, // Default admin user
+                    'user_id' => Auth::id(), // Use currently authenticated user's ID
                     'employee_id' => $equipmentRequest->employee_id,
                     'equipment_id' => $equipmentRequest->equipment_id,
                     'request_id' => $id,
@@ -564,7 +578,7 @@ class RequestController extends Controller
 
             DB::table('requests')->where('id', $id)->update([
                 'status' => 'rejected',
-                'approved_by' => 1, // Default admin user, you may want to get this from auth
+                'approved_by' => Auth::id(), // Use currently authenticated user's ID
                 'approved_at' => now(),
                 'rejection_reason' => $validated['rejection_reason'],
                 'updated_at' => now(),
