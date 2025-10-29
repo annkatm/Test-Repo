@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import HomeSidebar from './HomeSidebar';
 import GlobalHeader from './components/GlobalHeader';
 import EmployeeFilter from './components/EmployeeFilter';
-import { Eye, Pencil, Trash2, Search, AlertCircle } from 'lucide-react';
+import PrintReceipt from './components/PrintReceipt';
+import { Eye, Pencil, Trash2, Search, AlertCircle, Printer } from 'lucide-react';
 
 const getBadgeColor = (name) => {
   const colors = {
@@ -98,13 +99,16 @@ const EmployeePage = () => {
     positions: [],
     departments: [],
     clients: [],
-    employeeTypes: [],
-    accountTypes: []
+    employeeTypes: []
   });
   const [isEquipmentModalOpen, setIsEquipmentModalOpen] = useState(false);
   const [availableEquipment, setAvailableEquipment] = useState([]);
   const [issuedEquipment, setIssuedEquipment] = useState([]);
   const [equipmentSearchTerm, setEquipmentSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [printData, setPrintData] = useState(null);
 
   // Validation functions
   const validateEmail = (email) => {
@@ -241,8 +245,7 @@ const EmployeePage = () => {
         positions: '/api/positions',
         departments: '/api/departments',
         clients: '/api/clients',
-        employeeTypes: '/api/employee-types',
-        accountTypes: '/api/account-types'
+        employeeTypes: '/api/employee-types'
       };
 
       const promises = Object.entries(endpoints).map(async ([key, endpoint]) => {
@@ -336,7 +339,7 @@ const EmployeePage = () => {
       loadDropdownOptions();
     };
 
-    const eventTypes = ['positions:updated', 'departments:updated', 'clients:updated', 'employeetypes:updated', 'accounttypes:updated'];
+    const eventTypes = ['positions:updated', 'departments:updated', 'clients:updated', 'employeetypes:updated'];
     eventTypes.forEach(eventType => {
       window.addEventListener(eventType, handleDropdownUpdate);
     });
@@ -349,15 +352,34 @@ const EmployeePage = () => {
   }, []);
 
   const addEquipmentToIssued = (equipment) => {
-    // Check if already added
-    if (issuedEquipment.find(eq => eq.id === equipment.id)) {
+    // Check if already added (check by the grouped equipment's unique key)
+    const specKey = `${equipment.brand || equipment.name || 'Unknown'}-${equipment.specifications || equipment.description || 'No specs'}`;
+    if (issuedEquipment.find(eq => eq.specKey === specKey)) {
       return;
     }
-    setIssuedEquipment(prev => [...prev, equipment]);
+    
+    // Add the grouped equipment with all its details
+    const equipmentToAdd = {
+      id: equipment.id,
+      name: equipment.name,
+      brand: equipment.brand,
+      specifications: equipment.specifications,
+      item_image: equipment.item_image,
+      category: equipment.category,
+      status: equipment.status,
+      specKey: specKey,
+      serial_numbers: equipment.serial_numbers || [],
+      available_count: equipment.available_count || 0
+    };
+    
+    setIssuedEquipment(prev => [...prev, equipmentToAdd]);
   };
 
-  const removeEquipmentFromIssued = (equipmentId) => {
-    setIssuedEquipment(prev => prev.filter(eq => eq.id !== equipmentId));
+  const removeEquipmentFromIssued = (equipment) => {
+    // Use the specKey if it exists, otherwise generate it
+    const specKey = equipment.specKey || `${equipment.brand || equipment.name || 'Unknown'}-${equipment.specifications || equipment.description || 'No specs'}`;
+    
+    setIssuedEquipment(prev => prev.filter(eq => eq.specKey !== specKey));
   };
 
   const openEquipmentModal = () => {
@@ -368,6 +390,94 @@ const EmployeePage = () => {
   const closeEquipmentModal = () => {
     setIsEquipmentModalOpen(false);
     setEquipmentSearchTerm('');
+    setSelectedCategory('all');
+    setViewMode('grid');
+  };
+
+  const openPrintModal = () => {
+    if (issuedEquipment.length === 0) {
+      alert('No equipment selected for printing');
+      return;
+    }
+
+    // Prepare print data from current form and issued equipment
+    const printData = {
+      full_name: `${form.firstName} ${form.lastName}`.trim(),
+      position: form.position || 'N/A',
+      department: form.department || 'N/A',
+      items: issuedEquipment.map(eq => ({
+        equipment_name: eq.name || eq.brand || 'N/A',
+        brand: eq.brand || 'N/A',
+        model: eq.name || 'N/A',
+        category_name: eq.category?.name || 'N/A',
+        serial_number: Array.isArray(eq.serial_numbers) ? eq.serial_numbers.join(', ') : (eq.serial_number || 'N/A'),
+        serial_numbers: Array.isArray(eq.serial_numbers) ? eq.serial_numbers : [eq.serial_number || 'N/A'],
+        specifications: eq.specifications || 'No specifications',
+        date_released: new Date().toISOString(),
+        date_returned: null
+      })),
+    };
+
+    setPrintData(printData);
+    setIsPrintModalOpen(true);
+  };
+
+  const closePrintModal = () => {
+    setIsPrintModalOpen(false);
+    setPrintData(null);
+  };
+
+  // Get unique categories from available equipment
+  const getAvailableCategories = () => {
+    const categories = availableEquipment.map(eq => eq.category?.name || 'Uncategorized');
+    const uniqueCategories = [...new Set(categories)];
+    return uniqueCategories.sort();
+  };
+
+  // Get unique equipment items grouped by specifications
+  const getUniqueEquipment = () => {
+    const groupedMap = new Map();
+    
+    availableEquipment.forEach(eq => {
+      // Create a unique key based on specifications (brand, name, specs)
+      const specKey = `${eq.brand || eq.name || 'Unknown'}-${eq.specifications || eq.description || 'No specs'}`;
+      
+      if (!groupedMap.has(specKey)) {
+        // First time seeing this specification, create the group
+        groupedMap.set(specKey, {
+          id: eq.id, // Keep the first ID as reference
+          name: eq.name || eq.brand,
+          brand: eq.brand,
+          specifications: eq.specifications || eq.description || 'No specifications',
+          item_image: eq.item_image,
+          category: eq.category,
+          status: eq.status,
+          serial_numbers: [eq.serial_number].filter(Boolean), // Array of serial numbers
+          available_count: (eq.status === 'available' || eq.status === 'Available') ? 1 : 0,
+          all_items: [eq] // Store all items with this specification
+        });
+      } else {
+        // Add to existing group
+        const existing = groupedMap.get(specKey);
+        existing.serial_numbers.push(eq.serial_number);
+        existing.all_items.push(eq);
+        if (eq.status === 'available' || eq.status === 'Available') {
+          existing.available_count += 1;
+        }
+      }
+    });
+    
+    return Array.from(groupedMap.values());
+  };
+
+  // Calculate real availability for equipment, accounting for already selected items
+  const getEquipmentAvailability = (equipment) => {
+    const baseAvailability = equipment.available_count || 0;
+    const specKey = `${equipment.brand || equipment.name || 'Unknown'}-${equipment.specifications || equipment.description || 'No specs'}`;
+    const isAlreadySelected = issuedEquipment.find(eq => eq.specKey === specKey);
+    
+    // If this equipment is already selected, reduce availability by 1
+    return isAlreadySelected ? Math.max(0, baseAvailability - 1) : baseAvailability;
   };
 
   const resetAll = () => {
@@ -411,8 +521,13 @@ const EmployeePage = () => {
     const equipmentData = issuedEquipment.map(eq => ({
       id: eq.id,
       name: eq.name,
-      specs: eq.specs || eq.specifications || eq.description || 'N/A',
-      serial_number: eq.serial_number
+      brand: eq.brand,
+      specs: eq.specifications || eq.description || 'N/A',
+      item_image: eq.item_image,
+      category: eq.category,
+      status: eq.status,
+      serial_numbers: eq.serial_numbers || [],
+      available_count: eq.available_count || 0
     }));
 
     fetch('/api/employees', {
@@ -475,9 +590,23 @@ const EmployeePage = () => {
       try {
         const parsedEquipment = JSON.parse(emp.issuedItem);
         if (Array.isArray(parsedEquipment)) {
-          setIssuedEquipment(parsedEquipment);
+          // Transform the saved data back to the expected UI format
+          const transformedEquipment = parsedEquipment.map(eq => ({
+            id: eq.id,
+            name: eq.name,
+            brand: eq.brand || eq.name, // Use brand if available, otherwise use name
+            specifications: eq.specs || 'No specifications',
+            item_image: eq.item_image || null,
+            category: eq.category || null,
+            status: eq.status || 'available',
+            specKey: `${eq.brand || eq.name || 'Unknown'}-${eq.specs || 'No specs'}`,
+            serial_numbers: eq.serial_numbers || [],
+            available_count: eq.available_count || 0
+          }));
+          setIssuedEquipment(transformedEquipment);
         }
       } catch (e) {
+        console.error('Error parsing issued equipment:', e);
         setIssuedEquipment([]);
       }
     } else {
@@ -504,8 +633,13 @@ const EmployeePage = () => {
     const equipmentData = issuedEquipment.map(eq => ({
       id: eq.id,
       name: eq.name,
-      specs: eq.specs || eq.specifications || eq.description || 'N/A',
-      serial_number: eq.serial_number
+      brand: eq.brand,
+      specs: eq.specifications || eq.description || 'N/A',
+      item_image: eq.item_image,
+      category: eq.category,
+      status: eq.status,
+      serial_numbers: eq.serial_numbers || [],
+      available_count: eq.available_count || 0
     }));
     
     fetch(`/api/employees/${editing.id}`, {
@@ -790,37 +924,34 @@ const EmployeePage = () => {
               <div className="mt-6">
                 <div className="space-y-4">
                   <label className="block text-sm text-gray-700 font-medium mb-2">
-                    Issued Item
+                    Issued Equipment
                   </label>
                   <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
                     <div className="bg-gray-100 px-4 py-3 border-b border-gray-300">
-                      <div className="grid grid-cols-3 gap-4 text-sm font-bold text-gray-800">
-                        <div>Items</div>
-                        <div>Specs</div>
-                        <div>Serial no.</div>
+                      <div className="grid grid-cols-2 gap-4 text-sm font-bold text-gray-800">
+                        <div>Equipment</div>
+                        <div>Specifications</div>
                       </div>
                     </div>
-                    <div className="max-h-40 overflow-y-auto">
+                    <div className="max-h-60 overflow-y-auto">
                       <div className="divide-y divide-gray-200">
                         {viewing.issuedEquipment && viewing.issuedEquipment.length > 0 ? (
                           viewing.issuedEquipment.map((item, index) => (
-                            <div key={index} className="px-4 py-3">
-                              <div className="grid grid-cols-3 gap-4 items-center">
-                                <div className="text-blue-600 underline cursor-pointer font-medium">
-                                  {item.name || 'N/A'}
+                            <div key={index} className="px-4 py-3 hover:bg-gray-50">
+                              <div className="grid grid-cols-2 gap-4 items-center">
+                                <div className="text-blue-600 font-medium">
+                                  {item.name || item.brand || 'N/A'}
                                 </div>
                                 <div className="text-gray-700 text-sm leading-tight">
-                                  {item.specifications || item.specs || 'N/A'}
-                                </div>
-                                <div className="text-gray-700 text-sm">
-                                  {item.serial_number || 'N/A'}
+                                  {item.specifications || item.specs || 'No specifications'}
                                 </div>
                               </div>
                             </div>
                           ))
                         ) : (
-                          <div className="px-4 py-3 text-center text-gray-500">
-                            No items issued
+                          <div className="px-4 py-6 text-center text-gray-500">
+                            <div className="text-lg font-medium mb-2">No equipment issued</div>
+                            <div className="text-sm">This employee has not been assigned any equipment yet.</div>
                           </div>
                         )}
                       </div>
@@ -950,10 +1081,9 @@ const EmployeePage = () => {
                   </label>
                   <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
                     <div className="bg-gray-100 px-4 py-3 border-b border-gray-300">
-                      <div className="grid grid-cols-3 gap-4 text-sm font-bold text-gray-800">
-                        <div>Items</div>
-                        <div>Specs</div>
-                        <div>Serial no.</div>
+                      <div className="grid grid-cols-2 gap-4 text-sm font-bold text-gray-800">
+                        <div>Equipment</div>
+                        <div>Specifications</div>
                       </div>
                     </div>
                     <div className="max-h-60 overflow-y-auto">
@@ -963,52 +1093,45 @@ const EmployeePage = () => {
                             No equipment issued yet. Click "Add New" to assign equipment.
                           </div>
                         ) : (
-                          issuedEquipment.map((equipment) => (
-                            <div key={equipment.id} className="px-4 py-3 hover:bg-gray-50 transition-colors">
-                              <div className="flex items-start space-x-3">
+                          issuedEquipment.map((equipment, index) => (
+                            <div key={equipment.specKey || equipment.id || index} className="px-4 py-3 hover:bg-gray-50 transition-colors">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-3 flex-1">
                                 {/* Equipment Image */}
                                 {equipment.item_image ? (
                                   <img 
                                     src={`/storage/${equipment.item_image}`} 
                                     alt={equipment.name}
-                                    className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
+                                      className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
                                   />
                                 ) : (
-                                  <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                    <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
                                     <span className="text-gray-400 text-xs">No img</span>
                                   </div>
                                 )}
-                                
-                                {/* Equipment Details */}
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-start justify-between">
-                                    <div className="flex-1 min-w-0">
+                                  <div className="min-w-0 flex-1">
                                       <h5 className="text-blue-600 font-medium text-sm truncate">
                                         {equipment.name || equipment.brand}
                                       </h5>
-                                      <p className="text-gray-600 text-xs mt-0.5 line-clamp-1">
-                                        {equipment.specifications || equipment.brand || 'No specifications'}
-                                      </p>
-                                      <p className="text-gray-500 text-xs mt-0.5">
-                                        Serial: {equipment.serial_number || 'N/A'}
-                                      </p>
+                                    <p className="text-gray-700 text-sm leading-tight mt-1">
+                                      {equipment.specifications || 'No specifications'}
+                                    </p>
+                                  </div>
                                     </div>
                                     <button
                                       type="button"
-                                      onClick={() => removeEquipmentFromIssued(equipment.id)}
-                                      className="ml-2 text-red-500 hover:text-red-700 text-xs font-medium flex-shrink-0"
+                                  onClick={() => removeEquipmentFromIssued(equipment)}
+                                  className="ml-4 text-red-500 hover:text-red-700 text-xs font-medium flex-shrink-0 px-2 py-1 rounded hover:bg-red-50"
                                     >
                                       Remove
                                     </button>
-                                  </div>
-                                </div>
                               </div>
                             </div>
                           ))
                         )}
                       </div>
                     </div>
-                    <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
+                    <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
                       <button
                         type="button"
                         onClick={openEquipmentModal}
@@ -1016,6 +1139,20 @@ const EmployeePage = () => {
                         tabIndex={10}
                       >
                         Add New
+                      </button>
+                      <button
+                        type="button"
+                        onClick={openPrintModal}
+                        disabled={issuedEquipment.length === 0}
+                        className={`px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center space-x-2 ${
+                          issuedEquipment.length === 0
+                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            : 'bg-green-600 text-white hover:bg-green-700'
+                        }`}
+                        title={issuedEquipment.length === 0 ? 'No equipment selected' : 'Print accountability form'}
+                      >
+                        <Printer className="h-4 w-4" />
+                        <span>Print</span>
                       </button>
                     </div>
                   </div>
@@ -1147,10 +1284,9 @@ const EmployeePage = () => {
                   </label>
                   <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
                     <div className="bg-gray-100 px-4 py-3 border-b border-gray-300">
-                      <div className="grid grid-cols-3 gap-4 text-sm font-bold text-gray-800">
-                        <div>Items</div>
-                        <div>Specs</div>
-                        <div>Serial no.</div>
+                      <div className="grid grid-cols-2 gap-4 text-sm font-bold text-gray-800">
+                        <div>Equipment</div>
+                        <div>Specifications</div>
                       </div>
                     </div>
                     <div className="max-h-60 overflow-y-auto">
@@ -1160,52 +1296,45 @@ const EmployeePage = () => {
                             No equipment issued yet. Click "Add New" to assign equipment.
                           </div>
                         ) : (
-                          issuedEquipment.map((equipment) => (
-                            <div key={equipment.id} className="px-4 py-3 hover:bg-gray-50 transition-colors">
-                              <div className="flex items-start space-x-3">
+                          issuedEquipment.map((equipment, index) => (
+                            <div key={equipment.specKey || equipment.id || index} className="px-4 py-3 hover:bg-gray-50 transition-colors">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-3 flex-1">
                                 {/* Equipment Image */}
                                 {equipment.item_image ? (
                                   <img 
                                     src={`/storage/${equipment.item_image}`} 
                                     alt={equipment.name}
-                                    className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
+                                      className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
                                   />
                                 ) : (
-                                  <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                    <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
                                     <span className="text-gray-400 text-xs">No img</span>
                                   </div>
                                 )}
-                                
-                                {/* Equipment Details */}
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-start justify-between">
-                                    <div className="flex-1 min-w-0">
+                                  <div className="min-w-0 flex-1">
                                       <h5 className="text-blue-600 font-medium text-sm truncate">
                                         {equipment.name || equipment.brand}
                                       </h5>
-                                      <p className="text-gray-600 text-xs mt-0.5 line-clamp-1">
-                                        {equipment.specifications || equipment.brand || 'No specifications'}
-                                      </p>
-                                      <p className="text-gray-500 text-xs mt-0.5">
-                                        Serial: {equipment.serial_number || 'N/A'}
-                                      </p>
+                                    <p className="text-gray-700 text-sm leading-tight mt-1">
+                                      {equipment.specifications || 'No specifications'}
+                                    </p>
+                                  </div>
                                     </div>
                                     <button
                                       type="button"
-                                      onClick={() => removeEquipmentFromIssued(equipment.id)}
-                                      className="ml-2 text-red-500 hover:text-red-700 text-xs font-medium flex-shrink-0"
+                                  onClick={() => removeEquipmentFromIssued(equipment)}
+                                  className="ml-4 text-red-500 hover:text-red-700 text-xs font-medium flex-shrink-0 px-2 py-1 rounded hover:bg-red-50"
                                     >
                                       Remove
                                     </button>
-                                  </div>
-                                </div>
                               </div>
                             </div>
                           ))
                         )}
                       </div>
                     </div>
-                    <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
+                    <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
                       <button
                         type="button"
                         onClick={openEquipmentModal}
@@ -1213,6 +1342,20 @@ const EmployeePage = () => {
                         tabIndex={10}
                       >
                         Add New
+                      </button>
+                      <button
+                        type="button"
+                        onClick={openPrintModal}
+                        disabled={issuedEquipment.length === 0}
+                        className={`px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center space-x-2 ${
+                          issuedEquipment.length === 0
+                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            : 'bg-green-600 text-white hover:bg-green-700'
+                        }`}
+                        title={issuedEquipment.length === 0 ? 'No equipment selected' : 'Print accountability form'}
+                      >
+                        <Printer className="h-4 w-4" />
+                        <span>Print</span>
                       </button>
                     </div>
                   </div>
@@ -1266,42 +1409,175 @@ const EmployeePage = () => {
         {isEquipmentModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/30" onClick={closeEquipmentModal} />
-            <div className="relative bg-white rounded-2xl shadow-2xl w-[700px] max-w-[95vw] max-h-[80vh] overflow-hidden border border-gray-200">
+            <div className="relative bg-white rounded-2xl shadow-2xl w-[900px] max-w-[95vw] max-h-[90vh] overflow-hidden border border-gray-200">
+              {/* Header */}
               <div className="p-6 border-b border-gray-200">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xl font-semibold text-blue-600">Select Equipment</h3>
-                  <button onClick={closeEquipmentModal} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-2xl font-bold text-gray-800">Select Equipment</h3>
+                  <div className="flex items-center space-x-2">
+                    <button 
+                      onClick={() => setViewMode('grid')}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        viewMode === 'grid' 
+                          ? 'bg-blue-500 text-white' 
+                          : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      Grid View
+                    </button>
+                    <button 
+                      onClick={() => setViewMode('list')}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        viewMode === 'list' 
+                          ? 'bg-blue-500 text-white' 
+                          : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      List View
+                    </button>
                 </div>
-                <div className="mt-4">
-                  <div className="relative">
+                </div>
+                
+                {/* Search Bar */}
+                <div className="relative mb-4">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                     <input
                       type="text"
-                      placeholder="Search equipment..."
+                    placeholder="Search"
                       value={equipmentSearchTerm}
                       onChange={(e) => setEquipmentSearchTerm(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                       tabIndex={1}
                     />
                   </div>
+                
+                {/* Category Filters */}
+                <div className="flex items-center space-x-3">
+                  <button 
+                    onClick={() => setSelectedCategory('all')}
+                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                      selectedCategory === 'all' 
+                        ? 'bg-blue-500 text-white' 
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    All
+                  </button>
+                  {getAvailableCategories().map((category) => (
+                    <button 
+                      key={category}
+                      onClick={() => setSelectedCategory(category)}
+                      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                        selectedCategory === category 
+                          ? 'bg-blue-500 text-white' 
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {category}
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              <div className="p-6 overflow-y-auto" style={{ maxHeight: 'calc(80vh - 200px)' }}>
+              {/* Equipment Display */}
+              <div className="p-6 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 300px)' }}>
+                {viewMode === 'grid' ? (
+                  <div className="grid grid-cols-4 gap-6">
+                    {getUniqueEquipment()
+                      .filter(eq => {
+                        // Search filter
+                        const matchesSearch = 
+                          eq.name?.toLowerCase().includes(equipmentSearchTerm.toLowerCase()) ||
+                          eq.brand?.toLowerCase().includes(equipmentSearchTerm.toLowerCase()) ||
+                          (eq.specifications && eq.specifications.toLowerCase().includes(equipmentSearchTerm.toLowerCase())) ||
+                          (eq.serial_number && eq.serial_number.toLowerCase().includes(equipmentSearchTerm.toLowerCase())) ||
+                          eq.category?.name?.toLowerCase().includes(equipmentSearchTerm.toLowerCase());
+                        
+                        // Category filter
+                        const matchesCategory = selectedCategory === 'all' || 
+                          (eq.category?.name || 'Uncategorized') === selectedCategory;
+                        
+                        return matchesSearch && matchesCategory;
+                      })
+                      .map((equipment) => {
+                        const specKey = `${equipment.brand || equipment.name || 'Unknown'}-${equipment.specifications || equipment.description || 'No specs'}`;
+                        const isAdded = issuedEquipment.find(eq => eq.specKey === specKey);
+                        const availability = getEquipmentAvailability(equipment);
+                        return (
+                          <div 
+                            key={specKey} 
+                            className={`bg-white border-2 rounded-xl p-4 transition-all hover:shadow-lg ${
+                              isAdded ? 'border-blue-500 shadow-lg' : 'border-gray-200 hover:border-blue-300'
+                            }`}
+                          >
+                            {/* Equipment Image */}
+                            <div className="mb-4">
+                              {equipment.item_image ? (
+                                <img 
+                                  src={`/storage/${equipment.item_image}`} 
+                                  alt={equipment.name}
+                                  className="w-full h-32 rounded-lg object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-32 rounded-lg bg-gray-100 flex items-center justify-center">
+                                  <span className="text-gray-400 text-sm">No Image</span>
+                                </div>
+                              )}
+                            </div>
+                            
+                            {/* Equipment Details */}
+                            <div className="space-y-2">
+                              <h4 className="font-semibold text-gray-900 text-sm truncate">
+                                {equipment.brand || equipment.name}
+                              </h4>
+                              <p className="text-xs text-gray-600">
+                                Available Unit: {availability}
+                              </p>
+                            </div>
+                            
+                            {/* Select Button */}
+                            <button
+                              onClick={() => isAdded ? removeEquipmentFromIssued(equipment) : addEquipmentToIssued(equipment)}
+                              disabled={availability === 0 && !isAdded}
+                              className={`w-full mt-4 py-2 rounded-lg font-medium text-sm transition-colors ${
+                                isAdded 
+                                  ? 'bg-red-500 text-white hover:bg-red-600' 
+                                  : availability === 0
+                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                    : 'bg-blue-500 text-white hover:bg-blue-600'
+                              }`}
+                            >
+                              {isAdded ? 'Remove' : availability === 0 ? 'Out of Stock' : 'Select'}
+                            </button>
+                          </div>
+                        );
+                      })}
+                  </div>
+                ) : (
                 <div className="space-y-3">
-                  {availableEquipment
-                    .filter(eq => 
+                    {getUniqueEquipment()
+                      .filter(eq => {
+                        // Search filter
+                        const matchesSearch = 
                       eq.name?.toLowerCase().includes(equipmentSearchTerm.toLowerCase()) ||
                       eq.brand?.toLowerCase().includes(equipmentSearchTerm.toLowerCase()) ||
                       (eq.specifications && eq.specifications.toLowerCase().includes(equipmentSearchTerm.toLowerCase())) ||
                       (eq.serial_number && eq.serial_number.toLowerCase().includes(equipmentSearchTerm.toLowerCase())) ||
-                      eq.category?.name?.toLowerCase().includes(equipmentSearchTerm.toLowerCase())
-                    )
+                          eq.category?.name?.toLowerCase().includes(equipmentSearchTerm.toLowerCase());
+                        
+                        // Category filter
+                        const matchesCategory = selectedCategory === 'all' || 
+                          (eq.category?.name || 'Uncategorized') === selectedCategory;
+                        
+                        return matchesSearch && matchesCategory;
+                      })
                     .map((equipment) => {
-                      const isAdded = issuedEquipment.find(eq => eq.id === equipment.id);
+                        const specKey = `${equipment.brand || equipment.name || 'Unknown'}-${equipment.specifications || equipment.description || 'No specs'}`;
+                        const isAdded = issuedEquipment.find(eq => eq.specKey === specKey);
+                        const availability = getEquipmentAvailability(equipment);
                       return (
                         <div 
-                          key={equipment.id} 
+                            key={specKey} 
                           className={`p-4 border rounded-lg transition-all ${
                             isAdded ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
                           }`}
@@ -1326,11 +1602,11 @@ const EmployeePage = () => {
                                 <div className="flex items-center space-x-2 mb-1">
                                   <h4 className="font-semibold text-gray-900 truncate">{equipment.name || equipment.brand}</h4>
                                   <span className={`px-2 py-0.5 text-xs rounded-full flex-shrink-0 ${
-                                    equipment.status === 'available' || equipment.status === 'Available'
+                                      availability > 0
                                       ? 'bg-green-100 text-green-700' 
-                                      : 'bg-gray-100 text-gray-700'
+                                        : 'bg-red-100 text-red-700'
                                   }`}>
-                                    {equipment.status}
+                                      {availability > 0 ? `Available: ${availability}` : 'Out of Stock'}
                                   </span>
                                 </div>
                                 
@@ -1346,50 +1622,62 @@ const EmployeePage = () => {
                                   <span>
                                     <span className="font-medium">Category:</span> {equipment.category?.name || 'Uncategorized'}
                                   </span>
-                                  <span>
-                                    <span className="font-medium">Serial:</span> {equipment.serial_number || 'N/A'}
-                                  </span>
                                 </div>
                               </div>
                             </div>
                             
                             {/* Add/Remove Button */}
                             <button
-                              onClick={() => isAdded ? removeEquipmentFromIssued(equipment.id) : addEquipmentToIssued(equipment)}
+                                onClick={() => isAdded ? removeEquipmentFromIssued(equipment) : addEquipmentToIssued(equipment)}
+                                disabled={availability === 0 && !isAdded}
                               className={`px-4 py-2 rounded-lg font-medium transition-colors flex-shrink-0 ${
                                 isAdded 
                                   ? 'bg-red-100 text-red-600 hover:bg-red-200' 
+                                    : availability === 0
+                                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                   : 'bg-blue-500 text-white hover:bg-blue-600'
                               }`}
                             >
-                              {isAdded ? 'Remove' : 'Add'}
+                                {isAdded ? 'Remove' : availability === 0 ? 'Out of Stock' : 'Add'}
                             </button>
                           </div>
                         </div>
                       );
                     })}
-                  {availableEquipment.filter(eq => 
+                  </div>
+                )}
+                
+                {getUniqueEquipment().filter(eq => {
+                  const matchesSearch = 
                     eq.name?.toLowerCase().includes(equipmentSearchTerm.toLowerCase()) ||
                     eq.brand?.toLowerCase().includes(equipmentSearchTerm.toLowerCase()) ||
                     (eq.specifications && eq.specifications.toLowerCase().includes(equipmentSearchTerm.toLowerCase())) ||
                     (eq.serial_number && eq.serial_number.toLowerCase().includes(equipmentSearchTerm.toLowerCase())) ||
-                    eq.category?.name?.toLowerCase().includes(equipmentSearchTerm.toLowerCase())
-                  ).length === 0 && (
-                    <div className="text-center py-8 text-gray-500">
-                      {equipmentSearchTerm ? 'No equipment found matching your search.' : 'No available equipment at the moment.'}
+                    eq.category?.name?.toLowerCase().includes(equipmentSearchTerm.toLowerCase());
+                  
+                  const matchesCategory = selectedCategory === 'all' || 
+                    (eq.category?.name || 'Uncategorized') === selectedCategory;
+                  
+                  return matchesSearch && matchesCategory;
+                }).length === 0 && (
+                  <div className="text-center py-12 text-gray-500">
+                    <div className="text-lg font-medium mb-2">No equipment found</div>
+                    <div className="text-sm">
+                      {equipmentSearchTerm || selectedCategory !== 'all' ? 'Try adjusting your search terms or filters' : 'No available equipment at the moment'}
+                    </div>
                     </div>
                   )}
-                </div>
               </div>
 
+              {/* Footer */}
               <div className="p-6 border-t border-gray-200 bg-gray-50">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-gray-600 font-medium">
                     {issuedEquipment.length} equipment selected
                   </span>
                   <button
                     onClick={closeEquipmentModal}
-                    className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium transition-colors"
+                    className="px-6 py-2 bg-white border border-blue-500 text-blue-500 rounded-lg hover:bg-blue-50 font-medium transition-colors"
                     tabIndex={2}
                   >
                     Done
@@ -1398,6 +1686,18 @@ const EmployeePage = () => {
               </div>
             </div>
           </div>
+        )}
+
+        {/* Print Receipt Modal */}
+        {isPrintModalOpen && printData && (
+          <PrintReceipt
+            isOpen={isPrintModalOpen}
+            onClose={closePrintModal}
+            transactionData={printData}
+            onPrint={() => {
+              console.log('Printing accountability form for:', printData);
+            }}
+          />
         )}
       </div>
     </div>

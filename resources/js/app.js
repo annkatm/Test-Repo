@@ -280,11 +280,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             };
             
-            // Render SimpleEmployee component directly on employee page
+            // Render EmployeePage component directly on employee page
             try {
-                console.log('Rendering SimpleEmployee component on employee-root');
-                root.render(React.createElement(SimpleEmployee));
-                console.log('SimpleEmployee component rendered to employee-root');
+                console.log('Rendering EmployeePage component on employee-root');
+                root.render(React.createElement(EmployeePage));
+                console.log('EmployeePage component rendered to employee-root');
             } catch (employeeError) {
                 console.error('Error rendering Employee component:', employeeError);
                 // Try to use the inline fallback component if available
