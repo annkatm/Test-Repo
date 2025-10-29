@@ -109,6 +109,12 @@ const EmployeePage = () => {
   const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [printData, setPrintData] = useState(null);
+  // Toast state for success notifications
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => setToast(prev => ({ ...prev, show: false })), 3000);
+  };
 
   // Validation functions
   const validateEmail = (email) => {
@@ -586,6 +592,7 @@ const EmployeePage = () => {
           refreshEmployees();
           // Dispatch event to refresh equipment page
           window.dispatchEvent(new Event('equipment:updated'));
+          showToast('Employee added successfully');
         } else {
           alert(data.message || 'Failed to save employee');
         }
@@ -686,6 +693,7 @@ const EmployeePage = () => {
           refreshEmployees();
           // Dispatch event to refresh equipment page
           window.dispatchEvent(new Event('equipment:updated'));
+          showToast('Employee updated successfully');
         } else {
           alert(data.message || 'Failed to update employee');
         }
@@ -706,6 +714,7 @@ const EmployeePage = () => {
           refreshEmployees();
           // Dispatch event to refresh equipment page
           window.dispatchEvent(new Event('equipment:updated'));
+          showToast('Employee deleted successfully');
         } else {
           alert(data.message || 'Failed to delete employee');
         }
@@ -1150,28 +1159,31 @@ const EmployeePage = () => {
                       </div>
                     </div>
                     <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
-                      <button
-                        type="button"
-                        onClick={openEquipmentModal}
-                        className="px-4 py-2 bg-blue-500 border border-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
-                        tabIndex={10}
-                      >
-                        Add New
-                      </button>
-                      <button
-                        type="button"
-                        onClick={openPrintModal}
-                        disabled={issuedEquipment.length === 0}
-                        className={`px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center space-x-2 ${
-                          issuedEquipment.length === 0
-                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                            : 'bg-green-600 text-white hover:bg-green-700'
-                        }`}
-                        title={issuedEquipment.length === 0 ? 'No equipment selected' : 'Print accountability form'}
-                      >
-                        <Printer className="h-4 w-4" />
-                        <span>Print</span>
-                      </button>
+                      {(form.employeeType === 'New hire' || form.employeeType === 'Provisionary') && (
+                        <button
+                          type="button"
+                          onClick={openEquipmentModal}
+                          className="px-4 py-2 bg-blue-500 border border-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
+                          tabIndex={10}
+                        >
+                          Add New
+                        </button>
+                      )}
+                      {(form.employeeType === 'New hire' || form.employeeType === 'Provisionary') && (
+                        <button
+                          type="button"
+                          onClick={openPrintModal}
+                          disabled={issuedEquipment.length === 0}
+                          className={`p-2 rounded transition-colors ${
+                            issuedEquipment.length === 0
+                              ? 'text-gray-300 cursor-not-allowed'
+                              : 'text-gray-600 hover:text-gray-800'
+                          }`}
+                          title={issuedEquipment.length === 0 ? 'No equipment selected' : 'Print'}
+                        >
+                          <Printer className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1353,28 +1365,31 @@ const EmployeePage = () => {
                       </div>
                     </div>
                     <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
-                      <button
-                        type="button"
-                        onClick={openEquipmentModal}
-                        className="px-4 py-2 bg-blue-500 border border-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
-                        tabIndex={10}
-                      >
-                        Add New
-                      </button>
-                      <button
-                        type="button"
-                        onClick={openPrintModal}
-                        disabled={issuedEquipment.length === 0}
-                        className={`px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center space-x-2 ${
-                          issuedEquipment.length === 0
-                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                            : 'bg-green-600 text-white hover:bg-green-700'
-                        }`}
-                        title={issuedEquipment.length === 0 ? 'No equipment selected' : 'Print accountability form'}
-                      >
-                        <Printer className="h-4 w-4" />
-                        <span>Print</span>
-                      </button>
+                      {(form.employeeType === 'New hire' || form.employeeType === 'Provisionary') && (
+                        <button
+                          type="button"
+                          onClick={openEquipmentModal}
+                          className="px-4 py-2 bg-blue-500 border border-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
+                          tabIndex={10}
+                        >
+                          Add New
+                        </button>
+                      )}
+                      {(form.employeeType === 'New hire' || form.employeeType === 'Provisionary') && (
+                        <button
+                          type="button"
+                          onClick={openPrintModal}
+                          disabled={issuedEquipment.length === 0}
+                          className={`p-2 rounded transition-colors ${
+                            issuedEquipment.length === 0
+                              ? 'text-gray-300 cursor-not-allowed'
+                              : 'text-gray-600 hover:text-gray-800'
+                          }`}
+                          title={issuedEquipment.length === 0 ? 'No equipment selected' : 'Print'}
+                        >
+                          <Printer className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1716,6 +1731,25 @@ const EmployeePage = () => {
               console.log('Printing accountability form for:', printData);
             }}
           />
+        )}
+
+        {toast.show && (
+          <div className="fixed bottom-6 right-6 z-50">
+            <div className={`px-4 py-3 rounded-lg shadow-xl border-l-4 bg-white ${
+              toast.type === 'success' ? 'border-green-500' : 'border-red-500'
+            }`}>
+              <div className="flex items-center space-x-3">
+                <div className={`${
+                  toast.type === 'success' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
+                } w-8 h-8 rounded-full flex items-center justify-center`}>
+                  ✓
+                </div>
+                <div className="text-gray-800 font-medium">
+                  {toast.message}
+                </div>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>
