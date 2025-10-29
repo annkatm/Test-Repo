@@ -404,6 +404,36 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
         setActionLoading(false);
         return;
       }
+
+      // First, check the transaction status
+      const statusCheckRes = await fetch(`/api/transactions/${txId}`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        credentials: 'same-origin',
+      });
+
+      if (!statusCheckRes.ok) {
+        let errorMsg = 'Failed to verify transaction status';
+        try {
+          const errorData = await statusCheckRes.json();
+          errorMsg = errorData.message || errorMsg;
+        } catch (_) {}
+        alert(`Error: ${errorMsg}`);
+        setActionLoading(false);
+        return;
+      }
+
+      const transactionData = await statusCheckRes.json();
+      if (transactionData.status !== 'released') {
+        alert('This item cannot be returned because it is not currently marked as released.');
+        setActionLoading(false);
+        return;
+      }
+
+      // If we get here, the transaction exists and is in 'released' status
       const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
       const res = await fetch(`/api/transactions/${txId}/return`, {
         method: 'POST',
@@ -418,10 +448,14 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
           return_notes: ''
         }),
       });
+
       if (!res.ok) {
-        let msg = await res.text();
-        try { const j = JSON.parse(msg); msg = j?.message || j?.error || j?.errors || msg; } catch (_) {}
-        alert(`Return failed: ${msg || 'Unknown error'}`);
+        let errorMsg = 'Failed to process return';
+        try {
+          const errorData = await res.json();
+          errorMsg = errorData.message || errorMsg;
+        } catch (_) {}
+        alert(`Return failed: ${errorMsg}`);
         setActionLoading(false);
         return;
       }
