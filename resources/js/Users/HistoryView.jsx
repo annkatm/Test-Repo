@@ -1,4 +1,24 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
+
+export const readHistory = () => {
+  try {
+    const raw = localStorage.getItem('ireply_history');
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch (_) {
+    return [];
+  }
+};
+
+export const getHistoryCount = () => {
+  try {
+    const c = localStorage.getItem('ireply_history_count');
+    if (c != null) return Number(c) || 0;
+    return readHistory().length;
+  } catch (_) {
+    return 0;
+  }
+};
 
 const HistoryView = ({
   onBack,
@@ -12,6 +32,39 @@ const HistoryView = ({
   sortedData,
   logActivity,
 }) => {
+  const noop = () => {};
+  const [localSearch, setLocalSearch] = useState('');
+  const [localPerPage, setLocalPerPage] = useState(10);
+  const [localPage, setLocalPage] = useState(1);
+
+  const sTerm = searchTerm ?? localSearch;
+  const setST = setSearchTerm ?? setLocalSearch;
+  const perPage = itemsPerPage ?? localPerPage;
+  const setPerPage = setItemsPerPage ?? setLocalPerPage;
+  const page = currentPage ?? localPage;
+  const setPage = setCurrentPage ?? setLocalPage;
+  const log = logActivity ?? noop;
+
+  const sourceData = (sortedData && sortedData.length ? sortedData : readHistory());
+  const filtered = useMemo(() => {
+    const q = (sTerm || '').toString().toLowerCase().trim();
+    const arr = Array.isArray(sourceData) ? sourceData : [];
+    const base = q
+      ? arr.filter((it) => (it?.item || it?.message || '').toString().toLowerCase().includes(q))
+      : arr;
+    return base
+      .slice()
+      .sort((a, b) => new Date(b.date || b.time || 0) - new Date(a.date || a.time || 0));
+  }, [sourceData, sTerm]);
+
+  const localTotalPages = Math.max(1, Math.ceil(filtered.length / Math.max(1, perPage)));
+  const effectiveTotalPages = totalPages ?? localTotalPages;
+  const clampedPage = Math.min(Math.max(1, page), effectiveTotalPages);
+  const pageData = useMemo(() => {
+    const start = (clampedPage - 1) * perPage;
+    return filtered.slice(start, start + perPage);
+  }, [filtered, clampedPage, perPage]);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -34,10 +87,10 @@ const HistoryView = ({
         <input
           type="text"
           placeholder="Search by item name..."
-          value={searchTerm}
+          value={sTerm}
           onChange={(e) => {
-            setSearchTerm(e.target.value);
-            logActivity(`History search: ${e.target.value}`, 'info');
+            setST(e.target.value);
+            log(`History search: ${e.target.value}`, 'info');
           }}
           className="px-4 py-2 w-64 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
         />
@@ -55,7 +108,7 @@ const HistoryView = ({
 
         {/* Table Body */}
         <div className="divide-y divide-gray-100">
-          {sortedData.map((item) => (
+          {pageData.map((item) => (
             <div key={item.id || item.time} className="grid grid-cols-12 py-3 px-6 text-sm">
               <div className="col-span-3">{new Date(item.date || item.time).toLocaleDateString()}</div>
               <div className="col-span-3 truncate">{item.item}</div>
@@ -63,7 +116,7 @@ const HistoryView = ({
               <div className="col-span-3">{item.return_date || '-'}</div>
             </div>
           ))}
-          {sortedData.length === 0 && (
+          {pageData.length === 0 && (
             <div className="py-6 px-6 text-sm text-gray-500">No history yet.</div>
           )}
         </div>
@@ -75,19 +128,19 @@ const HistoryView = ({
         <div className="flex items-center justify-center gap-2">
           {/* Previous Button */}
           <button
-            onClick={() => setCurrentPage(Math.max(currentPage - 1, 1))}
-            disabled={currentPage === 1}
+            onClick={() => setPage(Math.max(clampedPage - 1, 1))}
+            disabled={clampedPage === 1}
             className="w-10 h-10 flex items-center justify-center border border-gray-300 rounded-lg bg-white text-gray-700 text-sm hover:bg-blue-50 hover:border-blue-400 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             ←
           </button>
 
           {/* Page Numbers */}
-          {Array.from({ length: totalPages }, (_, i) => i + 1).slice(Math.max(0, currentPage - 2), Math.min(totalPages, currentPage + 1)).map((i) => (
+          {Array.from({ length: effectiveTotalPages }, (_, i) => i + 1).slice(Math.max(0, clampedPage - 2), Math.min(effectiveTotalPages, clampedPage + 1)).map((i) => (
             <button
               key={i}
-              onClick={() => setCurrentPage(i)}
-              className={`w-10 h-10 flex items-center justify-center border rounded-lg text-sm font-medium transition-all ${currentPage === i
+              onClick={() => setPage(i)}
+              className={`w-10 h-10 flex items-center justify-center border rounded-lg text-sm font-medium transition-all ${clampedPage === i
                 ? 'bg-blue-600 text-white border-blue-600 shadow-md'
                 : 'bg-white text-gray-700 border-gray-300 hover:bg-blue-50 hover:border-blue-400'
                 }`}
@@ -98,8 +151,8 @@ const HistoryView = ({
 
           {/* Next Button */}
           <button
-            onClick={() => setCurrentPage(Math.min(currentPage + 1, totalPages))}
-            disabled={currentPage === totalPages}
+            onClick={() => setPage(Math.min(clampedPage + 1, effectiveTotalPages))}
+            disabled={clampedPage === effectiveTotalPages}
             className="w-10 h-10 flex items-center justify-center border border-gray-300 rounded-lg bg-white text-gray-700 text-sm hover:bg-blue-50 hover:border-blue-400 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             →
@@ -110,11 +163,11 @@ const HistoryView = ({
         <div className="flex items-center gap-2 mt-4 sm:mt-0">
           <span className="text-sm text-gray-700">Items per page:</span>
           <select
-            value={itemsPerPage}
+            value={perPage}
             onChange={(e) => {
-              setItemsPerPage(Number(e.target.value));
-              setCurrentPage(1);
-              logActivity(`History items per page set to ${Number(e.target.value)}`, 'info');
+              setPerPage(Number(e.target.value));
+              setPage(1);
+              log(`History items per page set to ${Number(e.target.value)}`, 'info');
             }}
             className="border border-gray-300 rounded-lg px-2 py-1 text-sm text-gray-700 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
           >

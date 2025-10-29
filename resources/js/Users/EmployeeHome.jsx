@@ -63,6 +63,105 @@ const EmployeeHome = () => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, ttl);
   };
+
+  useEffect(() => {
+    try {
+      const now = Date.now();
+      const within24h = (iso) => {
+        const ts = new Date(iso || Date.now()).getTime();
+        return Number.isFinite(ts) ? (now - ts <= 24 * 60 * 60 * 1000) : false;
+      };
+      const derived = [];
+      (Array.isArray(pendingTransactions) ? pendingTransactions : []).forEach((t) => {
+        const when = t.created_at || t.expected_start_date || t.date || t.time || new Date().toISOString();
+        if (within24h(when)) {
+          derived.push({
+            id: `req:${t.id || t.equipment_id || when}`,
+            item: t.equipment_name || t.item || 'Request',
+            message: t.message || 'Item requested',
+            variant: 'request',
+            date: when,
+            time: when,
+          });
+        }
+      });
+      (Array.isArray(transactions) ? transactions : []).forEach((t) => {
+        const s = String(t.status || '').toLowerCase();
+        if (/(approved|released|borrowed|active)/.test(s)) {
+          const when = t.created_at || t.expected_start_date || t.start_date || t.date || t.time || new Date().toISOString();
+          if (within24h(when)) {
+            derived.push({
+              id: `appr:${t.id || t.equipment_id || when}`,
+              item: t.equipment_name || t.item || 'Approved',
+              message: t.message || 'Item approved',
+              variant: 'approved',
+              date: when,
+              time: when,
+            });
+          }
+        }
+      });
+      (Array.isArray(deniedRequests) ? deniedRequests : []).forEach((r) => {
+        const when = r.date || r.time || new Date().toISOString();
+        if (within24h(when)) {
+          derived.push({
+            id: `deny:${r.id || when}`,
+            item: r.item || 'Request',
+            message: r.reason || 'Request denied',
+            variant: 'denied',
+            date: when,
+            time: when,
+          });
+        }
+      });
+      if (derived.length === 0) return;
+      setActivities((prev) => {
+        const base = Array.isArray(prev) ? prev : [];
+        const map = new Map(base.map((x) => [String(x.id || x.message + String(x.time || x.date || '')), x]));
+        derived.forEach((d) => {
+          const k = String(d.id || d.message + String(d.time || d.date || ''));
+          if (!map.has(k)) map.set(k, d);
+        });
+        const merged = Array.from(map.values())
+          .sort((a, b) => new Date(b.time || b.date || 0) - new Date(a.time || a.date || 0))
+          .slice(0, 50);
+        try { localStorage.setItem('employee_activities', JSON.stringify(merged)); } catch (_) { }
+        return merged;
+      });
+    } catch (_) { }
+  }, [pendingTransactions, transactions, deniedRequests]);
+
+  // Also compute a derived recent list on the fly for immediate rendering
+  const recentCombined = useMemo(() => {
+    try {
+      const now = Date.now();
+      const within24h = (iso) => {
+        const ts = new Date(iso || Date.now()).getTime();
+        return Number.isFinite(ts) ? (now - ts <= 24 * 60 * 60 * 1000) : false;
+      };
+      const list = [];
+      (Array.isArray(pendingTransactions) ? pendingTransactions : []).forEach((t) => {
+        const when = t.created_at || t.expected_start_date || t.date || t.time || new Date().toISOString();
+        if (within24h(when)) list.push({ id: `req:${t.id || t.equipment_id || when}`, item: t.equipment_name || t.item || 'Request', message: 'Item requested', variant: 'request', date: when, time: when });
+      });
+      (Array.isArray(transactions) ? transactions : []).forEach((t) => {
+        const s = String(t.status || '').toLowerCase();
+        const when = t.created_at || t.expected_start_date || t.start_date || t.date || t.time || new Date().toISOString();
+        if (/(approved|released|borrowed|active)/.test(s) && within24h(when)) list.push({ id: `appr:${t.id || t.equipment_id || when}`, item: t.equipment_name || t.item || 'Approved', message: 'Item approved', variant: 'approved', date: when, time: when });
+        if (/(return|returned)/.test(s) && within24h(when)) list.push({ id: `ret:${t.id || t.equipment_id || when}`, item: t.equipment_name || t.item || 'Return', message: 'Item returned', variant: 'return', date: when, time: when });
+        if (/(exchange|exchanged)/.test(s) && within24h(when)) list.push({ id: `ex:${t.id || t.equipment_id || when}`, item: t.equipment_name || t.item || 'Exchange', message: 'Item exchanged', variant: 'exchange', date: when, time: when });
+      });
+      (Array.isArray(deniedRequests) ? deniedRequests : []).forEach((r) => {
+        const when = r.date || r.time || new Date().toISOString();
+        if (within24h(when)) list.push({ id: `deny:${r.id || when}`, item: r.item || 'Request', message: r.reason || 'Request denied', variant: 'denied', date: when, time: when });
+      });
+      const base = Array.isArray(activities) ? activities : [];
+      const map = new Map([...base, ...list].map((x) => [String(x.id || x.message + String(x.time || x.date || '')), x]));
+      return Array.from(map.values()).sort((a, b) => new Date(b.time || b.date || 0) - new Date(a.time || a.date || 0));
+    } catch (_) {
+      return activities || [];
+    }
+  }, [activities, pendingTransactions, transactions, deniedRequests]);
   const [notificationCount, setNotificationCount] = useState(() => {
     try {
       const v = Number(localStorage.getItem('employee_history_unseen') || '0');
@@ -133,6 +232,27 @@ const EmployeeHome = () => {
           : prev
       ));
       try { showToast('Request cancelled', 'warning'); } catch (_) {}
+      // Add a cancel activity for Recent panel
+      try {
+        const when = new Date().toISOString();
+        const entry = {
+          id: `cancel:${reqId || equipId || when}`,
+          item: e?.detail?.equipment_name || e?.detail?.item || 'Request',
+          message: 'Request cancelled',
+          variant: 'cancel',
+          date: when,
+          time: when,
+        };
+        setActivities((prev) => {
+          const base = Array.isArray(prev) ? prev : [];
+          const map = new Map(base.map((x) => [String(x.id || x.message + String(x.time || x.date || '')), x]));
+          const k = String(entry.id || entry.message + String(entry.time || entry.date || ''));
+          if (!map.has(k)) map.set(k, entry);
+          const merged = Array.from(map.values()).sort((a, b) => new Date(b.time || b.date || 0) - new Date(a.time || a.date || 0)).slice(0, 50);
+          try { localStorage.setItem('employee_activities', JSON.stringify(merged)); } catch (_) {}
+          return merged;
+        });
+      } catch (_) {}
       // Fallback: refresh pending from server shortly after
       setTimeout(() => { try { fetchPendingTransactions(); } catch (_) {} }, 300);
     };
@@ -171,6 +291,27 @@ const EmployeeHome = () => {
         }, ...list];
       });
       try { showToast('Request created', 'success'); } catch (_) {}
+      // Add a request activity for Recent panel
+      try {
+        const when = d.created_at || new Date().toISOString();
+        const entry = {
+          id: `req:${d.id || d.equipment_id || when}`,
+          item: d.equipment_name || d.item || 'Request',
+          message: 'Item requested',
+          variant: 'request',
+          date: when,
+          time: when,
+        };
+        setActivities((prev) => {
+          const base = Array.isArray(prev) ? prev : [];
+          const map = new Map(base.map((x) => [String(x.id || x.message + String(x.time || x.date || '')), x]));
+          const k = String(entry.id || entry.message + String(entry.time || entry.date || ''));
+          if (!map.has(k)) map.set(k, entry);
+          const merged = Array.from(map.values()).sort((a, b) => new Date(b.time || b.date || 0) - new Date(a.time || a.date || 0)).slice(0, 50);
+          try { localStorage.setItem('employee_activities', JSON.stringify(merged)); } catch (_) {}
+          return merged;
+        });
+      } catch (_) {}
     };
     window.addEventListener('ireply:request:created', onCreated);
     return () => {
@@ -1121,7 +1262,7 @@ const EmployeeHome = () => {
           </button>
         </div>
 
-        <RecentActivities activities={activities} iconFor={iconFor} timeAgo={timeAgo} />
+        <RecentActivities activities={recentCombined} iconFor={iconFor} timeAgo={timeAgo} />
       </div>
       {isBorrowedOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm">
