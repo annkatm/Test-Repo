@@ -8,6 +8,7 @@ import ViewTransactionModal from './components/ViewTransactionModal';
 import VerifyReturnModal from './components/VerifyReturnModal';
 import { transactionService, apiUtils } from './services/api.js';
 import api from './services/api';
+import { showSuccess, showError } from './utils/toastUtils';
 
 const ViewApproved = () => {
   const [approved, setApproved] = useState([]);
@@ -539,7 +540,7 @@ const ViewApproved = () => {
       
       if (!transactionId) {
         console.error('Transaction ID not found');
-        alert('Transaction ID not found');
+        showError('Transaction ID not found', 'Verification Failed');
         return;
       }
 
@@ -569,21 +570,26 @@ const ViewApproved = () => {
       });
       
       if (verifyResponse.data.success) {
+        // Show detailed success message
+        const employeeName = returnData.full_name || returnData.employee_name || 'Unknown';
+        const itemName = returnData.equipment_name || 'N/A';
+        showSuccess(
+          `Return confirmed! ${employeeName} has returned ${itemName}.\nTransaction #${transactionId} completed.\nEquipment is now available for new requests.`,
+          'Return Verified'
+        );
+        
         // Close the modal
         handleCloseViewReturnModal();
         
-        // Refresh the data to update the lists
+        // Immediately refresh data to remove from verify returns list
         await fetchData();
-        
-        // Show success message
-        alert('Return verified successfully! Transaction completed.');
       } else {
         throw new Error(verifyResponse.data.message || 'Failed to verify return');
       }
     } catch (error) {
       console.error('Error verifying return:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Failed to verify return';
-      alert(`Error: ${errorMessage}`);
+      showError(errorMessage, 'Verification Error');
     }
   };
 

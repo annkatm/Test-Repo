@@ -526,6 +526,14 @@ class TransactionController extends Controller
                 'updated_at' => now()
             ]);
 
+            // Update the associated request to completed status so it doesn't appear in "approved" list
+            if ($transaction->request_id) {
+                DB::table('requests')->where('id', $transaction->request_id)->update([
+                    'status' => 'completed',
+                    'updated_at' => now()
+                ]);
+            }
+
             // Ensure equipment status is available (should already be, but double-check)
             if ($transaction->equipment_id) {
                 DB::table('equipment')
