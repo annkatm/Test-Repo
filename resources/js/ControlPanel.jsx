@@ -264,7 +264,7 @@ const ControlPanel = () => {
                 <form onSubmit={handleCategorySubmit}>
                   <div className="mb-4">
                     <label className="block text-[12px] text-gray-600 mb-1">Name*</label>
-                    <input type="text" value={catName} onChange={e => setCatName(e.target.value)} className="w-full px-3 py-2 rounded-md bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" required />
+                    <input type="text" value={catName} onChange={e => setCatName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.form?.requestSubmit(); } }} className="w-full px-3 py-2 rounded-md bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" required />
                   </div>
 
                   {/* Existing Categories header with toggle */}
@@ -332,6 +332,7 @@ const ControlPanel = () => {
                       type="text"
                       value={newItemName}
                       onChange={(e) => setNewItemName(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (!itemLoading) { addNewItem(); } } }}
                       className="flex-1 px-3 py-2 rounded-md bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder={`Enter ${getDisplayName(activeModal).toLowerCase()} name`}
                     />
