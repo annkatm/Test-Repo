@@ -105,23 +105,6 @@ const EmployeeHome = () => {
       localStorage.setItem(userKey('employee_reserved_equipment_ids'), JSON.stringify(Array.from(cur)));
     } catch (_) {}
   };
-  const cleanupReservedIds = (equipmentData) => {
-    try {
-      const reservedIds = getReservedIds();
-      const availableIds = new Set(equipmentData.map(eq => String(eq.id)));
-      let needsCleanup = false;
-      reservedIds.forEach(id => {
-        if (availableIds.has(id)) {
-          reservedIds.delete(id);
-          needsCleanup = true;
-        }
-      });
-      if (needsCleanup) {
-        localStorage.setItem(userKey('employee_reserved_equipment_ids'), JSON.stringify(Array.from(reservedIds)));
-      }
-    } catch (_) {}
-  };
-  
   const filterOutReserved = (list) => {
     try {
       const cur = getReservedIds();
@@ -183,9 +166,6 @@ const EmployeeHome = () => {
             item_image_url: eq.item_image_url
           })));
         }
-        
-        // Clean up reserved list: remove IDs that are now available
-        cleanupReservedIds(equipmentData);
         
         setEquipment(filterOutReserved(equipmentData));
       } catch (e) {
@@ -338,9 +318,6 @@ const EmployeeHome = () => {
         })));
       }
       
-      // Clean up reserved list: remove IDs that are now available
-      cleanupReservedIds(equipmentData);
-      
       setEquipment(filterOutReserved(equipmentData));
     } catch (e) {
       setError('Failed to load equipment for category');
@@ -363,10 +340,6 @@ const EmployeeHome = () => {
       } else if (Array.isArray(data.data)) {
         equipmentData = data.data;
       }
-      
-      // Clean up reserved list: remove IDs that are now available
-      cleanupReservedIds(equipmentData);
-      
       setEquipment(filterOutReserved(equipmentData));
     } catch (e) {
       setError('Failed to load all equipment');
