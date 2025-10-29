@@ -73,9 +73,12 @@ const AddStocks = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedEquipment, setSelectedEquipment] = useState(null);
+  const [categoryStats, setCategoryStats] = useState([]);
   const [categories, setCategories] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(1000); // Show all items by default
   const [formData, setFormData] = useState({
     category: '',
     serial_number: '',
@@ -234,6 +237,12 @@ const AddStocks = () => {
         throw new Error(data.message || 'Error adding equipment');
       }
 
+      // Trigger equipment update event for dynamic refresh
+      window.dispatchEvent(new Event('equipment:updated'));
+      
+      // Refresh equipment list
+      await fetchEquipment();
+
       // Reset form and close modal on success
       setFormData({
         category: '',
@@ -309,6 +318,7 @@ const AddStocks = () => {
           </div>
 
           {/* Table with proper HTML structure */}
+          {/* Equipment List */}
           <div className="mt-6">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
               {loading ? (
@@ -454,6 +464,49 @@ const AddStocks = () => {
                 </table>
               )}
             </div>
+            {equipment.length > 0 && (
+              <div className="flex items-center justify-between p-4 border-t border-gray-200">
+                <div className="flex items-center space-x-4">
+                  <span className="text-sm text-gray-600 font-medium">
+                    Total: {getFilteredAndSortedEquipment().length} {getFilteredAndSortedEquipment().length === 1 ? 'item' : 'items'}
+                  </span>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={currentPage === 1}
+                      className="p-1 rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => setCurrentPage(prev => prev + 1)}
+                      disabled={currentPage * itemsPerPage >= equipment.length}
+                      className="p-1 rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-gray-600">Items per page:</span>
+                  <select
+                    value={itemsPerPage}
+                    onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                    className="p-1 border rounded-md text-sm bg-white"
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                    <option value={1000}>All</option>
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
         </main>
 
