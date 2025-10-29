@@ -112,12 +112,31 @@ const Reports = () => {
           console.log('Top Borrowed Items:', borrowedItems);
           setTopBorrowed(borrowedItems);
 
-          // Update expensive equipment from API
-          setExpensiveEquipment((data.expensiveEquipment || []).map(item => ({
-            item: `${item.brand || ''} ${item.item || ''}`.trim() || 'Unknown',
-            value: parseFloat(item.value) || 0,
-            category: item.category || 'Uncategorized'
-          })));
+          // Update expensive equipment from API - group by model
+          setExpensiveEquipment(
+            (data.expensiveEquipment || [])
+              .reduce((acc, item) => {
+                const key = `${item.brand || ''} ${item.item || ''}`.trim() || 'Unknown';
+                const existing = acc.find(i => i.item === key);
+                
+                if (existing) {
+                  // If same model exists, add to the value
+                  existing.value += parseFloat(item.value) || 0;
+                  existing.count = (existing.count || 1) + 1;
+                } else {
+                  // Create new entry
+                  acc.push({
+                    item: key,
+                    value: parseFloat(item.value) || 0,
+                    category: item.category || 'Uncategorized',
+                    count: 1
+                  });
+                }
+                
+                return acc;
+              }, [])
+              .sort((a, b) => b.value - a.value) // Sort by value descending
+          );
 
           // Keep sample data for other sections (can be updated when endpoints are available)
           setEquipmentData([
@@ -431,10 +450,13 @@ const Reports = () => {
                     <div
                             className={`${getColorClass(item.value)} rounded-t w-full mb-2 transition-all duration-500 hover:opacity-80`}
                             style={{ height: `${height}px` }}
-                            title={`₱${item.value.toLocaleString()}`}
+                            title={`₱${item.value.toLocaleString()}${item.count > 1 ? ` (${item.count} units)` : ''}`}
                     ></div>
                           <span className="text-xs text-gray-600 text-center leading-tight">{item.item}</span>
                           <span className="text-xs font-semibold text-[#2262C6]">₱{(item.value / 1000).toFixed(0)}k</span>
+                          {item.count > 1 && (
+                            <span className="text-xs text-gray-500">({item.count} units)</span>
+                          )}
                         </div>
                       );
                     })
