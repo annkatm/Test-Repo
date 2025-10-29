@@ -40,6 +40,8 @@ const EmployeeHome = () => {
   const [itemsPerPage, setItemsPerPage] = useState(5);
   const [actionLoading, setActionLoading] = useState(false);
   const [activities, setActivities] = useState([]);
+  // Denied requests will be fetched from API
+  const [deniedRequests, setDeniedRequests] = useState([]);
   // Toasts for upper-right popup notifications
   const [toasts, setToasts] = useState([]);
   const [isBorrowedOpen, setIsBorrowedOpen] = useState(false);
@@ -558,8 +560,6 @@ const EmployeeHome = () => {
   const handleChangePage = (page) => setCurrentPage(page);
 
 
-  // Denied requests will be fetched from API
-  const [deniedRequests, setDeniedRequests] = useState([]);
 
   const handleReasonChange = (e) => {
     if (selectedRequest) {
