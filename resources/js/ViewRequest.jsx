@@ -483,8 +483,32 @@ const ViewRequest = () => {
         return;
       }
 
+      // First, check the transaction status and release if needed
+      try {
+        const statusCheck = await api.get(`/transactions/${transactionId}`);
+        const currentStatus = statusCheck.data?.data?.status || statusCheck.data?.status;
+        
+        console.log('Current transaction status:', currentStatus);
+        
+        // If transaction is not released, release it first
+        if (currentStatus !== 'released') {
+          console.log('Transaction not released, releasing first...');
+          await api.post(`/transactions/${transactionId}/release`, {
+            release_condition: 'good_condition',
+            release_notes: 'Auto-released for return'
+          });
+          console.log('Transaction released successfully');
+        }
+      } catch (releaseError) {
+        console.warn('Could not release transaction:', releaseError);
+        // Continue anyway, the return endpoint will handle the error if needed
+      }
+      
       // Call the return API endpoint
-      const response = await api.post(`/transactions/${transactionId}/return`, {});
+      const response = await api.post(`/transactions/${transactionId}/return`, {
+        return_condition: 'good_condition',
+        return_notes: ''
+      });
       
       if (response.data.success) {
         // Log the return activity
@@ -537,17 +561,21 @@ const ViewRequest = () => {
       }
     } catch (error) {
       console.error('Error processing return:', error);
+      console.error('Error response:', error.response?.data);
       
       // Show error message
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to process return';
+      console.error('Error message:', errorMessage);
+      
       if (window.showToast) {
         window.showToast({
           type: 'error',
           title: 'Return Failed',
-          message: error.response?.data?.message || error.message || 'Failed to process return',
+          message: errorMessage,
           duration: 6000
         });
       } else {
-        alert('Error processing return: ' + (error.response?.data?.message || error.message));
+        alert('Error processing return: ' + errorMessage);
       }
       
       throw error; // Re-throw to let the modal handle loading state

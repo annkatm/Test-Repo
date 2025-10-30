@@ -442,7 +442,7 @@ const SuperAdminUpdated = () => {
                             <td className="py-4 text-green-600">{req.status}</td>
                           )}
                           {transactionView === 'viewApproved' && (
-                            <td className="py-4 text-gray-700">{req.approver?.name}</td>
+                            <td className="py-4 text-gray-700">{req.approved_by_name || '-'}</td>
                           )}
                           <td className="py-4">
                             <div className="flex items-center justify-end space-x-3">

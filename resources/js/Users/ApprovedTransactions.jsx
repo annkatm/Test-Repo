@@ -111,6 +111,10 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
   useEffect(() => {
     try {
       const src = Array.isArray(approvedTransactions) ? approvedTransactions : [];
+      console.log('ApprovedTransactions props changed, approvedTransactions:', src);
+      if (src.length > 0) {
+        console.log('First prop transaction:', src[0]);
+      }
       const mapped = src.map((t, i) => {
         const dateSrc = t?.created_at || t?.expected_start_date || t?.start_date || t?.date || null;
         const date = dateSrc
@@ -139,18 +143,31 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
           exchangeItems: Array.isArray(t?.exchangeItems) ? t.exchangeItems : [],
         };
       });
+      console.log('Mapped transactions:', mapped);
       setDisplayList(mapped);
     } catch (_) {}
   }, [approvedTransactions]);
 
-  // Always fetch approved list so we get category/type fields from backend
+  // Fetch approved list from API only if no props provided
   useEffect(() => {
+    // Skip API fetch if we already have data from props
+    if (Array.isArray(approvedTransactions) && approvedTransactions.length > 0) {
+      console.log('Skipping API fetch - using prop data');
+      return;
+    }
+    
     let cancelled = false;
     const fetchApproved = async () => {
       try {
         const res = await fetch('/api/transactions/approved', { credentials: 'same-origin' });
         const json = await res.json().catch(() => ({}));
         const list = Array.isArray(json) ? json : (json && json.data && Array.isArray(json.data) ? json.data : []);
+        console.log('API /api/transactions/approved raw response:', json);
+        console.log('Extracted list:', list);
+        if (list.length > 0) {
+          console.log('First transaction object:', list[0]);
+          console.log('First transaction id field:', list[0]?.id);
+        }
         const mapped = (list || []).map((t, i) => {
           const dateSrc = t?.created_at || t?.expected_start_date || t?.start_date || t?.date || null;
           const date = dateSrc
@@ -191,10 +208,12 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
   // Listen for external changes to approved list and refresh from backend
   useEffect(() => {
     const refresh = async () => {
-      // If we already have a list from props, prefer it and skip fetching
-      if (approvedTransactions && approvedTransactions.length > 0) {
+      // Skip refresh if using prop data
+      if (Array.isArray(approvedTransactions) && approvedTransactions.length > 0) {
+        console.log('Skipping refresh - using prop data');
         return;
       }
+      
       try {
         const res = await fetch('/api/transactions/approved', { credentials: 'same-origin' });
         const json = await res.json().catch(() => ({}));
@@ -404,6 +423,36 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
         setActionLoading(false);
         return;
       }
+
+      // First, check the transaction status
+      const statusCheckRes = await fetch(`/api/transactions/${txId}`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        credentials: 'same-origin',
+      });
+
+      if (!statusCheckRes.ok) {
+        let errorMsg = 'Failed to verify transaction status';
+        try {
+          const errorData = await statusCheckRes.json();
+          errorMsg = errorData.message || errorMsg;
+        } catch (_) {}
+        alert(`Error: ${errorMsg}`);
+        setActionLoading(false);
+        return;
+      }
+
+      const transactionData = await statusCheckRes.json();
+      if (transactionData.status !== 'released') {
+        alert('This item cannot be returned because it is not currently marked as released.');
+        setActionLoading(false);
+        return;
+      }
+
+      // If we get here, the transaction exists and is in 'released' status
       const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
       const res = await fetch(`/api/transactions/${txId}/return`, {
         method: 'POST',
@@ -418,10 +467,14 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
           return_notes: ''
         }),
       });
+
       if (!res.ok) {
-        let msg = await res.text();
-        try { const j = JSON.parse(msg); msg = j?.message || j?.error || j?.errors || msg; } catch (_) {}
-        alert(`Return failed: ${msg || 'Unknown error'}`);
+        let errorMsg = 'Failed to process return';
+        try {
+          const errorData = await res.json();
+          errorMsg = errorData.message || errorMsg;
+        } catch (_) {}
+        alert(`Return failed: ${errorMsg}`);
         setActionLoading(false);
         return;
       }
@@ -830,8 +883,12 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                   transaction={selectedTransactionData}
                   onClose={() => setSelectedRow(null)}
                   onReturnNow={async () => { 
-                    logActivity('Approved: Clicked Return Now', 'return');
-                    await performReturn(selectedTransactionData);
+                    console.log('Return Now clicked - selectedTransactionData:', selectedTransactionData);
+                    const tid = selectedTransactionData?.tx_id || selectedTransactionData?.id || await resolveTxId(selectedTransactionData);
+                    console.log('Resolved transaction ID:', tid);
+                    setReturnTxId(tid || null);
+                    setShowReturnModal(true); 
+                    logActivity('Approved: Clicked Return Now', 'return'); 
                   }}
                   onOpenBrowse={() => { setShowBrowseLaptopsModal(true); logActivity('Approved: Clicked Exchange', 'exchange'); }}
                   className="flex-1"
@@ -878,7 +935,67 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                 Cancel
               </button>
               <button
-                onClick={async () => { await performReturn(selectedTransactionData); }}
+                onClick={async () => {
+                  if (actionLoading) return;
+                  setActionLoading(true);
+                  try {
+                    console.log('Confirm Return clicked');
+                    console.log('returnTxId:', returnTxId);
+                    console.log('selectedTransactionData:', selectedTransactionData);
+                    const txId = returnTxId || selectedTransactionData?.tx_id || selectedTransactionData?.id || await resolveTxId(selectedTransactionData);
+                    console.log('Final resolved txId:', txId);
+                    if (!txId) {
+                      console.error('No transaction ID found. Available fields:', Object.keys(selectedTransactionData || {}));
+                      alert('Missing transaction information. Please select a transaction and try again.\n\nDebug: ' + JSON.stringify(selectedTransactionData, null, 2));
+                      setShowReturnModal(false);
+                      return;
+                    }
+                    const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+                    const res = await fetch(`/api/transactions/${txId}/return`, {
+                      method: 'POST',
+                      headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrf,
+                      },
+                      credentials: 'same-origin',
+                      body: JSON.stringify({
+                        return_condition: 'good_condition',
+                        return_notes: ''
+                      }),
+                    });
+                    if (!res.ok) {
+                      const text = await res.text();
+                      throw new Error(text || `HTTP ${res.status}`);
+                    }
+                    setShowReturnModal(false);
+                    setSelectedRow(null);
+                    logActivity('Approved: Confirmed Return', 'success');
+                    try {
+                      const equipId = selectedTransactionData?.equipment_id;
+                      if (equipId) {
+                        window.dispatchEvent(new CustomEvent('ireply:equipment:restore', { detail: { equipment_id: equipId } }));
+                      }
+                    } catch (_) { }
+                    try {
+                      const payload = {
+                        id: selectedTransactionData?.id,
+                        item: selectedTransactionData?.item,
+                        date: new Date().toISOString(),
+                      };
+                      window.dispatchEvent(new CustomEvent('ireply:returned:add', { detail: payload }));
+                    } catch (_) { }
+                    try {
+                      window.dispatchEvent(new CustomEvent('ireply:navigate', { detail: { menu: 'Returned Items' } }));
+                    } catch (_) { }
+                    onBack();
+                  } catch (err) {
+                    console.error(err);
+                    alert('Failed to mark item as returned. Please try again.');
+                  } finally {
+                    setActionLoading(false);
+                  }
+                }}
                 disabled={actionLoading}
                 className="px-5 py-2 bg-blue-600 text-white rounded-lg font-medium shadow-md hover:bg-blue-700 hover:shadow-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed"
               >

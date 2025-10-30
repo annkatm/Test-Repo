@@ -14,7 +14,7 @@ const makeEcho = () => {
     const key = cfg.pusherKey || process.env.MIX_PUSHER_APP_KEY || process.env.VITE_PUSHER_APP_KEY;
     const cluster = cfg.pusherCluster || process.env.MIX_PUSHER_APP_CLUSTER || process.env.VITE_PUSHER_APP_CLUSTER;
     if (!key) {
-      console.warn('Pusher key not found; Echo will not be initialized');
+      // Silently return null if Pusher is not configured (common in development)
       return null;
     }
 

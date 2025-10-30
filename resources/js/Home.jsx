@@ -35,7 +35,7 @@ const HomePage = () => {
         // Fetch categories, equipment data, and current holders (transactions)
         const [categoriesRes, equipmentRes, holdersRes] = await Promise.all([
           api.get('/categories'),
-          api.get('/equipment'),
+          api.get('/equipment?per_page=1000'), // Fetch all equipment without pagination
           transactionService.getAll({ status: 'released' })
         ]);
 
@@ -157,7 +157,7 @@ const HomePage = () => {
               percentage,
               status: percentage >= 50 ? 'good' : percentage >= 20 ? 'warning' : 'low'
             };
-          });
+          }).filter(cat => cat.total > 0); // Only show categories that have equipment
 
           // Get recent equipment (last 30 days) - simulate with recent entries
           const recentEquipment = equipment
@@ -212,8 +212,17 @@ const HomePage = () => {
       fetchDashboardData(false); // Don't show loading spinner on background refresh
     }, 30000); // 30 seconds
 
-    // Cleanup interval on component unmount
-    return () => clearInterval(refreshInterval);
+    // Listen for equipment updates from other pages (e.g., AddStocks)
+    const handleEquipmentUpdate = () => {
+      fetchDashboardData(false); // Refresh without loading spinner
+    };
+    window.addEventListener('equipment:updated', handleEquipmentUpdate);
+
+    // Cleanup interval and event listener on component unmount
+    return () => {
+      clearInterval(refreshInterval);
+      window.removeEventListener('equipment:updated', handleEquipmentUpdate);
+    };
   }, []);
 
   // Handle scroll events for fade-out effect
