@@ -217,28 +217,42 @@ const EmployeePage = () => {
 
   const loadAvailableEquipment = async () => {
     try {
-      const res = await fetch('/api/equipment');
+      // Get paginated equipment list with category info
+      const res = await fetch('/api/equipment?per_page=100&status=available');
       const data = await res.json();
+      
       if (data.success) {
-        // Handle both data structures (data.data or data.data.data)
-        const equipmentList = Array.isArray(data.data) ? data.data : (data.data.data || []);
+        // Extract equipment from paginated response
+        const equipmentList = data.data.data || [];
         
-        // Debug: Log equipment structure to verify specs field
-        if (equipmentList.length > 0) {
-          console.log('Equipment sample:', equipmentList[0]);
-        }
-        
-        // Map equipment with category information
-        const equipmentWithCategories = equipmentList.map(item => ({
-          ...item,
-          category: item.category || { id: null, name: 'Uncategorized' }
+        // Transform equipment data to match our component's needs
+        const transformedEquipment = equipmentList.map(item => ({
+          id: item.id,
+          name: item.name || item.brand,
+          brand: item.brand,
+          specifications: item.specifications || 'No specifications',
+          serial_number: item.serial_number,
+          asset_tag: item.asset_tag,
+          status: item.status.toLowerCase(),
+          condition: item.condition,
+          purchase_price: item.purchase_price,
+          purchase_date: item.purchase_date,
+          warranty_expiry: item.warranty_expiry,
+          notes: item.notes,
+          location: item.location,
+          category: {
+            id: item.category?.id || null,
+            name: item.category?.name || 'Uncategorized'
+          },
+          item_image: item.item_image,
+          receipt_image: item.receipt_image,
+          // Add these fields for compatibility with existing code
+          specKey: `${item.brand || item.name}-${item.specifications || 'No specs'}`,
+          available_count: 1, // Each equipment is individual in this system
+          description: item.specifications
         }));
         
-        // Filter only available equipment
-        const available = equipmentWithCategories.filter(eq => 
-          eq.status === 'available' || eq.status === 'Available'
-        );
-        setAvailableEquipment(available);
+        setAvailableEquipment(transformedEquipment);
       }
     } catch (e) {
       console.error('Failed to load equipment:', e);
@@ -472,29 +486,34 @@ const EmployeePage = () => {
     const groupedMap = new Map();
     
     availableEquipment.forEach(eq => {
-      // Create a unique key based on specifications (brand, name, specs)
-      const specKey = `${eq.brand || eq.name || 'Unknown'}-${eq.specifications || eq.description || 'No specs'}`;
+      // Create a unique key combining brand and specifications
+      const specKey = `${eq.brand}-${eq.specifications}`;
       
       if (!groupedMap.has(specKey)) {
         // First time seeing this specification, create the group
         groupedMap.set(specKey, {
-          id: eq.id, // Keep the first ID as reference
-          name: eq.name || eq.brand,
+          id: eq.id,
+          name: eq.name,
           brand: eq.brand,
-          specifications: eq.specifications || eq.description || 'No specifications',
+          specifications: eq.specifications,
           item_image: eq.item_image,
+          receipt_image: eq.receipt_image,
           category: eq.category,
           status: eq.status,
-          serial_numbers: [eq.serial_number].filter(Boolean), // Array of serial numbers
-          available_count: (eq.status === 'available' || eq.status === 'Available') ? 1 : 0,
-          all_items: [eq] // Store all items with this specification
+          serial_numbers: [eq.serial_number],
+          available_count: 1,
+          price: eq.purchase_price,
+          condition: eq.condition,
+          location: eq.location,
+          all_items: [eq],
+          specKey // Store for reference
         });
       } else {
         // Add to existing group
         const existing = groupedMap.get(specKey);
-        existing.serial_numbers.push(eq.serial_number);
-        existing.all_items.push(eq);
-        if (eq.status === 'available' || eq.status === 'Available') {
+        if (!existing.serial_numbers.includes(eq.serial_number)) {
+          existing.serial_numbers.push(eq.serial_number);
+          existing.all_items.push(eq);
           existing.available_count += 1;
         }
       }
@@ -1485,10 +1504,10 @@ const EmployeePage = () => {
                   </div>
                 
                 {/* Category Filters */}
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-3 flex-wrap">
                   <button 
                     onClick={() => setSelectedCategory('all')}
-                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors mb-2 ${
                       selectedCategory === 'all' 
                         ? 'bg-blue-500 text-white' 
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -1496,11 +1515,11 @@ const EmployeePage = () => {
                   >
                     All
                   </button>
-                  {getAvailableCategories().map((category) => (
+                  {getAvailableCategories().sort().map((category) => (
                     <button 
                       key={category}
                       onClick={() => setSelectedCategory(category)}
-                      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors mb-2 ${
                         selectedCategory === category 
                           ? 'bg-blue-500 text-white' 
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -1518,17 +1537,24 @@ const EmployeePage = () => {
                   <div className="grid grid-cols-4 gap-6">
                     {getUniqueEquipment()
                       .filter(eq => {
+                        if (!eq) return false;
+
                         // Search filter
-                        const matchesSearch = 
-                          eq.name?.toLowerCase().includes(equipmentSearchTerm.toLowerCase()) ||
-                          eq.brand?.toLowerCase().includes(equipmentSearchTerm.toLowerCase()) ||
-                          (eq.specifications && eq.specifications.toLowerCase().includes(equipmentSearchTerm.toLowerCase())) ||
-                          (eq.serial_number && eq.serial_number.toLowerCase().includes(equipmentSearchTerm.toLowerCase())) ||
-                          eq.category?.name?.toLowerCase().includes(equipmentSearchTerm.toLowerCase());
+                        const searchTerm = equipmentSearchTerm.toLowerCase();
+                        const matchesSearch = !searchTerm || [
+                          eq.name,
+                          eq.brand,
+                          eq.specifications,
+                          ...eq.serial_numbers,
+                          eq.asset_tag,
+                          eq.category?.name
+                        ].some(field => 
+                          field && field.toString().toLowerCase().includes(searchTerm)
+                        );
                         
                         // Category filter
                         const matchesCategory = selectedCategory === 'all' || 
-                          (eq.category?.name || 'Uncategorized') === selectedCategory;
+                          eq.category?.name === selectedCategory;
                         
                         return matchesSearch && matchesCategory;
                       })
