@@ -162,7 +162,8 @@ class ReportController extends Controller
             $transactions = DB::table('transactions')
                 ->leftJoin('employees', 'transactions.employee_id', '=', 'employees.id')
                 ->leftJoin('equipment', 'transactions.equipment_id', '=', 'equipment.id')
-                ->leftJoin('users as approver', 'transactions.released_by', '=', 'approver.id')
+                ->leftJoin('requests', 'transactions.request_id', '=', 'requests.id')
+                ->leftJoin('users as approver', 'requests.approved_by', '=', 'approver.id')
                 ->when($startDate && $endDate, function ($q) use ($startDate, $endDate) {
                     $q->whereBetween('transactions.created_at', [$startDate, $endDate]);
                 })
@@ -247,7 +248,8 @@ class ReportController extends Controller
             $query = \Illuminate\Support\Facades\DB::table('transactions')
                 ->leftJoin('employees', 'transactions.employee_id', '=', 'employees.id')
                 ->leftJoin('equipment', 'transactions.equipment_id', '=', 'equipment.id')
-                ->leftJoin('users as approver', 'transactions.released_by', '=', 'approver.id')
+                ->leftJoin('requests', 'transactions.request_id', '=', 'requests.id')
+                ->leftJoin('users as approver', 'requests.approved_by', '=', 'approver.id')
                 ->when($startDate && $endDate, function ($q) use ($startDate, $endDate) {
                     $q->whereBetween('transactions.created_at', [$startDate, $endDate]);
                 })

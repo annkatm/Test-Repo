@@ -57,6 +57,7 @@ Route::put('/transactions/{id}', [TransactionController::class, 'update']);
 Route::delete('/transactions/{id}', [TransactionController::class, 'destroy']);
 Route::post('/transactions/{id}/release', [TransactionController::class, 'release']);
 Route::post('/transactions/{id}/return', [TransactionController::class, 'returnTransaction']);
+Route::post('/transactions/{id}/verify-return', [TransactionController::class, 'verifyReturn']);
 Route::post('/transactions/{id}/exchange', [TransactionController::class, 'exchange']);
 Route::post('/transactions/{id}/cancel', [TransactionController::class, 'cancel']);
 Route::post('/transactions/{id}/appeal', [TransactionController::class, 'appeal']);
