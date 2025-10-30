@@ -91,6 +91,9 @@ const AddStocks = () => {
   });
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [addedBatchesByProduct, setAddedBatchesByProduct] = useState({}); // key: productKey -> [{ count, at }]
+  const [expandedRows, setExpandedRows] = useState({}); // { '<productKey>-<timestamp>': true }
+  const toggleExpanded = (rowId) => setExpandedRows(prev => ({ ...prev, [rowId]: !prev[rowId] }));
 
   // Fetch equipment data
   useEffect(() => {
@@ -136,9 +139,35 @@ const AddStocks = () => {
     }
   };
 
-  // Filter and sort equipment
+  // Filter and sort equipment (group by product)
   const getFilteredAndSortedEquipment = () => {
-    let filteredEquipment = [...equipment];
+    // Group equipment by product (name + brand)
+    const grouped = equipment.reduce((acc, item) => {
+      const key = `${item.name || 'Unknown'}_${item.brand || 'Unknown'}`;
+      if (!acc[key]) {
+        acc[key] = {
+          key,
+          name: item.name || 'Unknown',
+          brand: item.brand || 'Unknown',
+          category: item.category || { id: null, name: 'Uncategorized' },
+          purchase_price: parseFloat(item.purchase_price) || 0,
+          image: item.item_image || null,
+          total_count: 0,
+          available_count: 0,
+          borrowed_count: 0,
+          issued_count: 0,
+          // capture an example created_at for display
+          created_at: item.created_at || null,
+        };
+      }
+      acc[key].total_count += 1;
+      if (item.status === 'available') acc[key].available_count += 1;
+      if (item.status === 'borrowed') acc[key].borrowed_count += 1;
+      if (item.status === 'issued') acc[key].issued_count += 1;
+      return acc;
+    }, {});
+
+    let filteredEquipment = Object.values(grouped);
 
     // Apply search filter
     if (searchTerm) {
@@ -147,7 +176,6 @@ const AddStocks = () => {
         item =>
           item.name?.toLowerCase().includes(searchLower) ||
           item.brand?.toLowerCase().includes(searchLower) ||
-          item.serial_number?.toLowerCase().includes(searchLower) ||
           item.category?.name?.toLowerCase().includes(searchLower)
       );
     }
@@ -178,6 +206,23 @@ const AddStocks = () => {
     }
 
     return filteredEquipment;
+  };
+
+  // Build display rows: duplicate product row per added batch
+  const getDisplayRows = () => {
+    const products = getFilteredAndSortedEquipment();
+    const rows = [];
+    products.forEach((p) => {
+      const batches = addedBatchesByProduct[p.key] || [];
+      if (batches.length === 0) {
+        rows.push({ ...p, _batch: null });
+      } else {
+        batches.forEach((b) => {
+          rows.push({ ...p, _batch: b });
+        });
+      }
+    });
+    return rows;
   };
 
   const handleInputChange = (e) => {
@@ -338,26 +383,7 @@ const AddStocks = () => {
                         }}
                         className="text-left py-4 px-6 font-semibold text-gray-700 cursor-pointer hover:bg-gray-100"
                       >
-                        <div className="flex items-center">
-                          Items
-                          {sortConfig.key === 'name' && (
-                            <span className="ml-2">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
-                          )}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => {
-                          const direction = sortConfig.key === 'serial_number' && sortConfig.direction === 'asc' ? 'desc' : 'asc';
-                          setSortConfig({ key: 'serial_number', direction });
-                        }}
-                        className="text-left py-4 px-6 font-semibold text-gray-700 cursor-pointer hover:bg-gray-100"
-                      >
-                        <div className="flex items-center">
-                          Serial Number
-                          {sortConfig.key === 'serial_number' && (
-                            <span className="ml-2">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
-                          )}
-                        </div>
+                        <div className="flex items-center">Items{sortConfig.key === 'name' && (<span className="ml-2">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>)}</div>
                       </th>
                       <th 
                         onClick={() => {
@@ -366,46 +392,29 @@ const AddStocks = () => {
                         }}
                         className="text-left py-4 px-6 font-semibold text-gray-700 cursor-pointer hover:bg-gray-100"
                       >
-                        <div className="flex items-center">
-                          Category
-                          {sortConfig.key === 'category' && (
-                            <span className="ml-2">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
-                          )}
-                        </div>
+                        <div className="flex items-center">Category{sortConfig.key === 'category' && (<span className="ml-2">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>)}</div>
                       </th>
-                      <th className="text-left py-4 px-6 font-semibold text-gray-700">Status</th>
-                      <th 
-                        onClick={() => {
-                          const direction = sortConfig.key === 'price' && sortConfig.direction === 'asc' ? 'desc' : 'asc';
-                          setSortConfig({ key: 'price', direction });
-                        }}
-                        className="text-left py-4 px-6 font-semibold text-gray-700 cursor-pointer hover:bg-gray-100"
-                      >
-                        <div className="flex items-center">
-                          Price
-                          {sortConfig.key === 'price' && (
-                            <span className="ml-2">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
-                          )}
-                        </div>
-                      </th>
-                      <th className="text-left py-4 px-6 font-semibold text-gray-700">Date Added</th>
-                      <th className="text-left py-4 px-6 font-semibold text-gray-700">Actions</th>
+                      <th className="text-right py-4 px-6 font-semibold text-gray-700">Added</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {getFilteredAndSortedEquipment().map((item, index) => (
+                    {getDisplayRows().map((item, index) => {
+                      const rowId = `${item.key}-${item._batch ? item._batch.at : 'base'}`;
+                      const isOpen = !!expandedRows[rowId];
+                      return (
+                      <React.Fragment key={rowId}>
                       <tr 
-                        key={item.id}
                         className={`
                           ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'} 
-                          hover:bg-blue-50 transition-colors duration-150 border-b border-gray-100 last:border-b-0
+                          hover:bg-blue-50 transition-colors duration-150 border-b border-gray-100 last:border-b-0 cursor-pointer
                         `}
+                        onClick={() => toggleExpanded(rowId)}
                       >
                         <td className="py-4 px-6">
                           <div className="flex items-center">
-                            {item.item_image ? (
+                            {item.image ? (
                               <img 
-                                src={`/storage/${item.item_image}`} 
+                                src={`/storage/${item.image}`} 
                                 alt={item.name}
                                 className="w-10 h-10 rounded-lg object-cover mr-3"
                               />
@@ -420,55 +429,71 @@ const AddStocks = () => {
                             </div>
                           </div>
                         </td>
-                        <td className="py-4 px-6 text-gray-700">{item.serial_number}</td>
                         <td className="py-4 px-6 text-gray-700">
                           {item.category?.name || 'Uncategorized'}
                         </td>
-                        <td className="py-4 px-6">
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium
-                            ${item.status === 'available' ? 'bg-green-100 text-green-800' : ''}
-                            ${item.status === 'borrowed' ? 'bg-blue-100 text-blue-800' : ''}
-                            ${item.status === 'issued' ? 'bg-orange-100 text-orange-800' : ''}
-                          `}>
-                            {item.status.replace('_', ' ')}
-                          </span>
-                        </td>
-                        <td className="py-4 px-6 text-gray-700 font-medium">
-                          ₱{Number(item.purchase_price).toLocaleString(undefined, {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2
-                          })}
-                        </td>
-                        <td className="py-4 px-6 text-gray-700 text-sm">
-                          {item.created_at ? new Date(item.created_at).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric'
-                          }) : 'N/A'}
-                        </td>
-                        <td className="py-4 px-6">
-                          <button 
-                            onClick={() => {
-                              setSelectedEquipment(item);
-                              setIsAddStocksOpen(true);
-                            }}
-                            className="p-2 rounded-lg bg-gray-50 text-gray-600 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                            title="Add Stock"
-                          >
-                            <Plus className="h-4 w-4" />
-                          </button>
+                        <td className="py-4 px-6 text-gray-700 font-semibold text-right">
+                          {item._batch ? `+${item._batch.count}` : '+0'}
                         </td>
                       </tr>
-                    ))}
+                      {isOpen && (
+                        <tr className="bg-white border-b border-gray-100">
+                          <td colSpan={3} className="px-6 py-4">
+                            <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+                              <div className="bg-gray-100 px-4 py-3 border-b border-gray-200">
+                                <div className="grid grid-cols-5 gap-4 text-xs font-semibold text-gray-700">
+                                  <div>Serial</div>
+                                  <div>Specs</div>
+                                  <div className="text-right">Price</div>
+                                  <div>Date Added</div>
+                                  <div>Receipt</div>
+                                </div>
+                              </div>
+                              <div className="divide-y divide-gray-200 max-h-64 overflow-y-auto">
+                                {(item._batch?.serials || []).map((serial, i) => (
+                                  <div key={`${rowId}-row-${i}`} className={`px-4 py-3 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                                    <div className="grid grid-cols-5 gap-4 items-center text-sm">
+                                      <div className="font-medium text-gray-900">{serial || 'N/A'}</div>
+                                      <div className="text-gray-700 truncate">{item._batch?.specs || item.specifications || '—'}</div>
+                                      <div className="text-right text-gray-800">
+                                        ₱{Number(item._batch?.price ?? item.purchase_price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      </div>
+                                      <div className="text-gray-700">
+                                        {(() => {
+                                          const dateRaw = item._batch?.at || item.created_at;
+                                          return dateRaw ? new Date(dateRaw).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
+                                        })()}
+                                      </div>
+                                      <div>
+                                        {item._batch?.receiptUrl ? (
+                                          <img src={item._batch.receiptUrl} alt="Receipt" className="h-10 w-auto object-contain bg-white rounded border" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                        ) : (
+                                          <span className="text-gray-400 text-xs">No receipt</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                                {(!item._batch?.serials || item._batch.serials.length === 0) && (
+                                  <div className="px-4 py-3 bg-white text-sm text-gray-500">No items captured for this batch.</div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      </React.Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               )}
             </div>
             {equipment.length > 0 && (
               <div className="flex items-center justify-between p-4 border-t border-gray-200">
-                <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-4">
                   <span className="text-sm text-gray-600 font-medium">
-                    Total: {getFilteredAndSortedEquipment().length} {getFilteredAndSortedEquipment().length === 1 ? 'item' : 'items'}
+                    Total: {getDisplayRows().length} {getDisplayRows().length === 1 ? 'item' : 'items'}
                   </span>
                   <div className="flex items-center space-x-2">
                     <button
@@ -482,7 +507,7 @@ const AddStocks = () => {
                     </button>
                     <button
                       onClick={() => setCurrentPage(prev => prev + 1)}
-                      disabled={currentPage * itemsPerPage >= equipment.length}
+                      disabled={currentPage * itemsPerPage >= getDisplayRows().length}
                       className="p-1 rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -516,6 +541,16 @@ const AddStocks = () => {
             selectedEquipment={selectedEquipment}
             categories={categories}
             onSuccess={fetchEquipment}
+            onAdded={(productKey, count, meta) => {
+              const now = new Date().toISOString();
+              setAddedBatchesByProduct(prev => ({
+                ...prev,
+                [productKey]: [
+                  { count, at: now, ...meta },
+                  ...(prev[productKey] || []),
+                ],
+              }));
+            }}
           />
         )}
         {isAddItemOpen && (
@@ -533,7 +568,7 @@ const AddStocks = () => {
 export default AddStocks;
 
 // New AddStocksModal Component with Three Progressive Modes
-const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess }) => {
+const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess, onAdded }) => {
   const [currentMode, setCurrentMode] = useState('category'); // 'category', 'product', 'serial'
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -696,6 +731,17 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
       // Refresh the products list to show updated counts
       if (selectedCategory) {
         await fetchProducts(selectedCategory.id);
+      }
+
+      // Inform parent how many were added and include batch meta for dropdown
+      if (onAdded && selectedProduct) {
+        const productKey = `${selectedProduct.name || 'Unknown'}_${selectedProduct.brand || 'Unknown'}`;
+        onAdded(productKey, serialNumbers.length, {
+          serials: [...serialNumbers],
+          specs: selectedProduct?.specifications || '',
+          price: selectedProduct?.purchase_price || 0,
+          receiptUrl: receiptPreview || null,
+        });
       }
     } catch (error) {
       setErrors({ submit: error.message });
