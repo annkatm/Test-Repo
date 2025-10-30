@@ -527,6 +527,17 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
         window.dispatchEvent(new CustomEvent('ireply:returned:add', { detail: returnedItem }));
       } catch (_) { }
       
+      // Notify admin ViewApproved page to move item to verify returns
+      try {
+        window.dispatchEvent(new CustomEvent('ireply:equipment:returned', {
+          detail: {
+            transaction_id: txId,
+            equipment_id: (tx || selectedTransactionData)?.equipment_id,
+            request_id: (tx || selectedTransactionData)?.request_id
+          }
+        }));
+      } catch (_) { }
+      
       // Refresh the approved list to remove the returned item
       try {
         window.dispatchEvent(new CustomEvent('ireply:approved:changed'));
@@ -923,7 +934,111 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
         </div>
       </div>
 
-      {/* Return Now modal moved into ExchangePanel */}
+      {/* RETURN NOW MODAL */}
+      {showReturnModal && selectedTransactionData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-2xl shadow-2xl w-[420px] p-6 relative transform transition-all duration-500 scale-100 hover:scale-[1.01] hover:rotate-[0.5deg] shadow-blue-900/30 hover:shadow-blue-800/50 perspective-[1200px] motion-safe:animate-pop3D">
+            <h2 className="text-lg font-bold text-gray-900 mb-6 text-center drop-shadow-md">
+              Return Confirmation
+            </h2>
+
+            {/* Dynamic Item List */}
+            <div className="space-y-4 mb-6">
+              {Array.isArray(selectedTransactionData.exchangeItems) && selectedTransactionData.exchangeItems.map((item, index) => (
+                <div
+                  key={index}
+                  className="flex items-start gap-4 pb-4 border-b border-gray-100 last:border-0"
+                >
+                  <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-2xl">
+                    {item.icon}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-900">{item.name}</p>
+                    <p className="text-sm text-gray-500">{item.brand} - {item.details}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Buttons */}
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => { setShowReturnModal(false); logActivity('Approved: Return modal closed', 'info'); }}
+                className="px-5 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 shadow-sm transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (actionLoading) return;
+                  setActionLoading(true);
+                  try {
+                    console.log('Confirm Return clicked');
+                    console.log('returnTxId:', returnTxId);
+                    console.log('selectedTransactionData:', selectedTransactionData);
+                    const txId = returnTxId || selectedTransactionData?.tx_id || selectedTransactionData?.id || await resolveTxId(selectedTransactionData);
+                    console.log('Final resolved txId:', txId);
+                    if (!txId) {
+                      console.error('No transaction ID found. Available fields:', Object.keys(selectedTransactionData || {}));
+                      alert('Missing transaction information. Please select a transaction and try again.\n\nDebug: ' + JSON.stringify(selectedTransactionData, null, 2));
+                      setShowReturnModal(false);
+                      return;
+                    }
+                    const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+                    const res = await fetch(`/api/transactions/${txId}/return`, {
+                      method: 'POST',
+                      headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrf,
+                      },
+                      credentials: 'same-origin',
+                      body: JSON.stringify({
+                        return_condition: 'good_condition',
+                        return_notes: ''
+                      }),
+                    });
+                    if (!res.ok) {
+                      const text = await res.text();
+                      throw new Error(text || `HTTP ${res.status}`);
+                    }
+                    setShowReturnModal(false);
+                    setSelectedRow(null);
+                    logActivity('Approved: Confirmed Return', 'success');
+                    try {
+                      const equipId = selectedTransactionData?.equipment_id;
+                      if (equipId) {
+                        window.dispatchEvent(new CustomEvent('ireply:equipment:restore', { detail: { equipment_id: equipId } }));
+                      }
+                    } catch (_) { }
+                    try {
+                      const payload = {
+                        id: selectedTransactionData?.id,
+                        item: selectedTransactionData?.item,
+                        date: new Date().toISOString(),
+                      };
+                      window.dispatchEvent(new CustomEvent('ireply:returned:add', { detail: payload }));
+                    } catch (_) { }
+                    try {
+                      window.dispatchEvent(new CustomEvent('ireply:navigate', { detail: { menu: 'Returned Items' } }));
+                    } catch (_) { }
+                    onBack();
+                  } catch (err) {
+                    console.error(err);
+                    alert('Failed to mark item as returned. Please try again.');
+                  } finally {
+                    setActionLoading(false);
+                  }
+                }}
+                disabled={actionLoading}
+                className="px-5 py-2 bg-blue-600 text-white rounded-lg font-medium shadow-md hover:bg-blue-700 hover:shadow-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* BROWSE LAPTOPS MODAL */}
       {showBrowseLaptopsModal && (

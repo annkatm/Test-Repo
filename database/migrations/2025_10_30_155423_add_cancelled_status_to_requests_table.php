@@ -12,8 +12,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Add 'completed' to the status enum for requests table
-        DB::statement("ALTER TABLE requests MODIFY COLUMN status ENUM('pending', 'approved', 'rejected', 'fulfilled', 'completed') DEFAULT 'pending'");
+        // Modify the status enum to include 'cancelled'
+        DB::statement("ALTER TABLE requests MODIFY COLUMN status ENUM('pending', 'approved', 'rejected', 'fulfilled', 'cancelled', 'completed') DEFAULT 'pending'");
     }
 
     /**
@@ -21,7 +21,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        // Remove 'completed' from the status enum
+        // Revert to original enum values
         DB::statement("ALTER TABLE requests MODIFY COLUMN status ENUM('pending', 'approved', 'rejected', 'fulfilled') DEFAULT 'pending'");
     }
 };

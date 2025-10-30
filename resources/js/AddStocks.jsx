@@ -101,6 +101,19 @@ const AddStocks = () => {
     fetchCategories();
   }, []);
 
+  // Listen for equipment updates to refresh the list
+  useEffect(() => {
+    const handleEquipmentUpdate = () => {
+      fetchEquipment();
+    };
+
+    window.addEventListener('equipment:updated', handleEquipmentUpdate);
+    
+    return () => {
+      window.removeEventListener('equipment:updated', handleEquipmentUpdate);
+    };
+  }, []);
+
   const fetchCategories = async () => {
     try {
       const response = await fetch('/api/categories');
@@ -208,21 +221,18 @@ const AddStocks = () => {
     return filteredEquipment;
   };
 
-  // Build display rows: duplicate product row per added batch
+  // Build display rows: show each product once with all its equipment items
   const getDisplayRows = () => {
     const products = getFilteredAndSortedEquipment();
-    const rows = [];
-    products.forEach((p) => {
-      const batches = addedBatchesByProduct[p.key] || [];
-      if (batches.length === 0) {
-        rows.push({ ...p, _batch: null });
-      } else {
-        batches.forEach((b) => {
-          rows.push({ ...p, _batch: b });
-        });
-      }
+    return products;
+  };
+
+  // Get all equipment items for a specific product
+  const getEquipmentItemsForProduct = (productKey) => {
+    return equipment.filter(item => {
+      const key = `${item.name || 'Unknown'}_${item.brand || 'Unknown'}`;
+      return key === productKey;
     });
-    return rows;
   };
 
   const handleInputChange = (e) => {
@@ -394,13 +404,17 @@ const AddStocks = () => {
                       >
                         <div className="flex items-center">Category{sortConfig.key === 'category' && (<span className="ml-2">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>)}</div>
                       </th>
-                      <th className="text-right py-4 px-6 font-semibold text-gray-700">Added</th>
+                      <th className="text-right py-4 px-6 font-semibold text-gray-700">Total Items</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {getDisplayRows().map((item, index) => {
-                      const rowId = `${item.key}-${item._batch ? item._batch.at : 'base'}`;
+                    {getDisplayRows().map((product, index) => {
+                      const rowId = product.key;
                       const isOpen = !!expandedRows[rowId];
+                      const productItems = getEquipmentItemsForProduct(product.key);
+                      const recentlyAdded = addedBatchesByProduct[product.key] || [];
+                      const totalRecentlyAdded = recentlyAdded.reduce((sum, batch) => sum + batch.count, 0);
+                      
                       return (
                       <React.Fragment key={rowId}>
                       <tr 
@@ -412,10 +426,10 @@ const AddStocks = () => {
                       >
                         <td className="py-4 px-6">
                           <div className="flex items-center">
-                            {item.image ? (
+                            {product.image ? (
                               <img 
-                                src={`/storage/${item.image}`} 
-                                alt={item.name}
+                                src={`/storage/${product.image}`} 
+                                alt={product.name}
                                 className="w-10 h-10 rounded-lg object-cover mr-3"
                               />
                             ) : (
@@ -424,58 +438,131 @@ const AddStocks = () => {
                               </div>
                             )}
                             <div>
-                              <div className="font-medium text-gray-900">{item.name}</div>
-                              <div className="text-sm text-gray-500">{item.brand}</div>
+                              <div className="font-medium text-gray-900">{product.name}</div>
+                              <div className="text-sm text-gray-500">{product.brand}</div>
                             </div>
                           </div>
                         </td>
                         <td className="py-4 px-6 text-gray-700">
-                          {item.category?.name || 'Uncategorized'}
+                          {product.category?.name || 'Uncategorized'}
                         </td>
                         <td className="py-4 px-6 text-gray-700 font-semibold text-right">
-                          {item._batch ? `+${item._batch.count}` : '+0'}
+                          {totalRecentlyAdded > 0 ? (
+                            <span className="text-green-600">+{totalRecentlyAdded}</span>
+                          ) : (
+                            <span className="text-gray-600">{product.total_count}</span>
+                          )}
                         </td>
                       </tr>
                       {isOpen && (
                         <tr className="bg-white border-b border-gray-100">
                           <td colSpan={3} className="px-6 py-4">
                             <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+                              {/* Summary Stats Bar */}
+                              <div className="bg-blue-50 px-4 py-2 border-b border-blue-200">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center space-x-6 text-xs">
+                                    <div className="flex items-center space-x-2">
+                                      <span className="font-semibold text-gray-700">Total:</span>
+                                      <span className="font-bold text-blue-600">{product.total_count}</span>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                      <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                                      <span className="text-gray-600">Available: <span className="font-semibold">{product.available_count}</span></span>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                      <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                                      <span className="text-gray-600">Borrowed: <span className="font-semibold">{product.borrowed_count}</span></span>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                      <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+                                      <span className="text-gray-600">Issued: <span className="font-semibold">{product.issued_count}</span></span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
                               <div className="bg-gray-100 px-4 py-3 border-b border-gray-200">
-                                <div className="grid grid-cols-5 gap-4 text-xs font-semibold text-gray-700">
+                                <div className="grid grid-cols-6 gap-4 text-xs font-semibold text-gray-700">
                                   <div>Serial</div>
                                   <div>Specs</div>
                                   <div className="text-right">Price</div>
                                   <div>Date Added</div>
+                                  <div>Status</div>
                                   <div>Receipt</div>
                                 </div>
                               </div>
                               <div className="divide-y divide-gray-200 max-h-64 overflow-y-auto">
-                                {(item._batch?.serials || []).map((serial, i) => (
-                                  <div key={`${rowId}-row-${i}`} className={`px-4 py-3 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
-                                    <div className="grid grid-cols-5 gap-4 items-center text-sm">
-                                      <div className="font-medium text-gray-900">{serial || 'N/A'}</div>
-                                      <div className="text-gray-700 truncate">{item._batch?.specs || item.specifications || '—'}</div>
-                                      <div className="text-right text-gray-800">
-                                        ₱{Number(item._batch?.price ?? item.purchase_price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                      </div>
-                                      <div className="text-gray-700">
-                                        {(() => {
-                                          const dateRaw = item._batch?.at || item.created_at;
-                                          return dateRaw ? new Date(dateRaw).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
-                                        })()}
-                                      </div>
-                                      <div>
-                                        {item._batch?.receiptUrl ? (
-                                          <img src={item._batch.receiptUrl} alt="Receipt" className="h-10 w-auto object-contain bg-white rounded border" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                                        ) : (
-                                          <span className="text-gray-400 text-xs">No receipt</span>
-                                        )}
+                                {productItems.length > 0 ? (
+                                  productItems.map((equipItem, i) => {
+                                    // Check if item was recently added (within last 5 minutes)
+                                    const isRecent = equipItem.created_at && 
+                                      (new Date() - new Date(equipItem.created_at)) < 5 * 60 * 1000;
+                                    
+                                    // Get status badge styling
+                                    const getStatusBadge = (status) => {
+                                      const statusLower = (status || 'available').toLowerCase();
+                                      switch(statusLower) {
+                                        case 'available':
+                                          return <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded-full">Available</span>;
+                                        case 'borrowed':
+                                          return <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded-full">Borrowed</span>;
+                                        case 'issued':
+                                          return <span className="px-2 py-1 text-xs font-medium bg-orange-100 text-orange-700 rounded-full">Issued</span>;
+                                        case 'maintenance':
+                                          return <span className="px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-700 rounded-full">Maintenance</span>;
+                                        case 'disposed':
+                                          return <span className="px-2 py-1 text-xs font-medium bg-red-100 text-red-700 rounded-full">Disposed</span>;
+                                        default:
+                                          return <span className="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-700 rounded-full">{status || 'Unknown'}</span>;
+                                      }
+                                    };
+                                    
+                                    return (
+                                    <div key={`${rowId}-item-${equipItem.id}`} className={`px-4 py-3 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'} ${isRecent ? 'border-l-4 border-green-500' : ''}`}>
+                                      <div className="grid grid-cols-6 gap-4 items-center text-sm">
+                                        <div className="font-medium text-gray-900 flex items-center">
+                                          {equipItem.serial_number || 'N/A'}
+                                          {isRecent && (
+                                            <span className="ml-2 px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded-full">New</span>
+                                          )}
+                                        </div>
+                                        <div className="text-gray-700 truncate" title={equipItem.specifications || equipItem.description || '—'}>
+                                          {equipItem.specifications || equipItem.description || '—'}
+                                        </div>
+                                        <div className="text-right text-gray-800">
+                                          ₱{Number(equipItem.purchase_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </div>
+                                        <div className="text-gray-700">
+                                          {equipItem.purchase_date ? new Date(equipItem.purchase_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 
+                                           equipItem.created_at ? new Date(equipItem.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
+                                        </div>
+                                        <div>
+                                          {getStatusBadge(equipItem.status)}
+                                        </div>
+                                        <div>
+                                          {equipItem.receipt_image ? (
+                                            <img 
+                                              src={`/storage/${equipItem.receipt_image}`} 
+                                              alt="Receipt" 
+                                              className="h-10 w-auto object-contain bg-white rounded border cursor-pointer hover:scale-105 transition-transform" 
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                window.open(`/storage/${equipItem.receipt_image}`, '_blank');
+                                              }}
+                                              onError={(e) => { 
+                                                e.currentTarget.style.display = 'none'; 
+                                                e.currentTarget.nextElementSibling.style.display = 'inline';
+                                              }} 
+                                            />
+                                          ) : null}
+                                          <span className="text-gray-400 text-xs" style={{display: equipItem.receipt_image ? 'none' : 'inline'}}>No receipt</span>
+                                        </div>
                                       </div>
                                     </div>
-                                  </div>
-                                ))}
-                                {(!item._batch?.serials || item._batch.serials.length === 0) && (
-                                  <div className="px-4 py-3 bg-white text-sm text-gray-500">No items captured for this batch.</div>
+                                    );
+                                  })
+                                ) : (
+                                  <div className="px-4 py-3 bg-white text-sm text-gray-500">No items found for this product.</div>
                                 )}
                               </div>
                             </div>
@@ -493,7 +580,7 @@ const AddStocks = () => {
               <div className="flex items-center justify-between p-4 border-t border-gray-200">
               <div className="flex items-center space-x-4">
                   <span className="text-sm text-gray-600 font-medium">
-                    Total: {getDisplayRows().length} {getDisplayRows().length === 1 ? 'item' : 'items'}
+                    Total: {getDisplayRows().length} {getDisplayRows().length === 1 ? 'product' : 'products'} ({equipment.length} {equipment.length === 1 ? 'item' : 'items'})
                   </span>
                   <div className="flex items-center space-x-2">
                     <button

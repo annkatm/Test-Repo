@@ -42,6 +42,53 @@ const ViewRequest = () => {
     }
   }, []);
 
+  // Listen for request cancellation events from employee dashboard
+  useEffect(() => {
+    const handleRequestCancelled = (event) => {
+      const { request_id, equipment_id } = event.detail || {};
+      
+      if (request_id) {
+        // Remove the cancelled request from pending requests
+        setPendingRequests(prev => {
+          const filtered = prev.filter(req => String(req.id) !== String(request_id));
+          console.log(`[ViewRequest] Removed cancelled request ${request_id}, remaining: ${filtered.length}`);
+          return filtered;
+        });
+      } else if (equipment_id) {
+        // Fallback: remove by equipment_id if request_id not available
+        setPendingRequests(prev => {
+          const filtered = prev.filter(req => String(req.equipment_id) !== String(equipment_id));
+          console.log(`[ViewRequest] Removed cancelled request by equipment ${equipment_id}, remaining: ${filtered.length}`);
+          return filtered;
+        });
+      }
+    };
+
+    const handleRequestCreated = (event) => {
+      const newRequest = event.detail || {};
+      
+      if (newRequest && newRequest.id) {
+        // Add the new request to pending requests if it doesn't already exist
+        setPendingRequests(prev => {
+          const exists = prev.some(req => String(req.id) === String(newRequest.id));
+          if (!exists) {
+            console.log(`[ViewRequest] Added new request ${newRequest.id}`);
+            return [newRequest, ...prev];
+          }
+          return prev;
+        });
+      }
+    };
+
+    window.addEventListener('ireply:request:cancelled', handleRequestCancelled);
+    window.addEventListener('ireply:request:created', handleRequestCreated);
+    
+    return () => {
+      window.removeEventListener('ireply:request:cancelled', handleRequestCancelled);
+      window.removeEventListener('ireply:request:created', handleRequestCreated);
+    };
+  }, [setPendingRequests]);
+
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [view, setView] = useState('viewRequest');
   const [scrollY, setScrollY] = useState(0);
@@ -321,6 +368,19 @@ const ViewRequest = () => {
               approved_by_name: "Admin",
               approved_at: new Date().toISOString()
             });
+            
+            // Dispatch event for employee dashboard to remove from On Process
+            try {
+              window.dispatchEvent(new CustomEvent('ireply:request:approved', {
+                detail: {
+                  request_id: request.id,
+                  equipment_id: request.equipment_id,
+                  equipment_name: request.equipment_name || request.item
+                }
+              }));
+            } catch (e) {
+              console.error('Error dispatching approved event:', e);
+            }
           }
         }
         
@@ -356,6 +416,20 @@ const ViewRequest = () => {
           if (response.data.success) {
             // Log the rejection activity
             await activityLogService.logRequestRejection(request.id, request, modalState.reason);
+            
+            // Dispatch event for employee dashboard to remove from On Process
+            try {
+              window.dispatchEvent(new CustomEvent('ireply:request:rejected', {
+                detail: {
+                  request_id: request.id,
+                  equipment_id: request.equipment_id,
+                  equipment_name: request.equipment_name || request.item,
+                  rejection_reason: modalState.reason
+                }
+              }));
+            } catch (e) {
+              console.error('Error dispatching rejected event:', e);
+            }
           }
         }
         
@@ -542,6 +616,18 @@ const ViewRequest = () => {
           }
         } catch (e) {
           console.error('Error dispatching equipment restore event:', e);
+        }
+        
+        // Dispatch equipment returned event for ViewApproved page
+        try {
+          window.dispatchEvent(new CustomEvent('ireply:equipment:returned', {
+            detail: { 
+              transaction_id: transactionId, 
+              equipment_id: returnData?.equipment_id 
+            }
+          }));
+        } catch (e) {
+          console.error('Error dispatching equipment returned event:', e);
         }
         
         try {
@@ -1458,6 +1544,19 @@ const ViewRequest = () => {
                       approved_by_name: 'Admin',
                       approved_at: new Date().toISOString()
                     });
+                    
+                    // Dispatch event for employee dashboard
+                    try {
+                      window.dispatchEvent(new CustomEvent('ireply:request:approved', {
+                        detail: {
+                          request_id: request.id,
+                          equipment_id: request.equipment_id,
+                          equipment_name: request.equipment_name || request.item
+                        }
+                      }));
+                    } catch (e) {
+                      console.error('Error dispatching approved event:', e);
+                    }
                   }
                 }
                 

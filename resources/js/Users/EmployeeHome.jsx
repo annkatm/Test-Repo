@@ -315,10 +315,104 @@ const EmployeeHome = () => {
         });
       } catch (_) {}
     };
+    
+    const onApproved = (e) => {
+      const reqId = e?.detail?.request_id;
+      const equipId = e?.detail?.equipment_id;
+      
+      if (reqId || equipId) {
+        // Remove approved request from pending list
+        setPendingTransactions((prev) => (
+          Array.isArray(prev)
+            ? prev.filter((r) => {
+                const byReq = reqId ? String(r.id) !== String(reqId) : true;
+                const byEquip = equipId ? String(r.equipment_id || '') !== String(equipId) : true;
+                return byReq && byEquip;
+              })
+            : prev
+        ));
+        
+        // Move to approved transactions
+        try { 
+          fetchApprovedTransactions(); 
+          showToast('Request approved!', 'success'); 
+        } catch (_) {}
+        
+        // Add approved activity
+        try {
+          const when = new Date().toISOString();
+          const entry = {
+            id: `appr:${reqId || equipId || when}`,
+            item: e?.detail?.equipment_name || e?.detail?.item || 'Request',
+            message: 'Request approved',
+            variant: 'approved',
+            date: when,
+            time: when,
+          };
+          setActivities((prev) => {
+            const base = Array.isArray(prev) ? prev : [];
+            const map = new Map(base.map((x) => [String(x.id || x.message + String(x.time || x.date || '')), x]));
+            const k = String(entry.id || entry.message + String(entry.time || entry.date || ''));
+            if (!map.has(k)) map.set(k, entry);
+            const merged = Array.from(map.values()).sort((a, b) => new Date(b.time || b.date || 0) - new Date(a.time || a.date || 0)).slice(0, 50);
+            try { localStorage.setItem('employee_activities', JSON.stringify(merged)); } catch (_) {}
+            return merged;
+          });
+        } catch (_) {}
+      }
+    };
+    
+    const onRejected = (e) => {
+      const reqId = e?.detail?.request_id;
+      const equipId = e?.detail?.equipment_id;
+      
+      if (reqId || equipId) {
+        // Remove rejected request from pending list
+        setPendingTransactions((prev) => (
+          Array.isArray(prev)
+            ? prev.filter((r) => {
+                const byReq = reqId ? String(r.id) !== String(reqId) : true;
+                const byEquip = equipId ? String(r.equipment_id || '') !== String(equipId) : true;
+                return byReq && byEquip;
+              })
+            : prev
+        ));
+        
+        try { showToast('Request was rejected by admin', 'error'); } catch (_) {}
+        
+        // Add rejected activity
+        try {
+          const when = new Date().toISOString();
+          const entry = {
+            id: `rej:${reqId || equipId || when}`,
+            item: e?.detail?.equipment_name || e?.detail?.item || 'Request',
+            message: 'Request rejected',
+            variant: 'denied',
+            date: when,
+            time: when,
+          };
+          setActivities((prev) => {
+            const base = Array.isArray(prev) ? prev : [];
+            const map = new Map(base.map((x) => [String(x.id || x.message + String(x.time || x.date || '')), x]));
+            const k = String(entry.id || entry.message + String(entry.time || entry.date || ''));
+            if (!map.has(k)) map.set(k, entry);
+            const merged = Array.from(map.values()).sort((a, b) => new Date(b.time || b.date || 0) - new Date(a.time || a.date || 0)).slice(0, 50);
+            try { localStorage.setItem('employee_activities', JSON.stringify(merged)); } catch (_) {}
+            return merged;
+          });
+        } catch (_) {}
+      }
+    };
+    
     window.addEventListener('ireply:request:created', onCreated);
+    window.addEventListener('ireply:request:approved', onApproved);
+    window.addEventListener('ireply:request:rejected', onRejected);
+    
     return () => {
       window.removeEventListener('ireply:request:cancelled', onCancelled);
       window.removeEventListener('ireply:request:created', onCreated);
+      window.removeEventListener('ireply:request:approved', onApproved);
+      window.removeEventListener('ireply:request:rejected', onRejected);
     };
   }, []);
 
@@ -599,14 +693,54 @@ const EmployeeHome = () => {
 
   const fetchPendingTransactions = async () => {
     try {
-      // Try direct pending endpoint first
+      console.log('[EmployeeHome] Fetching pending transactions...');
+      
+      // Get current user/employee info to filter requests
+      const currentEmployeeId = await (async () => {
+        try {
+          const userRes = await fetch('/check-auth', { credentials: 'same-origin' });
+          const userData = await userRes.json();
+          console.log('[EmployeeHome] User data:', userData);
+          
+          if (userData?.authenticated && userData?.user?.employee_id) {
+            console.log('[EmployeeHome] Found employee_id in user:', userData.user.employee_id);
+            return userData.user.employee_id;
+          }
+          
+          // Fallback: try to get employee by user_id
+          if (userData?.authenticated && userData?.user?.id) {
+            console.log('[EmployeeHome] Looking up employee by user_id:', userData.user.id);
+            const empRes = await fetch(`/api/employees?user_id=${userData.user.id}`);
+            const empData = await empRes.json();
+            const employees = Array.isArray(empData) ? empData : (Array.isArray(empData?.data) ? empData.data : []);
+            console.log('[EmployeeHome] Found employees:', employees);
+            if (employees.length > 0) {
+              console.log('[EmployeeHome] Using employee ID:', employees[0].id);
+              return employees[0].id;
+            }
+          }
+        } catch (e) {
+          console.error('[EmployeeHome] Error getting employee ID:', e);
+        }
+        return null;
+      })();
+
+      console.log('[EmployeeHome] Current employee ID:', currentEmployeeId);
+
+      // Fetch ALL pending requests first, then filter client-side
       let list = [];
       try {
         const response = await fetch('/api/requests?status=pending');
         const data = await response.json();
+        console.log('[EmployeeHome] API response:', data);
+        
         if (data && Array.isArray(data)) list = data;
         else if (data && Array.isArray(data.data)) list = data.data;
-      } catch (_) {}
+        
+        console.log('[EmployeeHome] Raw pending list:', list.length, 'items');
+      } catch (e) {
+        console.error('[EmployeeHome] Error fetching pending requests:', e);
+      }
 
       // Fallback: fetch all requests and filter to pending-like statuses
       if (!Array.isArray(list) || list.length === 0) {
@@ -616,11 +750,22 @@ const EmployeeHome = () => {
           const all = Array.isArray(j2) ? j2 : (Array.isArray(j2?.data) ? j2.data : []);
           const pendingLike = (all || []).filter((r) => {
             const s = String(r?.status || '').toLowerCase();
-            // treat these as "on process"
             return /(pending|processing|in\s*process|in_process|awaiting|waiting|review|on\s*process|requested|submitted|open)/.test(s);
           });
           list = pendingLike;
-        } catch (_) {}
+          console.log('[EmployeeHome] Fallback found:', list.length, 'pending items');
+        } catch (e) {
+          console.error('[EmployeeHome] Error in fallback fetch:', e);
+        }
+      }
+      
+      // Filter by current employee if we have the ID
+      if (currentEmployeeId && list.length > 0) {
+        const beforeFilter = list.length;
+        list = list.filter(r => String(r?.employee_id) === String(currentEmployeeId));
+        console.log('[EmployeeHome] Filtered from', beforeFilter, 'to', list.length, 'for employee', currentEmployeeId);
+      } else if (!currentEmployeeId && list.length > 0) {
+        console.warn('[EmployeeHome] No employee ID - showing all pending requests');
       }
 
       // Map minimal fields expected by UI
@@ -637,9 +782,32 @@ const EmployeeHome = () => {
         type: t?.type || t?.category || t?.category_name || t?.equipment_type || t?.item_type || (t?.equipment && (t?.equipment.type || t?.equipment.category || t?.equipment.category_name)) || null,
       }));
 
+      console.log('[EmployeeHome] Final pending transactions:', mapped.length, 'items', mapped);
       setPendingTransactions(mapped);
+      
+      // Clean up stale cancelled IDs - if a request ID is in cancelled list but not in pending list, remove it
+      const currentPendingIds = new Set(mapped.map(t => String(t.id)));
+      const currentEquipIds = new Set(mapped.map(t => String(t.equipment_id)).filter(Boolean));
+      
+      setCancelledReqIds(prev => {
+        const cleaned = prev.filter(id => currentPendingIds.has(String(id)));
+        if (cleaned.length !== prev.length) {
+          console.log('[EmployeeHome] Cleaned stale cancelled request IDs from', prev.length, 'to', cleaned.length);
+          try { sessionStorage.setItem('ireply_cancelled_req_ids', JSON.stringify(cleaned)); } catch (_) {}
+        }
+        return cleaned;
+      });
+      
+      setCancelledEquipIds(prev => {
+        const cleaned = prev.filter(id => currentEquipIds.has(String(id)));
+        if (cleaned.length !== prev.length) {
+          console.log('[EmployeeHome] Cleaned stale cancelled equipment IDs from', prev.length, 'to', cleaned.length);
+          try { sessionStorage.setItem('ireply_cancelled_equip_ids', JSON.stringify(cleaned)); } catch (_) {}
+        }
+        return cleaned;
+      });
     } catch (error) {
-      console.error('Failed to fetch pending requests:', error);
+      console.error('[EmployeeHome] Failed to fetch pending requests:', error);
       setPendingTransactions([]);
     }
   };
@@ -1079,7 +1247,13 @@ const EmployeeHome = () => {
           </div>
 
           <div className="divide-y divide-gray-100">
-            {(pendingTransactions.filter((t) => !cancelledReqIds.includes(String(t?.id)) && !cancelledEquipIds.includes(String(t?.equipment_id || ''))).length > 0) ? [...pendingTransactions]
+            {(() => {
+              console.log('[EmployeeHome] Rendering On Process - pendingTransactions:', pendingTransactions);
+              console.log('[EmployeeHome] Cancelled IDs:', cancelledReqIds, cancelledEquipIds);
+              const filtered = pendingTransactions.filter((t) => !cancelledReqIds.includes(String(t?.id)) && !cancelledEquipIds.includes(String(t?.equipment_id || '')));
+              console.log('[EmployeeHome] After filtering:', filtered);
+              return filtered.length;
+            })() > 0 ? [...pendingTransactions]
               .filter((t) => !cancelledReqIds.includes(String(t?.id)) && !cancelledEquipIds.includes(String(t?.equipment_id || '')))
               .sort((a, b) => {
                 const aDate = new Date(a.created_at || a.expected_start_date || 0).getTime();

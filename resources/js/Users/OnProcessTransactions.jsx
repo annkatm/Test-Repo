@@ -287,45 +287,94 @@ const OnProcessTransactions = ({
                   try {
                     const reqId = selectedRequestData?.id;
                     const equipId = selectedRequestData?.equipment_id || selectedRequestData?.equipment?.id || selectedRequestData?.equipmentId || selectedRequestData?.item_id || null;
-                    // Attempt to cancel via common endpoints (non-fatal if fail)
+                    
+                    // Cancel the request via API
                     if (reqId) {
                       const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
                       const baseHeaders = { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
                       const headers = csrf ? { ...baseHeaders, 'X-CSRF-TOKEN': csrf } : baseHeaders;
-                      try { await fetch(`/api/requests/${reqId}/cancel`, { method: 'POST', headers, credentials: 'same-origin' }); } catch (_) {}
-                      try { await fetch(`/api/requests/${reqId}`, { method: 'DELETE', headers, credentials: 'same-origin' }); } catch (_) {}
-                    }
-                    // Notify EmployeeHome to restore this equipment to the available list and un-reserve it for this user
-                    if (equipId) {
-                      // Persist a restore request so EmployeeHome can process it even if not mounted yet
+                      
                       try {
-                        const key = 'ireply_restore_queue';
-                        const raw = localStorage.getItem(key);
-                        const arr = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
-                        if (!arr.includes(String(equipId))) arr.push(String(equipId));
-                        localStorage.setItem(key, JSON.stringify(arr));
-                      } catch (_) {}
-                      // Also dispatch a live event for when EmployeeHome is mounted
-                      try { window.dispatchEvent(new CustomEvent('ireply:equipment:restore', { detail: { equipment_id: equipId } })); } catch (_) {}
-                    } else {
-                      // If missing, still ask for a general refresh
-                      try { window.dispatchEvent(new CustomEvent('ireply:equipment:restore')); } catch (_) {}
+                        const response = await fetch(`/api/requests/${reqId}/cancel`, { 
+                          method: 'POST', 
+                          headers, 
+                          credentials: 'same-origin' 
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (response.ok && data.success) {
+                          console.log('Request cancelled successfully:', data);
+                          
+                          // Only dispatch events if cancel was successful
+                          // Notify EmployeeHome to restore this equipment to the available list
+                          if (equipId) {
+                            try {
+                              const key = 'ireply_restore_queue';
+                              const raw = localStorage.getItem(key);
+                              const arr = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
+                              if (!arr.includes(String(equipId))) arr.push(String(equipId));
+                              localStorage.setItem(key, JSON.stringify(arr));
+                            } catch (_) {}
+                            
+                            try { 
+                              window.dispatchEvent(new CustomEvent('ireply:equipment:restore', { 
+                                detail: { equipment_id: equipId } 
+                              })); 
+                            } catch (_) {}
+                          }
+                          
+                          // Tell dashboards to drop this request from any pending/on-process lists
+                          try { 
+                            window.dispatchEvent(new CustomEvent('ireply:request:cancelled', { 
+                              detail: { 
+                                request_id: reqId, 
+                                equipment_id: equipId,
+                                equipment_name: selectedRequestData?.item || selectedRequestData?.equipment_name
+                              } 
+                            })); 
+                            console.log('[OnProcessTransactions] Dispatched ireply:request:cancelled event for request', reqId);
+                          } catch (_) {}
+                          
+                          // Remove from local On Process list
+                          setList((prev) => {
+                            if (!Array.isArray(prev)) return prev;
+                            return prev.filter(r => String(r.id) !== String(reqId));
+                          });
+                        } else {
+                          console.warn('Cancel request returned non-success:', data);
+                          alert('Failed to cancel request: ' + (data.message || 'Unknown error'));
+                          return; // Don't proceed if cancel failed
+                        }
+                      } catch (error) {
+                        console.error('Error cancelling request:', error);
+                        alert('Error cancelling request. Please try again.');
+                        return; // Don't proceed if error
+                      }
                     }
-                    // Tell dashboards to drop this request from any pending/on-process lists
-                    try { window.dispatchEvent(new CustomEvent('ireply:request:cancelled', { detail: { request_id: reqId, equipment_id: equipId } })); } catch (_) {}
-                    // Optimistically remove from local On Process list
-                    try { setList((prev) => (Array.isArray(prev) ? prev.filter(r => String(r.id) !== String(reqId) && String(r.equipment_id || '') !== String(equipId || '')) : prev)); } catch (_) {}
-                  } finally {
+                    
+                    // Close modal and go back
                     setIsCancelModalOpen(false);
                     setSelectedRequest(null);
-                    onBack();
+                    
+                    // Only go back if list is now empty, otherwise stay on page
+                    setTimeout(() => {
+                      const remainingCount = (list || []).filter(r => String(r.id) !== String(reqId)).length;
+                      if (remainingCount === 0) {
+                        onBack();
+                      }
+                    }, 100);
+                    
+                  } catch (error) {
+                    console.error('Error in cancel handler:', error);
+                  } finally {
                     setActionLoading(false);
                   }
                 }}
                 disabled={actionLoading}
                 className="px-8 py-2.5 bg-blue-600 text-white rounded-lg font-medium text-sm hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Confirm
+                {actionLoading ? 'Cancelling...' : 'Confirm'}
               </button>
             </div>
           </div>

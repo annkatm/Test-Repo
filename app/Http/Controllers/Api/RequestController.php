@@ -416,23 +416,27 @@ class RequestController extends Controller
                 ], 404);
             }
 
-        // Only allow deletion of pending requests
+            // Only allow deletion of pending requests
             if ($request->status !== 'pending') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Only pending requests can be deleted'
-            ], 422);
-        }
-
-            $request = Request::find($id);
-            if ($request) {
-                $request->delete(); // This will now soft delete due to SoftDeletes trait
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Only pending requests can be deleted'
+                ], 422);
             }
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Request deleted successfully'
-        ]);
+            // Delete the request using query builder
+            DB::table('requests')->where('id', $id)->delete();
+
+            // Log the activity
+            ActivityLogService::logSystemActivity(
+                'Deleted request',
+                "Deleted request #{$request->request_number}"
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Request deleted successfully'
+            ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -578,11 +582,21 @@ class RequestController extends Controller
 
             DB::table('requests')->where('id', $id)->update([
                 'status' => 'rejected',
-                'approved_by' => Auth::id(), // Use currently authenticated user's ID
+                'approved_by' => Auth::id(),
                 'approved_at' => now(),
-                'rejection_reason' => $validated['rejection_reason'],
-                'updated_at' => now(),
+                'rejection_reason' => $validated['rejection_reason']
             ]);
+
+            // Reset equipment status to available so it can be requested again
+            if ($equipmentRequest->equipment_id) {
+                try {
+                    DB::table('equipment')->where('id', $equipmentRequest->equipment_id)->update([
+                        'status' => 'available'
+                    ]);
+                } catch (\Exception $e) {
+                    \Log::warning("Could not reset equipment status: " . $e->getMessage());
+                }
+            }
 
             // Fetch updated request with related data
             $updatedRequest = DB::table('requests')
@@ -741,6 +755,81 @@ class RequestController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error fetching request statistics: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Cancel a pending request
+     */
+    public function cancel(string $id): JsonResponse
+    {
+        try {
+            $request = DB::table('requests')->where('id', $id)->first();
+            
+            if (!$request) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Request not found'
+                ], 404);
+            }
+
+            // Only allow cancellation of pending requests
+            if ($request->status !== 'pending') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Only pending requests can be cancelled'
+                ], 422);
+            }
+
+            // Use transaction to ensure atomicity
+            DB::beginTransaction();
+            
+            try {
+                // Update request status to cancelled (don't update timestamps, let DB handle it)
+                DB::table('requests')->where('id', $id)->update([
+                    'status' => 'cancelled'
+                ]);
+
+                // Reset equipment status to available so it can be requested again
+                if ($request->equipment_id) {
+                    DB::table('equipment')->where('id', $request->equipment_id)->update([
+                        'status' => 'available'
+                    ]);
+                }
+                
+                DB::commit();
+            } catch (\Exception $e) {
+                DB::rollBack();
+                \Log::error("Error updating request/equipment: " . $e->getMessage());
+                throw $e;
+            }
+
+            // Log the activity (non-critical, don't fail if this errors)
+            try {
+                ActivityLogService::logSystemActivity(
+                    'Cancelled request',
+                    "Cancelled request #{$request->request_number}"
+                );
+            } catch (\Exception $e) {
+                \Log::warning("Could not log activity: " . $e->getMessage());
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Request cancelled successfully',
+                'data' => [
+                    'request_id' => $id,
+                    'equipment_id' => $request->equipment_id
+                ]
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Cancel request error for ID {$id}: " . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Error cancelling request: ' . $e->getMessage()
             ], 500);
         }
     }
