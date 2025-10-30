@@ -297,7 +297,7 @@ const ExchangePanel = ({
           </button>
         </div>
 
-        {/* Removed Item summary per request */}
+        {/* Removed Item summary per request  */}
 
         {/* Item card with image */}
         <div className={showReturnModal ? 'hidden' : 'flex items-start gap-3 mb-4'}>

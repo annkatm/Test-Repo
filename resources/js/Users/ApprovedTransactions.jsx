@@ -80,7 +80,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
     });
   };
 
-  // Keep chosenUnit in sync if changed by another tab/process
+  // Keep chosenUnit in sync if changed by another tab/processs
   useEffect(() => {
     const onStorage = (e) => {
       if (e.key === 'approved_selected_unit') {
