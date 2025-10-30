@@ -116,7 +116,12 @@ const AddStocks = () => {
     try {
       setLoading(true);
       // Request all equipment without status filter and with high per_page to show all items
-      const response = await fetch('/api/equipment?per_page=1000');
+      const response = await fetch('/api/equipment?per_page=1000', {
+        credentials: 'same-origin',
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
       const data = await response.json();
       
       if (data.success) {
@@ -228,6 +233,10 @@ const AddStocks = () => {
 
       const response = await fetch('/api/equipment', {
         method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Accept': 'application/json',
+        },
         body: formDataToSend
       });
 
@@ -556,7 +565,12 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
     try {
       setLoading(true);
       // Fetch all equipment for the category without pagination limits
-      const response = await fetch(`/api/equipment?category_id=${categoryId}&per_page=1000`);
+      const response = await fetch(`/api/equipment?category_id=${categoryId}&per_page=1000`, {
+        credentials: 'same-origin',
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
       const data = await response.json();
       
       if (data.success) {
@@ -678,6 +692,10 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
 
       const response = await fetch('/api/equipment/add-stock', {
         method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Accept': 'application/json',
+        },
         body: formData,
       });
 
@@ -867,7 +885,7 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
             {/* Serial Numbers */}
             <div className="mb-6">
               <label className="text-sm text-gray-600 mb-2 block">Serial Numbers</label>
-              <div className="space-y-3 max-h-48 overflow-y-auto">
+              <div className={`space-y-3 ${serialNumbers.length >= 4 ? 'max-h-48 overflow-y-auto select-scrollbar' : ''}`}>
                 {serialNumbers.map((serial, idx) => (
                   <div key={idx} className="flex items-center space-x-3">
                     <label className="text-sm text-gray-500 w-20">Serial No.</label>
@@ -1096,6 +1114,10 @@ const AddItemModal = ({ onClose, categories = [], onSuccess }) => {
 
       const response = await fetch('/api/equipment', {
         method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Accept': 'application/json',
+        },
         body: formDataToSend,
       });
 

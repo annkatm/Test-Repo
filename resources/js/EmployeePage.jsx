@@ -5,6 +5,35 @@ import EmployeeFilter from './components/EmployeeFilter';
 import PrintReceipt from './components/PrintReceipt';
 import { Eye, Pencil, Trash2, Search, AlertCircle, Printer } from 'lucide-react';
 
+// Add custom scrollbar styles
+const scrollbarStyles = `
+  .modal-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #3B82F6 #F3F4F6;
+  }
+  .modal-scrollbar::-webkit-scrollbar {
+    width: 8px;
+  }
+  .modal-scrollbar::-webkit-scrollbar-track {
+    background: #F3F4F6;
+    border-radius: 4px;
+  }
+  .modal-scrollbar::-webkit-scrollbar-thumb {
+    background: #3B82F6;
+    border-radius: 4px;
+  }
+  .modal-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #2563EB;
+  }
+`;
+
+const style = document.createElement('style');
+style.textContent = scrollbarStyles;
+if (!document.head.querySelector('style[data-modal-scrollbar]')) {
+  style.setAttribute('data-modal-scrollbar', 'true');
+  document.head.appendChild(style);
+}
+
 const getBadgeColor = (name) => {
   const colors = {
     J: 'bg-blue-500',
@@ -994,7 +1023,7 @@ const EmployeePage = () => {
         {isAddOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/20" onClick={closeModal} />
-            <div className="relative bg-white rounded-2xl shadow-2xl w-[600px] max-w-[95vw] max-h-[70vh] overflow-y-auto p-6 border border-gray-200" style={{scrollbarWidth: 'none', msOverflowStyle: 'none'}}>
+            <div className="relative bg-white rounded-2xl shadow-2xl w-[600px] max-w-[95vw] max-h-[70vh] overflow-y-auto modal-scrollbar p-6 border border-gray-200">
               <button onClick={closeModal} className="absolute right-4 top-4 text-gray-400 hover:text-gray-600 text-xl">✕</button>
               <h3 className="text-xl font-semibold text-blue-500 text-center mb-8">Add employee</h3>
 
@@ -1201,7 +1230,7 @@ const EmployeePage = () => {
         {editing && (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/20" onClick={closeEdit} />
-            <div className="relative bg-white rounded-2xl shadow-2xl w-[600px] max-w-[95vw] max-h-[70vh] overflow-y-auto p-6 border border-gray-200" style={{scrollbarWidth: 'none', msOverflowStyle: 'none'}}>
+            <div className="relative bg-white rounded-2xl shadow-2xl w-[600px] max-w-[95vw] max-h-[70vh] overflow-y-auto modal-scrollbar p-6 border border-gray-200">
               <button onClick={closeEdit} className="absolute right-4 top-4 text-gray-400 hover:text-gray-600 text-xl">✕</button>
               <h3 className="text-xl font-semibold text-blue-500 text-center mb-8">Edit employee</h3>
               <div className="grid grid-cols-2 gap-6">

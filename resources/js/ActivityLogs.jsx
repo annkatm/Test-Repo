@@ -14,6 +14,7 @@ const ActivityLogs = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
+  const [currentUser, setCurrentUser] = useState(null);
 
   // Fetch activity logs from API
   const fetchActivityLogs = async (page = 1, search = '', days = 30, type = 'all') => {
@@ -68,8 +69,30 @@ const ActivityLogs = () => {
     }
   };
 
-  // Load activity logs on component mount
+  // Fetch current user
+  const fetchCurrentUser = async () => {
+    try {
+      const response = await fetch('/api/user', {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        credentials: 'same-origin',
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setCurrentUser(data);
+      }
+    } catch (error) {
+      console.error('Error fetching current user:', error);
+    }
+  };
+
+  // Load activity logs and current user on component mount
   useEffect(() => {
+    fetchCurrentUser();
     fetchActivityLogs();
   }, []);
 
@@ -228,7 +251,7 @@ const ActivityLogs = () => {
                   </div>
                 ) : (
                   activityLogs.map((log) => (
-                    <div key={log.id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                    <div key={log.id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
                       <div className="flex items-start space-x-3">
                         <div className="flex-shrink-0">
                           <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
@@ -236,10 +259,26 @@ const ActivityLogs = () => {
                           </div>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-blue-600">
-                            {log.user ? `${log.user.name} ${log.action}` : log.action}
-                          </p>
+                          <div className="flex items-center space-x-2 mb-1">
+                            {log.user && (
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                currentUser && log.user.id === currentUser.id
+                                  ? 'bg-green-100 text-green-800'
+                                  : 'bg-blue-100 text-blue-800'
+                              }`}>
+                                {currentUser && log.user.id === currentUser.id ? 'You' : log.user.name}
+                              </span>
+                            )}
+                            <p className="text-sm font-medium text-blue-600">
+                              {log.action}
+                            </p>
+                          </div>
                           <p className="text-xs text-gray-500 mt-1">{log.description}</p>
+                          {!log.user && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs text-gray-500 bg-gray-100 mt-1">
+                              System
+                            </span>
+                          )}
                         </div>
                         <div className="flex-shrink-0">
                           <span className="text-xs text-gray-500">
