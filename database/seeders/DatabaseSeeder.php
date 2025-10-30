@@ -13,6 +13,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             RolesSeeder::class,        // First, create roles
             AdminUsersSeeder::class,   // Create admin and employee users
+            EmployeeTypesSeeder::class, // Employee types
             CategoriesSeeder::class,   // Categories for equipment
             EmployeesSeeder::class,    // Employees
             EquipmentSeeder::class,    // Equipment with categories

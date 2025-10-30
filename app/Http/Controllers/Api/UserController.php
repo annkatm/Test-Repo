@@ -178,9 +178,16 @@ class UserController extends Controller
         try {
             $user = User::findOrFail($id);
             
+            // Check if email is being changed
+            $emailChanged = $request->email !== $user->email;
+            
             $validator = Validator::make($request->all(), [
                 'name' => 'required|string|max:255',
-                'email' => ['required', 'email', Rule::unique('users')->ignore($id)->whereNull('deleted_at')],
+                'email' => [
+                    'required', 
+                    'email', 
+                    Rule::unique('users')->ignore($user->id, 'id')->whereNull('deleted_at')
+                ],
                 'password' => 'nullable|string|min:6',
                 'username' => 'nullable|string|max:255',
                 'accountType' => 'required|in:admin,employee',
@@ -195,6 +202,22 @@ class UserController extends Controller
                     'message' => 'Validation failed',
                     'errors' => $validator->errors()
                 ], 422);
+            }
+            
+            // Double-check: If email changed, manually verify it doesn't exist
+            if ($emailChanged) {
+                $existingUser = User::where('email', $request->email)
+                    ->where('id', '!=', $user->id)
+                    ->whereNull('deleted_at')
+                    ->first();
+                    
+                if ($existingUser) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Validation failed',
+                        'errors' => ['email' => ['The email has already been taken.']]
+                    ], 422);
+                }
             }
 
             // Get role based on accountType

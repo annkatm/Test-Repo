@@ -2,16 +2,22 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Mail;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\RequestController;
 use App\Http\Controllers\Api\EquipmentController;
 use App\Http\Controllers\Api\ActivityLogController;
 use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\AuthController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
 });
+
+// Password reset API routes
+Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword']);
+Route::post('/auth/reset-password', [AuthController::class, 'resetPassword']);
 
 // Employee routes
 Route::get('/employees', [EmployeeController::class, 'index']);
@@ -51,6 +57,7 @@ Route::put('/transactions/{id}', [TransactionController::class, 'update']);
 Route::delete('/transactions/{id}', [TransactionController::class, 'destroy']);
 Route::post('/transactions/{id}/release', [TransactionController::class, 'release']);
 Route::post('/transactions/{id}/return', [TransactionController::class, 'returnTransaction']);
+Route::post('/transactions/{id}/verify-return', [TransactionController::class, 'verifyReturn']);
 Route::post('/transactions/{id}/exchange', [TransactionController::class, 'exchange']);
 Route::post('/transactions/{id}/cancel', [TransactionController::class, 'cancel']);
 Route::post('/transactions/{id}/appeal', [TransactionController::class, 'appeal']);

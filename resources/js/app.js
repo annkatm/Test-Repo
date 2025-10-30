@@ -15,6 +15,8 @@ import UsersPage from './UsersPage.jsx';
 import ControlPanel from './ControlPanel.jsx';
 import Reports from './Reports.jsx';
 import Archive from './Archive.jsx';
+import LoginPage from './auth/loginpage.jsx';
+import ResetPassword from './auth/ResetPassword.jsx';
 import ToastContainer from './components/ToastContainer.jsx';
 import { replaceAlert } from './utils/toastUtils.js';
 
@@ -133,6 +135,68 @@ document.addEventListener('DOMContentLoaded', function() {
     } catch (error) {
         console.error('Failed to initialize toast system:', error);
     }
+    
+    // Check for reset-password-root (for reset password page)
+    const resetPasswordContainer = document.getElementById('reset-password-root');
+    console.log('reset-password-root element found:', resetPasswordContainer);
+    
+    if (resetPasswordContainer) {
+        try {
+            console.log('Initializing ResetPassword component');
+            const root = createRoot(resetPasswordContainer);
+            root.render(React.createElement(ResetPassword));
+            console.log('ResetPassword component rendered successfully');
+        } catch (error) {
+            console.error('Error rendering ResetPassword component:', error);
+        }
+    }
+    
+    // Check for login-root (for login page)
+    const loginContainer = document.getElementById('login-root');
+    console.log('login-root element found:', loginContainer);
+    
+    if (loginContainer) {
+        try {
+            console.log('Initializing LoginPage component');
+            const root = createRoot(loginContainer);
+            
+            // Define onAuthSuccess callback
+            const handleAuthSuccess = () => {
+                console.log('Authentication successful, checking user role for redirect...');
+                // Fetch user data to determine appropriate redirect
+                fetch('/login-data')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success && data.redirect) {
+                            window.location.href = data.redirect;
+                        } else {
+                            // Fallback to dashboard
+                            window.location.href = '/dashboard';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching login data:', error);
+                        // Fallback to dashboard
+                        window.location.href = '/dashboard';
+                    });
+            };
+            
+            root.render(React.createElement(LoginPage, { onAuthSuccess: handleAuthSuccess }));
+            console.log('LoginPage component rendered successfully');
+        } catch (error) {
+            console.error('Error rendering LoginPage component:', error);
+            // Display error message in the UI
+            loginContainer.innerHTML = `
+              <div style="padding: 20px; background-color: #ffebee; border: 2px solid #f44336; border-radius: 5px; margin: 20px; text-align: center;">
+                <h2 style="color: #d32f2f;">Login Page Failed to Load</h2>
+                <p>There was an error loading the Login component. Please try reloading the page.</p>
+                <button onclick="window.location.reload()" style="padding: 10px 20px; background-color: #2196f3; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 10px;">
+                  Reload Page
+                </button>
+              </div>
+            `;
+        }
+    }
   // Lazy-load SuperAdmin when the superadmin page is present to code-split large admin bundle
   (function lazyLoadSuperAdmin() {
     const superAdminContainer = document.getElementById('superadmin-root');
@@ -216,11 +280,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             };
             
-            // Render SimpleEmployee component directly on employee page
+            // Render EmployeePage component directly on employee page
             try {
-                console.log('Rendering SimpleEmployee component on employee-root');
-                root.render(React.createElement(SimpleEmployee));
-                console.log('SimpleEmployee component rendered to employee-root');
+                console.log('Rendering EmployeePage component on employee-root');
+                root.render(React.createElement(EmployeePage));
+                console.log('EmployeePage component rendered to employee-root');
             } catch (employeeError) {
                 console.error('Error rendering Employee component:', employeeError);
                 // Try to use the inline fallback component if available

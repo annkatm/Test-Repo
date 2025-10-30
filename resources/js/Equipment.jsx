@@ -95,6 +95,8 @@ const Equipment = () => {
       
       if (response.data.success) {
         await fetchData();
+        // Notify other components (e.g., Home dashboard) to refresh
+        window.dispatchEvent(new Event('equipment:updated'));
         setSuccessMessage('Serial number updated successfully.');
         setShowSuccess(true);
         setTimeout(() => setShowSuccess(false), 3000);
@@ -204,6 +206,8 @@ const Equipment = () => {
       
       if (response.data.success) {
         await fetchData();
+        // Notify other components (e.g., Home dashboard) to refresh
+        window.dispatchEvent(new Event('equipment:updated'));
         setSuccessMessage('Equipment has been archived successfully.');
         setShowSuccess(true);
         setTimeout(() => setShowSuccess(false), 3000);

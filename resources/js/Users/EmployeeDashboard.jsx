@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Home, History, Package } from 'lucide-react';
-import Employetaskbar from './Employetaskbar.jsx';
+import EmployeeTaskbar from './Employetaskbar.jsx';
 import EmployeeSidebar from './employeesidebar.jsx';
 import EmployeeHome from './EmployeeHome.jsx';
 import EmployeeTransaction from './EmployeeTransaction.jsx';
@@ -11,7 +11,7 @@ const EmployeeDashboard = ({
   employeeName: propEmployeeName,
   notifications: propNotifications = 3
 }) => {
-  const [activeMenu, setActiveMenu] = useState('Home');
+  const [activeMenu, setActiveMenu] = useState('Transaction');
   const [userData, setUserData] = useState(null);
   const [employeeName, setEmployeeName] = useState(propEmployeeName || 'Employee User');
   const [userRole, setUserRole] = useState('employee');
@@ -109,9 +109,9 @@ const EmployeeDashboard = ({
   const renderContent = () => {
     switch (activeMenu) {
       case 'Home':
-        return <EmployeeTransaction />;
-      case 'Transaction':
         return <EmployeeHome />;
+      case 'Transaction':
+        return <EmployeeTransaction />;
       case 'Returned Items':
         return <EmployeeReturnItems />;
       default:
@@ -130,7 +130,7 @@ const EmployeeDashboard = ({
   
       {/* Main Content Area with Employee Taskbar */}
       <div className="flex-1 flex flex-col min-h-0">
-        <Employetaskbar 
+        <EmployeeTaskbar 
           onSearch={handleSearch}
           employeeName={employeeName}
           userRole={userRole}
