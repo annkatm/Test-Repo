@@ -70,5 +70,19 @@ export const activityLogService = {
       'Transaction',
       transactionId
     );
+  },
+
+  /**
+   * Log equipment return
+   */
+  async logEquipmentReturn(transactionId, returnData) {
+    const equipmentName = returnData.equipment_name || returnData.item || 'Unknown Equipment';
+    const employeeName = returnData.full_name || returnData.employee_name || 'Unknown Employee';
+    return this.logActivity(
+      'Equipment Returned',
+      `${equipmentName} returned by ${employeeName}`,
+      'Transaction',
+      transactionId
+    );
   }
 };

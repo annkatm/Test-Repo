@@ -8,17 +8,14 @@ const PrintReceipt = ({
   onPrint
 }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [serialSearchTerms, setSerialSearchTerms] = useState({});
-  const [showDropdowns, setShowDropdowns] = useState({});
   const [editableItems, setEditableItems] = useState([]);
-  const dropdownRef = React.useRef(null);
+  const [showDropdowns, setShowDropdowns] = useState({});
   const [editableData, setEditableData] = useState({
     full_name: '',
     position: '',
     department: 'YD Level 1',
     equipment_name: '',
     serial_number: '',
-    notes: '',
     it_admin: 'Arvin D. Salas',
     hr_lead: 'MAUMondres/PMagdadaro',
     it_admin_title: 'IT Administrator',
@@ -38,14 +35,12 @@ In the event that I am unable to return any of the company-issued equipment upon
         department: transactionData.department || 'YD Level 1',
         equipment_name: transactionData.equipment_name || '',
         serial_number: transactionData.serial_number || '',
-        notes: transactionData.notes || ''
       }));
       
       // Initialize editable items
       const items = transactionData.items || [{
         equipment_name: transactionData.equipment_name,
         serial_number: transactionData.serial_number,
-        notes: transactionData.notes
       }];
       setEditableItems(items);
     }
@@ -54,7 +49,7 @@ In the event that I am unable to return any of the company-issued equipment upon
   // Close dropdown when clicking outside
   React.useEffect(() => {
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+      if (!event.target.closest('.dropdown-container')) {
         setShowDropdowns({});
       }
     };
@@ -80,15 +75,12 @@ In the event that I am unable to return any of the company-issued equipment upon
 
   // Handle both single item and multiple items (grouped)
   const items = editableItems.length > 0 ? editableItems : (transactionData.items || [{
-    equipment_name: transactionData.equipment_name,
-    serial_number: transactionData.serial_number,
-    notes: transactionData.notes
+        equipment_name: transactionData.equipment_name,
+        serial_number: transactionData.serial_number,
+        serial_numbers: transactionData.serial_numbers || [transactionData.serial_number],
+        notes: transactionData.notes
   }]);
 
-  // Get all unique serial numbers for dropdown
-  const allSerialNumbers = items
-    .map(item => item.serial_number)
-    .filter(serial => serial && serial !== 'N/A');
 
   // Debug: Log items to verify serial numbers are present
   console.log('PrintReceipt - Items to print:', items);
@@ -230,10 +222,6 @@ In the event that I am unable to return any of the company-issued equipment upon
                   </tr>
                 `;
               }).join('')}
-              <tr class="others-row">
-                <td colspan="2">Others:</td>
-                <td colspan="3">${transactionData.notes || 'New Hire'}</td>
-              </tr>
             </tbody>
           </table>
 
@@ -393,10 +381,6 @@ In the event that I am unable to return any of the company-issued equipment upon
                     </tr>
                   `;
                 }).join('')}
-                <tr class="others-row">
-                  <td colspan="2">Others:</td>
-                  <td colspan="3">${transactionData.notes || 'New Hire'}</td>
-                </tr>
               </tbody>
             </table>
 
@@ -587,46 +571,32 @@ In the event that I am unable to return any of the company-issued equipment upon
                         <div className="text-sm text-gray-500 flex items-center gap-2">
                           <span>Serial:</span>
                           {isEditing ? (
-                            <div className="relative">
-                              <input
-                                type="text"
-                                value={serialSearchTerms[index] !== undefined ? serialSearchTerms[index] : item.serial_number || ''}
-                                onChange={(e) => {
-                                  setSerialSearchTerms(prev => ({
-                                    ...prev,
-                                    [index]: e.target.value
-                                  }));
+                            <div className="relative dropdown-container">
+                              <button
+                                type="button"
+                                onClick={() => {
                                   setShowDropdowns(prev => ({
                                     ...prev,
-                                    [index]: true
+                                    [index]: !prev[index]
                                   }));
                                 }}
-                                onFocus={() => {
-                                  setShowDropdowns(prev => ({
-                                    ...prev,
-                                    [index]: true
-                                  }));
-                                }}
-                                placeholder="Type to search serial number..."
-                                className="px-2 py-1 border border-gray-300 rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-48"
-                              />
+                                className="px-2 py-1 border border-gray-300 rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-48 text-left flex items-center justify-between"
+                              >
+                                <span>{item.serial_number || 'Select serial number...'}</span>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                              </button>
                               {showDropdowns[index] && (
                                 <div className="absolute z-10 w-48 mt-1 bg-white border border-gray-300 rounded shadow-lg max-h-40 overflow-y-auto">
-                                  {allSerialNumbers
-                                    .filter(serial => 
-                                      serial.toLowerCase().includes((serialSearchTerms[index] || '').toLowerCase())
-                                    )
-                                    .map((serial, idx) => (
+                                  {item.serial_numbers && item.serial_numbers.length > 0 ? (
+                                    item.serial_numbers.map((serial, idx) => (
                                       <div
                                         key={idx}
                                         onClick={() => {
                                           const newItems = [...editableItems];
                                           newItems[index].serial_number = serial;
                                           setEditableItems(newItems);
-                                          setSerialSearchTerms(prev => ({
-                                            ...prev,
-                                            [index]: serial
-                                          }));
                                           setShowDropdowns(prev => ({
                                             ...prev,
                                             [index]: false
@@ -636,11 +606,9 @@ In the event that I am unable to return any of the company-issued equipment upon
                                       >
                                         {serial}
                                       </div>
-                                    ))}
-                                  {allSerialNumbers.filter(serial => 
-                                    serial.toLowerCase().includes((serialSearchTerms[index] || '').toLowerCase())
-                                  ).length === 0 && (
-                                    <div className="px-3 py-2 text-sm text-gray-500">No matching serial numbers</div>
+                                    ))
+                                  ) : (
+                                    <div className="px-3 py-2 text-sm text-gray-500">No serial numbers available</div>
                                   )}
                                 </div>
                               )}
@@ -656,11 +624,6 @@ In the event that I am unable to return any of the company-issued equipment upon
                       </div>
                     );
                   })}
-                  {transactionData.notes && (
-                    <div className="text-sm text-gray-500 mt-2 pt-2 border-t">
-                      <strong>Notes:</strong> {transactionData.notes}
-                    </div>
-                  )}
                 </div>
               </div>
 

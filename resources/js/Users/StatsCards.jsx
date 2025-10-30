@@ -30,4 +30,3 @@ const StatsCards = ({ transactionStats, onBorrowedClick, onOverdueClick }) => {
 };
 
 export default StatsCards;
-

@@ -47,6 +47,13 @@ const UsersPage = () => {
     return password.length >= 8;
   };
 
+  // Helper function to remove undefined values from object
+  const removeUndefined = (obj) => {
+    return Object.fromEntries(
+      Object.entries(obj).filter(([_, v]) => v !== undefined)
+    );
+  };
+
   const validateForm = (isEdit = false) => {
     const newErrors = {};
 
@@ -272,16 +279,16 @@ const UsersPage = () => {
             'Accept': 'application/json',
             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
           },
-          body: JSON.stringify({
+          body: JSON.stringify(removeUndefined({
             name: newUser.name.trim(),
             email: newUser.email.trim(),
-            password: newUser.password || null,
+            password: newUser.password && newUser.password.trim() ? newUser.password : undefined,
             accountType: selectedUser?.accountType === "IT Admin" ? "admin" : "employee",
             username: newUser.username.trim() || newUser.email.split('@')[0],
             position: newUser.position.trim() || selectedUser.position || "Employee",
             department: selectedUser.department || null,
             phone: selectedUser.phone || null,
-          }),
+          })),
         });
 
         const result = await response.json();

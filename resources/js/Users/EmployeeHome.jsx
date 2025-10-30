@@ -1,649 +1,922 @@
-import React, { useState, useEffect } from 'react';
-import { Laptop, Plus } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import Echo from '../echo';
+import { Laptop, X, RefreshCcw, ClipboardList, Mouse, FilePlus2 } from 'lucide-react';
+import OnProcessTransactions from './OnProcessTransactions';
+import ApprovedTransactions from './ApprovedTransactions';
+import StatsCards from './StatsCards';
+import RecentActivities from './RecentActivities';
+import HistoryView from './HistoryView';
 
 const EmployeeHome = () => {
-  const [employees, setEmployees] = useState([]);
-  const [equipment, setEquipment] = useState([]);
+  const [showExchangeConfirmModal, setShowExchangeConfirmModal] = useState(false);
+  const [showBrowseLaptopsModal, setShowBrowseLaptopsModal] = useState(false);
+  const [selectedLaptop, setSelectedLaptop] = useState(null);
+  const [activeCategory, setActiveCategory] = useState('Laptops');
+  const [transactions, setTransactions] = useState([]);
+  const [pendingTransactions, setPendingTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState(null);
-  const [categories, setCategories] = useState([]);
-  const [cartItems, setCartItems] = useState([]);
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [returnDate, setReturnDate] = useState(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+  const [transactionStats, setTransactionStats] = useState({
+    borrowed: 0,
+    available: 0,
+    overdue: 0
+  });
+  const [showReturnModal, setShowReturnModal] = useState(false);
+  const [showPendings, setShowPendings] = useState(false);
+  const [isDeniedModalOpen, setIsDeniedModalOpen] = useState(false);
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [selectedRow, setSelectedRow] = useState(1);
+  const [currentView, setCurrentView] = useState('transactions');
+  const [showHistory, setShowHistory] = useState(false);
+  const [showExchangeModal, setShowExchangeModal] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState('Laptops');
+  const [showReasonModal, setShowReasonModal] = useState(false);
+  const [exchangeReason, setExchangeReason] = useState('');
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [sortOption, setSortOption] = useState("date-desc");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [itemsPerPage, setItemsPerPage] = useState(5);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [activities, setActivities] = useState([]);
+  // Denied requests will be fetched from API
+  const [deniedRequests, setDeniedRequests] = useState([]);
+  // Toasts for upper-right popup notifications
+  const [toasts, setToasts] = useState([]);
+  const [isBorrowedOpen, setIsBorrowedOpen] = useState(false);
+  const [isOverdueOpen, setIsOverdueOpen] = useState(false);
+  const [borrowedItems, setBorrowedItems] = useState([]);
+  const [overdueItems, setOverdueItems] = useState([]);
+  // Track locally-cancelled requests to immediately hide them from On Process
+  const [cancelledReqIds, setCancelledReqIds] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem('ireply_cancelled_req_ids') || '[]'); } catch (_) { return []; }
+  });
+  const [cancelledEquipIds, setCancelledEquipIds] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem('ireply_cancelled_equip_ids') || '[]'); } catch (_) { return []; }
+  });
 
-  const isLaptopCategory = (categoryId) => {
-    const cat = categories.find(c => String(c.id) === String(categoryId));
-    return (cat?.name || '').toLowerCase() === 'laptop';
+  const showToast = (message, variant = 'info', ttl = 4500) => {
+    const id = Date.now() + Math.random();
+    const toast = { id, message, variant };
+    setToasts((prev) => [toast, ...prev].slice(0, 6));
+    // auto remove
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, ttl);
   };
 
-  const getCategoryNameById = (categoryId) => {
-    const cat = categories.find(c => String(c.id) === String(categoryId));
-    return (cat?.name || '').toLowerCase();
-  };
-
-  const getLimitForCategoryId = (categoryId) => {
-    const name = getCategoryNameById(categoryId);
-    if (name === 'laptop') return 1;
-    if (name === 'monitor') return 3;
-    if (name === 'keyboard') return 1;
-    if (name === 'mouse') return 1;
-    return Infinity;
-  };
-
-  const countInCartByCategoryId = (categoryId) => {
+  useEffect(() => {
     try {
-      const idStr = String(categoryId);
-      let count = 0;
-      for (const ci of cartItems) {
-        const units = Array.isArray(ci?.units) ? ci.units : [];
-        for (const u of units) {
-          if (String(u?.category_id) === idStr) count += 1;
+      const now = Date.now();
+      const within24h = (iso) => {
+        const ts = new Date(iso || Date.now()).getTime();
+        return Number.isFinite(ts) ? (now - ts <= 24 * 60 * 60 * 1000) : false;
+      };
+      const derived = [];
+      (Array.isArray(pendingTransactions) ? pendingTransactions : []).forEach((t) => {
+        const when = t.created_at || t.expected_start_date || t.date || t.time || new Date().toISOString();
+        if (within24h(when)) {
+          derived.push({
+            id: `req:${t.id || t.equipment_id || when}`,
+            item: t.equipment_name || t.item || 'Request',
+            message: t.message || 'Item requested',
+            variant: 'request',
+            date: when,
+            time: when,
+          });
         }
-      }
-      return count;
+      });
+      (Array.isArray(transactions) ? transactions : []).forEach((t) => {
+        const s = String(t.status || '').toLowerCase();
+        if (/(approved|released|borrowed|active)/.test(s)) {
+          const when = t.created_at || t.expected_start_date || t.start_date || t.date || t.time || new Date().toISOString();
+          if (within24h(when)) {
+            derived.push({
+              id: `appr:${t.id || t.equipment_id || when}`,
+              item: t.equipment_name || t.item || 'Approved',
+              message: t.message || 'Item approved',
+              variant: 'approved',
+              date: when,
+              time: when,
+            });
+          }
+        }
+      });
+      (Array.isArray(deniedRequests) ? deniedRequests : []).forEach((r) => {
+        const when = r.date || r.time || new Date().toISOString();
+        if (within24h(when)) {
+          derived.push({
+            id: `deny:${r.id || when}`,
+            item: r.item || 'Request',
+            message: r.reason || 'Request denied',
+            variant: 'denied',
+            date: when,
+            time: when,
+          });
+        }
+      });
+      if (derived.length === 0) return;
+      setActivities((prev) => {
+        const base = Array.isArray(prev) ? prev : [];
+        const map = new Map(base.map((x) => [String(x.id || x.message + String(x.time || x.date || '')), x]));
+        derived.forEach((d) => {
+          const k = String(d.id || d.message + String(d.time || d.date || ''));
+          if (!map.has(k)) map.set(k, d);
+        });
+        const merged = Array.from(map.values())
+          .sort((a, b) => new Date(b.time || b.date || 0) - new Date(a.time || a.date || 0))
+          .slice(0, 50);
+        try { localStorage.setItem('employee_activities', JSON.stringify(merged)); } catch (_) { }
+        return merged;
+      });
+    } catch (_) { }
+  }, [pendingTransactions, transactions, deniedRequests]);
+
+  // Also compute a derived recent list on the fly for immediate rendering
+  const recentCombined = useMemo(() => {
+    try {
+      const now = Date.now();
+      const within24h = (iso) => {
+        const ts = new Date(iso || Date.now()).getTime();
+        return Number.isFinite(ts) ? (now - ts <= 24 * 60 * 60 * 1000) : false;
+      };
+      const list = [];
+      (Array.isArray(pendingTransactions) ? pendingTransactions : []).forEach((t) => {
+        const when = t.created_at || t.expected_start_date || t.date || t.time || new Date().toISOString();
+        if (within24h(when)) list.push({ id: `req:${t.id || t.equipment_id || when}`, item: t.equipment_name || t.item || 'Request', message: 'Item requested', variant: 'request', date: when, time: when });
+      });
+      (Array.isArray(transactions) ? transactions : []).forEach((t) => {
+        const s = String(t.status || '').toLowerCase();
+        const when = t.created_at || t.expected_start_date || t.start_date || t.date || t.time || new Date().toISOString();
+        if (/(approved|released|borrowed|active)/.test(s) && within24h(when)) list.push({ id: `appr:${t.id || t.equipment_id || when}`, item: t.equipment_name || t.item || 'Approved', message: 'Item approved', variant: 'approved', date: when, time: when });
+        if (/(return|returned)/.test(s) && within24h(when)) list.push({ id: `ret:${t.id || t.equipment_id || when}`, item: t.equipment_name || t.item || 'Return', message: 'Item returned', variant: 'return', date: when, time: when });
+        if (/(exchange|exchanged)/.test(s) && within24h(when)) list.push({ id: `ex:${t.id || t.equipment_id || when}`, item: t.equipment_name || t.item || 'Exchange', message: 'Item exchanged', variant: 'exchange', date: when, time: when });
+      });
+      (Array.isArray(deniedRequests) ? deniedRequests : []).forEach((r) => {
+        const when = r.date || r.time || new Date().toISOString();
+        if (within24h(when)) list.push({ id: `deny:${r.id || when}`, item: r.item || 'Request', message: r.reason || 'Request denied', variant: 'denied', date: when, time: when });
+      });
+      const base = Array.isArray(activities) ? activities : [];
+      const map = new Map([...base, ...list].map((x) => [String(x.id || x.message + String(x.time || x.date || '')), x]));
+      return Array.from(map.values()).sort((a, b) => new Date(b.time || b.date || 0) - new Date(a.time || a.date || 0));
     } catch (_) {
+      return activities || [];
+    }
+  }, [activities, pendingTransactions, transactions, deniedRequests]);
+  const [notificationCount, setNotificationCount] = useState(() => {
+    try {
+      const v = Number(localStorage.getItem('employee_history_unseen') || '0');
+      return Number.isNaN(v) ? 0 : v;
+    } catch (_e) {
       return 0;
     }
-  };
+  });
+  const prevHistoryLenRef = useRef(0);
 
-  const isAtLimitForCategoryId = (categoryId) => {
-    const limit = getLimitForCategoryId(categoryId);
-    const current = countInCartByCategoryId(categoryId);
-    return current >= limit;
-  };
-
-  const logActivity = (message, variant = 'info') => {
-    try {
-      const prev = JSON.parse(localStorage.getItem('employee_activities') || '[]');
-      const entry = { id: Date.now(), message, variant, time: new Date().toISOString() };
-      const next = [entry, ...(Array.isArray(prev) ? prev : [])].slice(0, 50);
-      localStorage.setItem('employee_activities', JSON.stringify(next));
-    } catch (_) {}
-  };
-
-  // Keep a per-user local list of reserved equipment IDs so they stay hidden after request submission
-  const getReservedIds = () => {
-    try {
-      const raw = localStorage.getItem('employee_reserved_equipment_ids') || '[]';
-      const arr = JSON.parse(raw);
-      return Array.isArray(arr) ? new Set(arr.map(String)) : new Set();
-    } catch (_) { return new Set(); }
-  };
-  const addReservedIds = (ids) => {
-    try {
-      const cur = getReservedIds();
-      for (const id of ids) cur.add(String(id));
-      localStorage.setItem('employee_reserved_equipment_ids', JSON.stringify(Array.from(cur)));
-    } catch (_) {}
-  };
-  const removeReservedId = (id) => {
-    try {
-      const cur = getReservedIds();
-      cur.delete(String(id));
-      localStorage.setItem('employee_reserved_equipment_ids', JSON.stringify(Array.from(cur)));
-    } catch (_) {}
-  };
-  const filterOutReserved = (list) => {
-    try {
-      const cur = getReservedIds();
-      return (Array.isArray(list) ? list : []).filter((eq) => !cur.has(String(eq.id)));
-    } catch (_) {
-      return Array.isArray(list) ? list : [];
-    }
-  };
-
-  // Load data on component mount
   useEffect(() => {
-    const controller = new AbortController();
-    const loadData = async () => {
-      setLoading(true);
-      setError('');
-      try {
-        const [empRes, catRes, equipRes] = await Promise.all([
-          fetch('/api/employees', { signal: controller.signal }),
-          fetch('/api/categories', { signal: controller.signal }),
-          fetch('/api/equipment?per_page=100&status=available', { signal: controller.signal })
-        ]);
-        
-        const empData = await empRes.json();
-        const catData = await catRes.json();
-        const equipData = await equipRes.json();
-        
-        if (empData.success && Array.isArray(empData.data)) {
-          setEmployees(empData.data);
-        } else if (Array.isArray(empData)) {
-          setEmployees(empData);
-        } else {
-          setEmployees([]);
-        }
-        
-        if (catData && Array.isArray(catData.data)) {
-          setCategories(catData.data);
-        } else if (Array.isArray(catData)) {
-          setCategories(catData);
-        } else {
-          setCategories([]);
-        }
-        
-        let equipmentData = [];
-        if (Array.isArray(equipData)) {
-          equipmentData = equipData;
-        } else if (equipData && equipData.data && Array.isArray(equipData.data.data)) {
-          equipmentData = equipData.data.data;
-        } else if (Array.isArray(equipData.data)) {
-          equipmentData = equipData.data;
-        }
-        
-        // Debug: Log equipment with images
-        const equipmentWithImages = equipmentData.filter(eq => eq.item_image || eq.item_image_url);
-        if (equipmentWithImages.length > 0) {
-          console.log('Equipment with images:', equipmentWithImages.map(eq => ({
-            id: eq.id,
-            brand: eq.brand,
-            item_image: eq.item_image,
-            item_image_url: eq.item_image_url
-          })));
-        }
-        
-        setEquipment(filterOutReserved(equipmentData));
-      } catch (e) {
-        if (e.name !== 'AbortError') setError('Failed to load data');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadData();
-    return () => controller.abort();
+    try {
+      const saved = JSON.parse(localStorage.getItem('employee_activities') || '[]');
+      if (Array.isArray(saved)) setActivities(saved);
+    } catch (_) { }
   }, []);
 
-  // Listen for restore events from other parts of the app (e.g., EmployeeTransaction)
+  // On mount, process any created-requests queued by EmployeeHome (in case this view wasn't mounted during submission)
   useEffect(() => {
-    const handler = async (e) => {
-      try {
-        const eqId = e?.detail?.equipment_id;
-        if (eqId) {
-          // Allow this unit to reappear by removing it from reserved list
-          try { removeReservedId(eqId); } catch (_) {}
-          // Try to fetch a single equipment unit and add it back if available
-          try {
-            const res = await fetch(`/api/equipment/${eqId}`);
-            const data = await res.json();
-            const item = data?.data || data;
-            if (item && (!item.status || item.status === 'available')) {
-              setEquipment((prev) => {
-                if (Array.isArray(prev) && prev.some((x) => String(x.id) === String(item.id))) return prev;
-                return [item, ...(Array.isArray(prev) ? prev : [])];
-              });
-            }
-          } catch (_err) {
-            // If single fetch fails, fall back to refreshing available list
-            const res = await fetch('/api/equipment?per_page=100&status=available');
-            const data = await res.json();
-            let equipmentData = [];
-            if (Array.isArray(data)) equipmentData = data; else if (data?.data?.data) equipmentData = data.data.data; else if (Array.isArray(data?.data)) equipmentData = data.data;
-            setEquipment(equipmentData || []);
-          }
-        } else {
-          // No id provided: refresh available equipment
-          const res = await fetch('/api/equipment?per_page=100&status=available');
-          const data = await res.json();
-          let equipmentData = [];
-          if (Array.isArray(data)) equipmentData = data; else if (data?.data?.data) equipmentData = data.data.data; else if (Array.isArray(data?.data)) equipmentData = data.data;
-          setEquipment(equipmentData || []);
-        }
-      } catch (_e) { /* ignore */ }
-    };
-    window.addEventListener('ireply:equipment:restore', handler);
-    return () => window.removeEventListener('ireply:equipment:restore', handler);
+    try {
+      const key = 'ireply_created_queue';
+      const raw = localStorage.getItem(key);
+      const arr = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
+      if (!arr || arr.length === 0) return;
+      // Clear queue first to avoid duplicates
+      try { localStorage.setItem(key, JSON.stringify([])); } catch (_) {}
+      setPendingTransactions((prev) => {
+        const list = Array.isArray(prev) ? prev : [];
+        const next = [...arr, ...list].filter((item, idx, self) => {
+          // de-dupe by id or equipment_id
+          const id = String(item?.id || '');
+          const eq = String(item?.equipment_id || '');
+          const firstIdx = self.findIndex(x => String(x?.id || '') === id || String(x?.equipment_id || '') === eq);
+          return firstIdx === idx;
+        });
+        return next;
+      });
+    } catch (_) { /* ignore */ }
   }, []);
 
-  // Group equipment units into products (same brand/name/specs)
-  const getGroupedEquipment = () => {
-    const groups = {};
-    for (const eq of equipment) {
-      const key = `${(eq.name || eq.brand || 'Unknown').toLowerCase()}||${(eq.specifications || '').toLowerCase()}||${eq.category_id || ''}`;
-      if (!groups[key]) {
-        groups[key] = {
-          key,
-          name: eq.name || eq.brand || 'Unknown',
-          brand: eq.brand || eq.name || 'Unknown',
-          specifications: eq.specifications || '',
-          category_id: eq.category_id,
-          image: eq.item_image_url || eq.item_image || null,
-          items: [],
-        };
-      }
-      groups[key].items.push(eq);
-    }
-    return Object.values(groups)
-      .map(g => ({
-        ...g,
-        availableCount: g.items.filter(i => !i.status || i.status === 'available').length,
-        representative: g.items[0] || null,
-      }));
-  };
-
-  const handleItemTableClick = async (category) => {
-    try {
-      setSelectedCategory(category.name || category);
-      setLoading(true);
-      const categoryId = category.id || null;
-      let url = '/api/equipment?per_page=100&status=available';
-      if (categoryId) {
-        url += `&category_id=${categoryId}`;
-      } else if (typeof category === 'string') {
-        url += `&search=${encodeURIComponent(category)}`;
-      }
-      const res = await fetch(url);
-      const data = await res.json();
-      
-      let equipmentData = [];
-      if (Array.isArray(data)) {
-        equipmentData = data;
-      } else if (data && data.data && Array.isArray(data.data.data)) {
-        equipmentData = data.data.data;
-      } else if (Array.isArray(data.data)) {
-        equipmentData = data.data;
-      }
-      
-      // Debug: Log equipment with images
-      const equipmentWithImages = equipmentData.filter(eq => eq.item_image || eq.item_image_url);
-      if (equipmentWithImages.length > 0) {
-        console.log('Equipment with images (category filter):', equipmentWithImages.map(eq => ({
-          id: eq.id,
-          brand: eq.brand,
-          item_image: eq.item_image,
-          item_image_url: eq.item_image_url
-        })));
-      }
-      
-      setEquipment(filterOutReserved(equipmentData));
-    } catch (e) {
-      setError('Failed to load equipment for category');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchAllAvailableEquipment = async () => {
-    try {
-      setLoading(true);
-      setSelectedCategory(null);
-      const res = await fetch('/api/equipment?per_page=100&status=available');
-      const data = await res.json();
-      let equipmentData = [];
-      if (Array.isArray(data)) {
-        equipmentData = data;
-      } else if (data && data.data && Array.isArray(data.data.data)) {
-        equipmentData = data.data.data;
-      } else if (Array.isArray(data.data)) {
-        equipmentData = data.data;
-      }
-      setEquipment(filterOutReserved(equipmentData));
-    } catch (e) {
-      setError('Failed to load all equipment');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePlusClick = (item) => {
-    if (item.status && item.status !== 'available') {
-      alert('This equipment is currently unavailable. Please choose another item.');
-      return;
-    }
-    if (isAtLimitForCategoryId(item.category_id)) {
-      const name = getCategoryNameById(item.category_id) || 'item';
-      const limit = getLimitForCategoryId(item.category_id);
-      alert(`You can only add up to ${limit} ${name}${limit > 1 ? 's' : ''}.`);
-      return;
-    }
-    // Group key based on same logic as equipment grouping
-    const groupKey = `${(item.name || item.brand || 'Unknown').toLowerCase()}||${(item.specifications || '').toLowerCase()}||${item.category_id || ''}`;
-    const existingGroup = cartItems.find(ci => ci.groupKey === groupKey);
-    if (existingGroup) {
-      setCartItems(cartItems.map(ci => 
-        ci.groupKey === groupKey
-          ? { ...ci, quantity: ci.quantity + 1, units: [...ci.units, item] }
-          : ci
-      ));
-    } else {
-      setCartItems([
-        ...cartItems,
-        {
-          groupKey,
-          name: item.name || item.brand || 'Unknown',
-          brand: item.brand || item.name || 'Unknown',
-          specifications: item.specifications || '',
-          image: item.item_image_url || item.item_image || null,
-          quantity: 1,
-          units: [item]
-        }
-      ]);
-    }
-
-    // Remove the added item from the visible equipment list so it vanishes
-    // This reflects that this specific unit is now taken/reserved in the cart
-    setEquipment(prev => prev.filter(eq => eq.id !== item.id));
-
-    logActivity(`Added to cart: ${(item.name || item.brand || 'Item')} (${item.id})`, 'success');
-
-    const itemsSection = document.getElementById('items-section');
-    if (itemsSection) {
-      itemsSection.scrollIntoView({ 
-        behavior: 'smooth',
-        block: 'start',
-        inline: 'nearest'
-      });
-    }
-  };
-
-  const handleRemoveFromCart = (groupKey) => {
-    const group = cartItems.find(ci => ci.groupKey === groupKey);
-    if (group) {
-      // Return all units in this group back to the equipment list if not already there
-      setEquipment(prev => {
-        const existingIds = new Set(prev.map(eq => eq.id));
-        const toAdd = group.units.filter(u => !existingIds.has(u.id));
-        return [...toAdd, ...prev];
-      });
-      logActivity(`Removed from cart: ${group.name} (x${group.quantity})`, 'warning');
-    }
-    setCartItems(cartItems.filter(ci => ci.groupKey !== groupKey));
-  };
-
-  const handleQuantityChange = (groupKey, newQuantity) => {
-    const group = cartItems.find(ci => ci.groupKey === groupKey);
-    if (!group) return;
-    if (newQuantity <= 0) {
-      handleRemoveFromCart(groupKey);
-      return;
-    }
-    if (newQuantity < group.quantity) {
-      // Decrement: return one unit to equipment
-      const unit = group.units[group.units.length - 1];
-      if (unit) {
-        setEquipment(prev => {
-          if (getReservedIds().has(String(unit.id))) return prev; // keep hidden if reserved
-          return prev.some(eq => eq.id === unit.id) ? prev : [unit, ...prev];
+  // Listen for request-cancelled events to update pending list immediately
+  useEffect(() => {
+    const onCancelled = (e) => {
+      const reqId = e?.detail?.request_id;
+      const equipId = e?.detail?.equipment_id;
+      if (!reqId && !equipId) return;
+      if (reqId) {
+        setCancelledReqIds((prev) => {
+          const next = Array.from(new Set([...(Array.isArray(prev) ? prev : []), String(reqId)]));
+          try { sessionStorage.setItem('ireply_cancelled_req_ids', JSON.stringify(next)); } catch (_) {}
+          return next;
         });
       }
-      setCartItems(cartItems.map(ci => 
-        ci.groupKey === groupKey ? { ...ci, quantity: newQuantity, units: ci.units.slice(0, -1) } : ci
-      ));
-      logActivity(`Decreased quantity: ${group.name} to x${newQuantity}`, 'info');
-    } else if (newQuantity > group.quantity) {
-      const catId = group?.units?.[0]?.category_id;
-      if (catId && isAtLimitForCategoryId(catId)) {
-        const name = getCategoryNameById(catId) || 'item';
-        const limit = getLimitForCategoryId(catId);
-        alert(`You can only add up to ${limit} ${name}${limit > 1 ? 's' : ''}.`);
-        return;
+      if (equipId) {
+        setCancelledEquipIds((prev) => {
+          const next = Array.from(new Set([...(Array.isArray(prev) ? prev : []), String(equipId)]));
+          try { sessionStorage.setItem('ireply_cancelled_equip_ids', JSON.stringify(next)); } catch (_) {}
+          return next;
+        });
       }
-      // Increment: try to take one matching available unit from equipment
-      const matchIndex = equipment.findIndex(eq => (
-        `${(eq.name || eq.brand || 'Unknown').toLowerCase()}||${(eq.specifications || '').toLowerCase()}||${eq.category_id || ''}` === groupKey
-      ));
-      if (matchIndex === -1) return; // no more stock available
-      const unit = equipment[matchIndex];
-      setEquipment(prev => prev.filter((_, idx) => idx !== matchIndex));
-      setCartItems(cartItems.map(ci => 
-        ci.groupKey === groupKey ? { ...ci, quantity: newQuantity, units: [...ci.units, unit] } : ci
-      ));
-      logActivity(`Increased quantity: ${group.name} to x${newQuantity}`, 'info');
-    }
-  };
-
-  const handleCancel = () => {
-    if (cartItems.length > 0) {
-      setEquipment(prev => {
-        // Add back any unit from all groups that's not already present in the equipment list
-        const existingIds = new Set(prev.map(eq => eq.id));
-        const toAdd = cartItems.flatMap(ci => ci.units || []).filter(u => !existingIds.has(u.id) && !getReservedIds().has(String(u.id)));
-        return [...toAdd, ...prev];
-      });
-    }
-    setCartItems([]);
-    logActivity('Canceled cart and reset selection', 'warning');
-    // Reset selection and reload default available equipment
-    setSelectedCategory(null);
-    (async () => {
-      try {
-        const res = await fetch('/api/equipment?per_page=100&status=available');
-        const data = await res.json();
-        let equipmentData = [];
-        if (Array.isArray(data)) {
-          equipmentData = data;
-        } else if (data && data.data && Array.isArray(data.data.data)) {
-          equipmentData = data.data.data;
-        } else if (Array.isArray(data.data)) {
-          equipmentData = data.data;
-        }
-        setEquipment(equipmentData);
-      } catch (e) {
-        // non-blocking; keep prior equipment if reload fails
-      } finally {
-        // Scroll back to categories/options
-        const cat = document.getElementById('categories-section');
-        if (cat && typeof cat.scrollIntoView === 'function') {
-          cat.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-      }
-    })();
-  };
-
-  const submitRequest = async () => {
-    if (cartItems.length === 0) {
-      alert('Please add items to your cart before submitting a request.');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      logActivity(`Submitting request for ${cartItems.reduce((s, i) => s + i.quantity, 0)} item(s)`, 'info');
-      
-      // Get the current user/employee ID from check-auth endpoint
-      const userResponse = await fetch('/check-auth', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest'
-        },
-        credentials: 'same-origin'
-      });
-      
-      const userData = await userResponse.json();
-      console.log('User data:', userData);
-      
-      if (!userData.authenticated || !userData.user) {
-        alert('You must be logged in to submit a request.');
-        return;
-      }
-
-      // Get the current user's linked employee information
-      let currentEmployee = null;
-      
-      // First, try to get employee info from the user's linked_employee_id
-      if (userData.user.linked_employee_id) {
-        try {
-          const employeeResponse = await fetch(`/api/employees/${userData.user.linked_employee_id}`);
-          const employeeData = await employeeResponse.json();
-          if (employeeData.success && employeeData.data) {
-            currentEmployee = employeeData.data;
-          }
-        } catch (error) {
-          console.warn('Failed to fetch linked employee:', error);
-        }
-      }
-      
-      // Fallback: Find the employee record by email if no linked employee
-      if (!currentEmployee) {
-        const employeeResponse = await fetch('/api/employees');
-        const employeeData = await employeeResponse.json();
-        const employees = employeeData.success ? employeeData.data : employeeData;
-        console.log('Employees:', employees);
-
-        if (Array.isArray(employees) && employees.length > 0) {
-          // 1) First try to match by linked_employee_id if user has one
-          if (userData.user.linked_employee_id) {
-            currentEmployee = employees.find(emp => emp.id === userData.user.linked_employee_id) || null;
-            console.log('Found employee by linked_employee_id:', currentEmployee);
-          }
-
-          // 2) If not found by linked_employee_id, try employee_id matching
-          if (!currentEmployee && userData.user.employee_id) {
-            currentEmployee = employees.find(emp => emp.employee_id === userData.user.employee_id) || null;
-            console.log('Found employee by employee_id:', currentEmployee);
-          }
-
-          // 3) If not found by employee_id, try email matching
-          if (!currentEmployee && userData.user.email) {
-            currentEmployee = employees.find(emp => 
-              emp.email && emp.email.toLowerCase() === userData.user.email.toLowerCase()
-            ) || null;
-            console.log('Found employee by email:', currentEmployee);
-          }
-
-          // 4) Fallback: match by full name (first + last) if available
-          if (!currentEmployee && userData.user.name) {
-            const parts = userData.user.name.trim().split(/\s+/);
-            const firstName = parts[0] || '';
-            const lastName = parts.length > 1 ? parts.slice(-1)[0] : '';
-            currentEmployee = employees.find(emp =>
-              (emp.first_name || '').toLowerCase() === firstName.toLowerCase() &&
-              (emp.last_name || '').toLowerCase() === lastName.toLowerCase()
-            ) || null;
-            console.log('Found employee by name:', currentEmployee);
-          }
-        }
-      }
-
-      console.log('Current employee:', currentEmployee);
-
-      if (!currentEmployee) {
-        alert(`Employee record not found for your account (${userData.user.email}). Please contact the administrator to link your user account to an employee profile.`);
-        return;
-      }
-
-      // Get CSRF token
-      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-      
-      if (!csrfToken) {
-        alert('Security token not found. Please refresh the page.');
-        return;
-      }
-
-      // Submit each item as a separate request, skipping duplicates and unavailable items
-      const seen = new Set();
-      const results = [];
-      for (const group of cartItems) {
-        for (const unit of group.units) {
-          if (unit.status && unit.status !== 'available') {
-            results.push({ success: false, data: { message: 'Item unavailable' } });
-            logActivity(`Request skipped (unavailable): ${group.name} (${unit.id})`, 'warning');
-            continue;
-          }
-          if (seen.has(unit.id)) continue; // avoid duplicate requests for same equipment
-          seen.add(unit.id);
-          const requestData = {
-            employee_id: currentEmployee.id,
-            equipment_id: unit.id,
-            request_type: 'new_assignment',
-            request_mode: 'on_site',
-            reason: `Request for 1 unit of ${group.name || group.brand}`,
-            expected_start_date: startDate,
-            expected_end_date: returnDate
-          };
-
-          console.log('Submitting request:', requestData);
-
-          // Build headers suitable for Laravel session auth; include Authorization only if present
-          const headers = {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': csrfToken,
-            'X-Requested-With': 'XMLHttpRequest',
-          };
-          const authToken = typeof localStorage !== 'undefined' ? localStorage.getItem('auth_token') : null;
-          if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
-
-          const response = await fetch('/api/requests', {
-            method: 'POST',
-            headers,
-            credentials: 'same-origin',
-            body: JSON.stringify(requestData)
-          });
-
-          let data = null;
-          try {
-            data = await response.json();
-          } catch (parseErr) {
-            data = { success: false, message: 'Invalid JSON response', parseErr: String(parseErr) };
-          }
-          console.log('Response status:', response.status, 'Response data:', data);
-          const ok = response.ok && (data?.success === true || data?.status === 'success');
-          results.push({ success: ok, status: response.status, data, unitId: unit.id, unit, groupKey: group.groupKey });
-
-          if (ok) {
-            logActivity(`Request submitted: ${group.name} (${unit.id})`, 'success');
-          } else {
-            const msg = data?.message || data?.error || `HTTP ${response.status}`;
-            logActivity(`Request failed: ${group.name} (${unit.id}) - ${msg}`, 'warning');
-          }
-        }
-      }
-
-      // Check outcomes
-      const successCount = results.filter(r => r.success).length;
-      const failedCount = results.length - successCount;
-      const successIds = new Set(results.filter(r => r.success).map(r => r.unitId));
-
-      if (successCount > 0) {
-        // Optimistically remove successful units from the Equipment Types list so they vanish immediately
-        // Persistently hide these units for this user
-        addReservedIds(Array.from(successIds));
-        setEquipment(prev => prev.filter(eq => !successIds.has(eq.id)));
-
-        if (failedCount === 0) {
-          alert(`✓ All ${successCount} request(s) submitted successfully!\n\nYour requests have been sent to the Super Admin for approval.`);
-          setCartItems([]); // Clear cart when everything succeeded
-          try {
-            const msg = `${successCount} request(s) submitted`;
-            if (window.IReplyNotify) window.IReplyNotify(msg, 'success', true);
-            window.dispatchEvent(new CustomEvent('ireply:notify', { detail: { message: `You submitted ${successCount} request(s)`, variant: 'success' } }));
-          } catch (_) {}
-        } else {
-          alert(`${successCount} request(s) submitted successfully, but ${failedCount} failed.\n\nSuccessful requests have been sent to the Super Admin.`);
-          // Remove only successful units from the cart; keep failed ones
-          const nextCart = cartItems
-            .map(ci => {
-              const remainingUnits = (ci.units || []).filter(u => !successIds.has(u.id));
-              const nextQty = Math.max(0, remainingUnits.length);
-              return nextQty > 0 ? { ...ci, units: remainingUnits, quantity: nextQty } : null;
+      setPendingTransactions((prev) => (
+        Array.isArray(prev)
+          ? prev.filter((r) => {
+              const byReq = reqId ? String(r.id) !== String(reqId) : true;
+              const byEquip = equipId ? String(r.equipment_id || '') !== String(equipId) : true;
+              return byReq && byEquip;
             })
-            .filter(Boolean);
-          setCartItems(nextCart);
-          try {
-            const msg = `${successCount} request(s) submitted (some failed)`;
-            if (window.IReplyNotify) window.IReplyNotify(msg, 'warning', true);
-            window.dispatchEvent(new CustomEvent('ireply:notify', { detail: { message: msg, variant: 'warning' } }));
-          } catch (_) {}
+          : prev
+      ));
+      try { showToast('Request cancelled', 'warning'); } catch (_) {}
+      // Add a cancel activity for Recent panel
+      try {
+        const when = new Date().toISOString();
+        const entry = {
+          id: `cancel:${reqId || equipId || when}`,
+          item: e?.detail?.equipment_name || e?.detail?.item || 'Request',
+          message: 'Request cancelled',
+          variant: 'cancel',
+          date: when,
+          time: when,
+        };
+        setActivities((prev) => {
+          const base = Array.isArray(prev) ? prev : [];
+          const map = new Map(base.map((x) => [String(x.id || x.message + String(x.time || x.date || '')), x]));
+          const k = String(entry.id || entry.message + String(entry.time || entry.date || ''));
+          if (!map.has(k)) map.set(k, entry);
+          const merged = Array.from(map.values()).sort((a, b) => new Date(b.time || b.date || 0) - new Date(a.time || a.date || 0)).slice(0, 50);
+          try { localStorage.setItem('employee_activities', JSON.stringify(merged)); } catch (_) {}
+          return merged;
+        });
+      } catch (_) {}
+      // Fallback: refresh pending from server shortly after
+      setTimeout(() => { try { fetchPendingTransactions(); } catch (_) {} }, 300);
+    };
+    window.addEventListener('ireply:request:cancelled', onCancelled);
+    const onCreated = (e) => {
+      const d = e?.detail || {};
+      if (!d || (!d.id && !d.equipment_id)) return;
+      // Un-ignore this request/equipment if it was previously cancelled
+      if (d.id) {
+        setCancelledReqIds((prev) => {
+          const next = (Array.isArray(prev) ? prev : []).filter((x) => String(x) !== String(d.id));
+          try { sessionStorage.setItem('ireply_cancelled_req_ids', JSON.stringify(next)); } catch (_) {}
+          return next;
+        });
+      }
+      if (d.equipment_id) {
+        setCancelledEquipIds((prev) => {
+          const next = (Array.isArray(prev) ? prev : []).filter((x) => String(x) !== String(d.equipment_id));
+          try { sessionStorage.setItem('ireply_cancelled_equip_ids', JSON.stringify(next)); } catch (_) {}
+          return next;
+        });
+      }
+      setPendingTransactions((prev) => {
+        const list = Array.isArray(prev) ? prev : [];
+        const exists = list.some((r) => (d.id && String(r.id) === String(d.id)) || (d.equipment_id && String(r.equipment_id || '') === String(d.equipment_id)));
+        if (exists) return list;
+        return [{
+          id: d.id || Date.now(),
+          created_at: d.created_at || new Date().toISOString(),
+          expected_start_date: d.expected_start_date || null,
+          expected_end_date: d.expected_end_date || null,
+          equipment_id: d.equipment_id || null,
+          equipment_name: d.equipment_name || d.item || 'Item',
+          item: d.equipment_name || d.item || 'Item',
+          status: d.status || 'Pending',
+        }, ...list];
+      });
+      try { showToast('Request created', 'success'); } catch (_) {}
+      // Add a request activity for Recent panel
+      try {
+        const when = d.created_at || new Date().toISOString();
+        const entry = {
+          id: `req:${d.id || d.equipment_id || when}`,
+          item: d.equipment_name || d.item || 'Request',
+          message: 'Item requested',
+          variant: 'request',
+          date: when,
+          time: when,
+        };
+        setActivities((prev) => {
+          const base = Array.isArray(prev) ? prev : [];
+          const map = new Map(base.map((x) => [String(x.id || x.message + String(x.time || x.date || '')), x]));
+          const k = String(entry.id || entry.message + String(entry.time || entry.date || ''));
+          if (!map.has(k)) map.set(k, entry);
+          const merged = Array.from(map.values()).sort((a, b) => new Date(b.time || b.date || 0) - new Date(a.time || a.date || 0)).slice(0, 50);
+          try { localStorage.setItem('employee_activities', JSON.stringify(merged)); } catch (_) {}
+          return merged;
+        });
+      } catch (_) {}
+    };
+    window.addEventListener('ireply:request:created', onCreated);
+    return () => {
+      window.removeEventListener('ireply:request:cancelled', onCancelled);
+      window.removeEventListener('ireply:request:created', onCreated);
+    };
+  }, []);
+
+  const logActivity = (message, variant = 'info') => {
+    const entry = { id: Date.now(), message, variant, time: new Date().toISOString() };
+    setActivities((prev) => {
+      const next = [entry, ...prev].slice(0, 50);
+      try { localStorage.setItem('employee_activities', JSON.stringify(next)); } catch (_) { }
+      return next;
+    });
+  };
+
+  // Increment the unseen history/notification counter and optionally append a local history/activity entry
+  const incrementNotification = (count = 1, entry = null) => {
+    setNotificationCount((prev) => {
+      const next = prev + count;
+      try { localStorage.setItem('employee_history_unseen', String(next)); } catch (_) { }
+      return next;
+    });
+
+    if (entry) {
+      // Prepend to activities and historyData locally so UI reflects it immediately
+      setActivities((prev) => {
+        const next = [entry, ...prev].slice(0, 50);
+        try { localStorage.setItem('employee_activities', JSON.stringify(next)); } catch (_) { }
+        return next;
+      });
+      setHistoryData((prev) => [entry, ...prev]);
+    }
+  };
+
+  const fetchBorrowedItems = async () => {
+    try {
+      let list = [];
+      try {
+        const res = await fetch('/api/transactions/borrowed');
+        if (res.ok) {
+          const data = await res.json();
+          list = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
         }
+      } catch (_) {}
+
+      if (!Array.isArray(list) || list.length === 0) {
+        try {
+          const res2 = await fetch('/api/employees/current-holders');
+          const data2 = await res2.json();
+          list = Array.isArray(data2?.data) ? data2.data : (Array.isArray(data2) ? data2 : []);
+        } catch (_) {}
+      }
+
+      if (!Array.isArray(list) || list.length === 0) {
+        const derived = (transactions || []).filter(t => (t.status || '').toLowerCase() === 'approved' && !t.return_date);
+        list = derived;
+      }
+
+      setBorrowedItems(list);
+      return list;
+    } catch (_) {
+      setBorrowedItems([]);
+      return [];
+    }
+  };
+
+  const fetchOverdueItems = async () => {
+    try {
+      let list = [];
+      try {
+        const res = await fetch('/api/transactions/overdue');
+        if (res.ok) {
+          const data = await res.json();
+          list = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
+        }
+      } catch (_) {}
+
+      if (!Array.isArray(list) || list.length === 0) {
+        const now = Date.now();
+        const derived = (transactions || []).filter(t => {
+          const end = t.expected_end_date || t.return_date;
+          if (!end) return false;
+          const endTs = new Date(end).getTime();
+          const isReturned = Boolean(t.return_date && new Date(t.return_date).getTime());
+          return !isReturned && endTs && endTs < now;
+        });
+        list = derived;
+      }
+
+      setOverdueItems(list);
+      return list;
+    } catch (_) {
+      setOverdueItems([]);
+      return [];
+    }
+  };
+
+  // Global function for other parts of the app to notify this component about new events
+  // Usage: window.IReplyNotify('Your request was approved', 'success')
+  useEffect(() => {
+    window.IReplyNotify = (message, variant = 'info', addToHistory = true, historyEntry = null) => {
+      const entry = historyEntry || { id: Date.now(), item: message, message, variant, date: new Date().toISOString(), time: new Date().toISOString(), local: Boolean(historyEntry) };
+      if (addToHistory) {
+        incrementNotification(1, entry);
+        // dispatch a specific history event for other listeners
+        try {
+          window.dispatchEvent(new CustomEvent('ireply:history', { detail: entry }));
+        } catch (_) { }
       } else {
-        const firstFailure = results[0] || {};
-        const msg = firstFailure?.data?.message || firstFailure?.data?.error || `HTTP ${firstFailure?.status || 'unknown'}`;
-        alert(`All requests failed. Please check your inputs and try again.\n\nDetails: ${msg}`);
-        logActivity(`All requests failed - ${msg}`, 'warning');
+        incrementNotification(1, null);
+      }
+      // keep a log in activities
+      setActivities((prev) => {
+        const next = [entry, ...prev].slice(0, 50);
+        try { localStorage.setItem('employee_activities', JSON.stringify(next)); } catch (_) { }
+        return next;
+      });
+      // show toast popup for the notification
+      try { showToast(typeof message === 'string' ? message : (entry.message || 'Notification'), variant); } catch (_) { }
+    };
+
+    const notifyHandler = (e) => {
+      const detail = e?.detail || {};
+      const message = detail.message || detail.msg || 'New activity';
+      const variant = detail.variant || 'info';
+      const entry = { id: Date.now(), item: message, message, variant, date: new Date().toISOString(), time: new Date().toISOString() };
+      incrementNotification(1, entry);
+      showToast(message, variant);
+    };
+
+    const historyHandler = (e) => {
+      const detail = e?.detail || {};
+      if (!detail) return;
+      const entry = {
+        id: detail.id || Date.now(),
+        item: detail.item || detail.message || detail.msg || 'History item',
+        message: detail.message || detail.msg || detail.item || 'History item',
+        variant: detail.variant || 'info',
+        date: detail.date || new Date().toISOString(),
+        time: detail.time || detail.date || new Date().toISOString(),
+        local: true
+      };
+      // Append to local history and increment unseen
+      incrementNotification(1, entry);
+      showToast(entry.message || entry.item, entry.variant || 'info');
+    };
+
+    window.addEventListener('ireply:notify', notifyHandler);
+    window.addEventListener('ireply:history', historyHandler);
+
+    return () => {
+      try { delete window.IReplyNotify; } catch (_) { }
+      window.removeEventListener('ireply:notify', notifyHandler);
+      window.removeEventListener('ireply:history', historyHandler);
+    };
+  }, []);
+
+  const timeAgo = (iso) => {
+    const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+    if (diff < 60) return `${diff}s ago`;
+    const m = Math.floor(diff / 60); if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`;
+    const d = Math.floor(h / 24); return `${d}d ago`;
+  };
+
+  // Helper to fetch recent activity entries
+  const getRecentActivities = (limit = 10, filterVariant = null) => {
+    const list = filterVariant ? activities.filter((a) => a.variant === filterVariant) : activities;
+    return list.slice(0, Math.max(0, limit));
+  };
+
+  // History data will be fetched from API
+  const [historyData, setHistoryData] = useState([]);
+
+  // Fetch denied requests
+  const fetchDeniedRequests = async () => {
+    try {
+      const res = await fetch('/api/requests?status=denied');
+      const data = await res.json();
+
+
+      if (data.success && Array.isArray(data.data)) {
+        const mapped = data.data.map((r, idx) => ({
+          id: r.id ?? idx + 1,
+          date: r.created_at ? new Date(r.created_at).toLocaleDateString("en-US", {
+            month: "2-digit",
+            day: "2-digit",
+            year: "numeric",
+          }) : '',
+          item: r.equipment_name || r.item || r.items || r.title || 'Request',
+          brand: r.brand || '',
+          model: r.model || '',
+          status: 'Denied',
+          reason: r.denial_reason || r.reason || 'No reason provided'
+        }));
+        setDeniedRequests(mapped);
+        return mapped;
+      } else {
+        // Set to empty array if no data
+        setDeniedRequests([]);
+        return [];
+      }
+    } catch (e) {
+      console.error('Failed to fetch denied requests', e);
+      setDeniedRequests([]);
+      return [];
+    }
+  };
+
+  const iconFor = (variant) => {
+    if (variant === 'return') return { Icon: RefreshCcw, bg: 'bg-blue-50', text: 'text-blue-700' };
+    if (variant === 'exchange') return { Icon: RefreshCcw, bg: 'bg-purple-50', text: 'text-purple-700' };
+    if (variant === 'success') return { Icon: FilePlus2, bg: 'bg-green-50', text: 'text-green-700' };
+    if (variant === 'warning') return { Icon: Mouse, bg: 'bg-yellow-50', text: 'text-yellow-700' };
+    return { Icon: ClipboardList, bg: 'bg-gray-50', text: 'text-gray-700' };
+  };
+
+  // 🔍 Filter by search term
+  const filteredData = useMemo(() => {
+    return historyData.filter((item) =>
+      (item?.item || '').toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [historyData, searchTerm]);
+
+  // 🔃 Sort the data
+  const sortedData = useMemo(() => {
+    return [...filteredData].sort((a, b) => {
+      if (sortOption === "date-asc") return new Date(a.date) - new Date(b.date);
+      if (sortOption === "date-desc") return new Date(b.date) - new Date(a.date);
+      if (sortOption === "item-asc") return (a?.item || '').localeCompare(b?.item || '');
+      if (sortOption === "item-desc") return (b?.item || '').localeCompare(a?.item || '');
+      return 0;
+    });
+  }, [filteredData, sortOption]);
+
+  // 📄 Pagination
+  const totalPages = Math.ceil(sortedData.length / itemsPerPage);
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = sortedData.slice(indexOfFirstItem, indexOfLastItem);
+
+  const handleChangePage = (page) => setCurrentPage(page);
+
+
+
+  const handleReasonChange = (e) => {
+    if (selectedRequest) {
+      setDeniedRequests(deniedRequests.map(request =>
+        request.id === selectedRequest.id
+          ? { ...request, reason: e.target.value }
+          : request
+      ));
+      setSelectedRequest({ ...selectedRequest, reason: e.target.value });
+    }
+  };
+
+  // Approved transactions will be fetched from API
+  const [approvedTransactions, setApprovedTransactions] = useState([]);
+
+  // Equipment data will be fetched from API
+  const [laptopBrands, setLaptopBrands] = useState([]);
+  const [exchangeItems, setExchangeItems] = useState([]);
+
+  // Database connection functions for transactions
+  const fetchTransactionStats = async () => {
+    try {
+      const response = await fetch('/api/transactions/stats');
+      const data = await response.json();
+
+      if (data.success) {
+        setTransactionStats({
+          borrowed: data.data.borrowed || 0,
+          available: data.data.available || 0,
+          overdue: data.data.overdue || 0
+        });
       }
     } catch (error) {
-      console.error('Failed to submit request:', error);
-      alert('Failed to submit request. Please try again.\n\nError: ' + error.message);
-      logActivity(`Submit request error: ${error.message}`, 'warning');
-    } finally {
-      setLoading(false);
+      console.error('Failed to fetch transaction stats:', error);
     }
+  };
+
+  const fetchPendingTransactions = async () => {
+    try {
+      // Try direct pending endpoint first
+      let list = [];
+      try {
+        const response = await fetch('/api/requests?status=pending');
+        const data = await response.json();
+        if (data && Array.isArray(data)) list = data;
+        else if (data && Array.isArray(data.data)) list = data.data;
+      } catch (_) {}
+
+      // Fallback: fetch all requests and filter to pending-like statuses
+      if (!Array.isArray(list) || list.length === 0) {
+        try {
+          const res2 = await fetch('/api/requests');
+          const j2 = await res2.json();
+          const all = Array.isArray(j2) ? j2 : (Array.isArray(j2?.data) ? j2.data : []);
+          const pendingLike = (all || []).filter((r) => {
+            const s = String(r?.status || '').toLowerCase();
+            // treat these as "on process"
+            return /(pending|processing|in\s*process|in_process|awaiting|waiting|review|on\s*process|requested|submitted|open)/.test(s);
+          });
+          list = pendingLike;
+        } catch (_) {}
+      }
+
+      // Map minimal fields expected by UI
+      const mapped = (Array.isArray(list) ? list : []).map((t, index) => ({
+        id: t?.id || index + 1,
+        created_at: t?.created_at || t?.date || null,
+        expected_start_date: t?.expected_start_date || t?.start_date || t?.requested_start || t?.start || null,
+        expected_end_date: t?.expected_end_date || t?.return_date || t?.due_date || t?.expected_return_date || t?.end || null,
+        item: t?.equipment_name || t?.item || t?.name || '-',
+        equipment_name: t?.equipment_name || t?.item || t?.name || '-',
+        status: t?.status || 'Pending',
+        equipment_id: t?.equipment_id || t?.equipment?.id || t?.item_id || null,
+        equipment: t?.equipment || t?.equipment_details || t?.equipment_info || null,
+        type: t?.type || t?.category || t?.category_name || t?.equipment_type || t?.item_type || (t?.equipment && (t?.equipment.type || t?.equipment.category || t?.equipment.category_name)) || null,
+      }));
+
+      setPendingTransactions(mapped);
+    } catch (error) {
+      console.error('Failed to fetch pending requests:', error);
+      setPendingTransactions([]);
+    }
+  };
+
+  const fetchApprovedTransactions = async () => {
+    try {
+      // 1) Fetch from approved endpoint
+      const respApproved = await fetch('/api/transactions/approved', { credentials: 'same-origin' });
+      const jsonApproved = await respApproved.json().catch(() => ({}));
+      const listApproved = Array.isArray(jsonApproved)
+        ? jsonApproved
+        : (Array.isArray(jsonApproved?.data)
+          ? jsonApproved.data
+          : (Array.isArray(jsonApproved?.data?.data) ? jsonApproved.data.data : []));
+
+      // 2) Fetch from generic transactions and filter approved-like
+      let listGeneric = [];
+      try {
+        const res2 = await fetch('/api/transactions', { credentials: 'same-origin' });
+        const j2 = await res2.json().catch(() => ({}));
+        const raw2 = Array.isArray(j2) ? j2 : (Array.isArray(j2?.data) ? j2.data : (Array.isArray(j2?.data?.data) ? j2.data.data : []));
+        const allowed = ['approved', 'released', 'borrowed', 'active'];
+        listGeneric = (raw2 || []).filter(t => allowed.includes(String(t?.status || '').toLowerCase()));
+      } catch (_) {}
+
+      // Merge approved + generic and de-duplicate
+      let merged = [...(Array.isArray(listApproved) ? listApproved : []), ...(Array.isArray(listGeneric) ? listGeneric : [])];
+      if (merged.length > 0) {
+        const seen = new Set();
+        merged = merged.filter((t) => {
+          const id = t?.id ?? t?.transaction_id ?? t?.request_id ?? null;
+          const eq = t?.equipment_id ?? t?.equipment?.id ?? null;
+          // Only de-duplicate when BOTH id and equipment_id exist and are non-empty
+          if (id != null && id !== '' && eq != null && eq !== '') {
+            const key = `${String(id)}::${String(eq)}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          }
+          // Otherwise, keep the entry to avoid accidental collapsing
+          return true;
+        });
+      }
+
+      // 3) Fallback to current holders if still empty
+      if (!Array.isArray(merged) || merged.length === 0) {
+        try {
+          const res3 = await fetch('/api/employees/current-holders', { credentials: 'same-origin' });
+          const j3 = await res3.json().catch(() => ({}));
+          merged = Array.isArray(j3) ? j3 : (Array.isArray(j3?.data) ? j3.data : []);
+        } catch (_) {}
+      }
+
+      // 4) Additional fallback to approved requests
+      if (!Array.isArray(merged) || merged.length === 0) {
+        try {
+          const res4 = await fetch('/api/requests?status=approved', { credentials: 'same-origin' });
+          const j4 = await res4.json().catch(() => ({}));
+          const reqs = Array.isArray(j4) ? j4 : (Array.isArray(j4?.data) ? j4.data : []);
+          merged = (reqs || []).map(r => ({
+            id: r.id,
+            equipment_id: r.equipment_id || r.equipment?.id,
+            equipment_name: r.equipment_name || r.item || '-',
+            expected_start_date: r.expected_start_date || r.start_date,
+            expected_end_date: r.expected_end_date || r.return_date,
+            status: r.status || 'approved',
+          }));
+        } catch (_) {}
+      }
+
+      const finalList = Array.isArray(merged) ? merged : [];
+      try {
+        console.log('[EmployeeTransaction] Approved fetch result count:', finalList.length, finalList.slice(0, 3));
+      } catch (_) {}
+      setTransactions(finalList);
+      // Ensure the dashboard 'Item Currently Borrowed' reflects approved items count
+      try { setTransactionStats((prev) => ({ ...prev, borrowed: Array.isArray(finalList) ? finalList.length : 0 })); } catch (_) {}
+    } catch (error) {
+      console.error('Failed to fetch approved transactions:', error);
+      setTransactions([]);
+    }
+  };
+
+  const fetchTransactionHistory = async () => {
+    try {
+      const response = await fetch('/api/transactions/history');
+      const data = await response.json();
+
+      if (data.success && Array.isArray(data.data)) {
+        // Merge server history with any local-only entries we have in historyData
+        setHistoryData((prevLocal) => {
+          const server = data.data || [];
+          // Keep local entries that are marked as local or have ids not found in server
+          const localOnly = (prevLocal || []).filter((h) => {
+            if (!h) return false;
+            // if item has a flag local === true keep it
+            if (h.local) return true;
+            // if id is missing or not present in server, keep it
+            if (!h.id) return true;
+            return !server.some((s) => String(s.id) === String(h.id));
+          });
+
+          const merged = [...localOnly, ...server];
+          try { prevHistoryLenRef.current = Array.isArray(merged) ? merged.length : 0; } catch (_) { }
+          return merged;
+        });
+        return data.data;
+      } else {
+        // keep local entries if server returns no data
+        setHistoryData((prev) => prev || []);
+        return [];
+      }
+    } catch (error) {
+      console.error('Failed to fetch transaction history:', error);
+      // keep local entries on error
+      setHistoryData((prev) => prev || []);
+      return [];
+    }
+  };
+
+  // Poll history endpoint periodically to detect new history entries
+  useEffect(() => {
+    let stopped = false;
+    const check = async () => {
+      try {
+        const data = await fetchTransactionHistory();
+        if (stopped) return;
+        const prevLen = prevHistoryLenRef.current || 0;
+        const newLen = Array.isArray(data) ? data.length : 0;
+        // If more items than previous length, increment notification by difference
+        if (newLen > prevLen) {
+          const diff = newLen - prevLen;
+          incrementNotification(diff, null);
+        }
+        prevHistoryLenRef.current = newLen;
+      } catch (e) {
+        // ignore polling errors
+      }
+    };
+
+    // initial check
+    check();
+    const iv = setInterval(check, 30000); // every 30s
+
+    return () => {
+      stopped = true;
+      clearInterval(iv);
+    };
+  }, []);
+
+  useEffect(() => {
+    const loadTransactionData = async () => {
+      await fetchTransactionStats();
+      await fetchPendingTransactions();
+      await fetchApprovedTransactions();
+      const initialHistory = await fetchTransactionHistory();
+      // Set the previous history length so the polling doesn't treat existing items as new
+      prevHistoryLenRef.current = Array.isArray(initialHistory) ? initialHistory.length : 0;
+      await fetchDeniedRequests(); // Fetch denied requests on load
+
+      try {
+        const res = await fetch('/api/employees/current-holders');
+        const data = await res.json();
+        if (data.success && Array.isArray(data.data)) {
+          if (transactions.length === 0) {
+            setTransactions(data.data);
+            // Sync borrowed count to approved/current-holder items length when using fallback
+            try { setTransactionStats((prev) => ({ ...prev, borrowed: Array.isArray(data.data) ? data.data.length : 0 })); } catch (_) {}
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch legacy transaction data:', error);
+      }
+    };
+
+    loadTransactionData();
+
+    // Setup Echo subscription for real-time events when available
+    let subscribedChannel = null;
+    (async () => {
+      try {
+        // determine the employee id for current user
+        const res = await fetch('/check-auth', { credentials: 'same-origin' });
+        const userData = await res.json();
+        let employeeId = null;
+        if (userData && userData.user) {
+          // try to get linked_employee_id or fall back to lookup
+          employeeId = userData.user.linked_employee_id || null;
+        }
+
+        if (!employeeId) {
+          try {
+            const eRes = await fetch('/api/employees');
+            const eData = await eRes.json();
+            const list = eData.success ? eData.data : eData;
+            if (Array.isArray(list) && userData && userData.user && userData.user.email) {
+              const found = list.find(emp => emp.email && emp.email.toLowerCase() === userData.user.email.toLowerCase());
+              if (found) employeeId = found.id;
+            }
+          } catch (_) { }
+        }
+
+        if (employeeId && Echo) {
+          try {
+            subscribedChannel = Echo.private(`user.history.${employeeId}`);
+            subscribedChannel.listen('RequestCreated', (e) => {
+              const payload = e || {};
+              const entry = {
+                id: payload.id || payload.data?.id || Date.now(),
+                item: payload.equipment_name || payload.item || payload.data?.equipment_name || payload.message || 'Request',
+                message: payload.message || `Request ${payload.request_number || ''}`,
+                variant: 'info',
+                date: payload.created_at || payload.date || new Date().toISOString(),
+                time: payload.created_at || payload.date || new Date().toISOString()
+              };
+              // Append to history and increment badge
+              incrementNotification(1, entry);
+            }).listen('RequestUpdated', (e) => {
+              const payload = e || {};
+              const entry = {
+                id: payload.id || payload.data?.id || Date.now(),
+                item: payload.equipment_name || payload.item || payload.data?.equipment_name || payload.message || 'Request',
+                message: payload.message || `Request updated ${payload.request_number || ''}`,
+                variant: 'info',
+                date: payload.updated_at || payload.date || new Date().toISOString(),
+                time: payload.updated_at || payload.date || new Date().toISOString()
+              };
+              incrementNotification(1, entry);
+            });
+          } catch (e) {
+            // ignore Echo errors
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    })();
+
+    // Set up polling to refresh denied requests every 30 seconds
+    const deniedRequestsInterval = setInterval(() => {
+      fetchDeniedRequests();
+    }, 30000); // 30 seconds
+
+    // Cleanup interval on unmount
+    return () => {
+      clearInterval(deniedRequestsInterval);
+      try {
+        if (subscribedChannel && Echo) subscribedChannel.stopListening();
+      } catch (_) { }
+    };
+  }, []);
+
+  const handleRowClick = (request) => {
+    setSelectedRequest(request);
+  };
+
+  const handleFileUpload = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      setUploadedFile(file);
+    }
+  };
+
+  const handleConfirmExchange = () => {
+    // Handle the exchange confirmation logic here
+    console.log('Exchange reason:', exchangeReason);
+    console.log('Uploaded file:', uploadedFile);
+    setShowReasonModal(false);
+    setShowExchangeConfirmModal(true);
+    setExchangeReason('');
+    setUploadedFile(null);
+  };
+
+  const handleSendExchangeRequest = () => {
+    setShowExchangeConfirmModal(false);
+    // Reset to transactions view after confirmation
+    setTimeout(() => setCurrentView('transactions'), 300);
   };
 
   if (loading) {
@@ -662,284 +935,416 @@ const EmployeeHome = () => {
     );
   }
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-4xl font-bold text-[#2262C6] transition-all duration-300">Transaction</h1>
-      </div>
 
-      <div className="pl-5 grid grid-cols-1 md:grid-cols-12 gap-8 items-start bg-white ">
-        <div id="categories-section" className="rounded-xl shadow-xl shadow-gray-600 col-span-12 md:col-span-3 overflow-y-auto h-138 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-          <div className="p-6 h-full">
-            <h2 className="text-lg font-semibold text-gray-900 mb-6">Item Categories</h2>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                key="all"
-                onClick={fetchAllAvailableEquipment}
-                className={`aspect-square bg-gray-100 rounded-lg flex flex-col items-center justify-center hover:shadow-md transition-all cursor-pointer ${
-                  selectedCategory === null ? 'ring-2 ring-blue-500' : ''
-                }`}
-              >
-                <Laptop className="h-8 w-8 text-gray-600 mb-2" />
-                <span className="text-sm font-semibold text-gray-800 text-center px-1 truncate">All</span>
-              </button>
-              {categories.map((category) => (
-                <button
-                  key={category.id}
-                  onClick={() => handleItemTableClick(category)}
-                   className={`aspect-square bg-gray-100 rounded-lg flex flex-col items-center justify-center hover:shadow-md transition-all cursor-pointer ${
-                    selectedCategory === (category.name || category) ? 'ring-2 ring-blue-500' : ''
-                }`}
-                >
-                 {category.image ? (
-    <div className="w-16 h-16 rounded-lg flex items-center justify-center overflow-hidden mb-2"> {/* ⬅️ Increased size */}
-      <img
-        src={
-          category.image.startsWith('http')
-            ? category.image
-            : category.image.startsWith('/storage')
-            ? `${window.location.origin}${category.image}`
-            : `${window.location.origin}/storage/${category.image}`
-        }
-        alt={category.name || 'Category'}
-        className="w-full h-full object-cover"
-        onError={(e) => {
-          e.target.onerror = null;
-          e.target.style.display = 'none';
-          e.target.nextElementSibling.style.display = 'flex';
-        }}
+  // ===== HISTORY VIEW =====
+  if (showHistory) {
+    return (
+      <HistoryView
+        onBack={() => setShowHistory(false)}
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        itemsPerPage={itemsPerPage}
+        setItemsPerPage={setItemsPerPage}
+        currentPage={currentPage}
+        setCurrentPage={setCurrentPage}
+        totalPages={totalPages}
+        sortedData={currentItems}
+        logActivity={logActivity}
       />
-      <Laptop className="h-8 w-8 text-gray-600 hidden" /> 
-    </div>
-  ) : (
-    <Laptop className="h-8 w-8 text-gray-600 mb-2" />
-  )}
-  <span className="text-sm font-semibold text-gray-800 text-center px-1 truncate"> 
-    {category.name || 'Category'}
-  </span>
-</button>
-              ))}
-              {categories.length === 0 && (
-                <div className="col-span-2 text-center text-sm text-gray-500 py-8">No categories found</div>
-              )}
-            </div>
-          </div>
+    );
+  }
+
+
+  // Main transaction view
+  // Show full Approved list when requested
+  if (currentView === 'approved') {
+    const approvedData = [...(transactions || [])]
+      .sort((a, b) => {
+        const aDate = new Date(a?.created_at || a?.expected_start_date || a?.start_date || 0).getTime();
+        const bDate = new Date(b?.created_at || b?.expected_start_date || b?.start_date || 0).getTime();
+        return bDate - aDate;
+      })
+      .map((t) => {
+        const dsrc = t?.created_at || t?.expected_start_date || t?.start_date || t?.date || null;
+        const date = dsrc
+          ? new Date(dsrc).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
+          : new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+        return {
+          // Use any available identifier to ensure Return works
+          id: t?.id ?? t?.transaction_id ?? t?.request_id ?? t?.transactionID ?? t?.trans_id ?? t?.trx_id ?? t?.uuid ?? t?.pivot?.transaction_id ?? null,
+          tx_id: t?.id ?? t?.transaction_id ?? t?.request_id ?? t?.transactionID ?? t?.trans_id ?? t?.trx_id ?? t?.uuid ?? t?.pivot?.transaction_id ?? null,
+          date,
+          item: t?.equipment_name || t?.item || '-',
+          match_name: t?.equipment_name || t?.item || '-',
+          status: t?.status || '-',
+          equipment_id: t?.equipment_id || t?.equipment?.id || null,
+          brand: t?.brand || t?.equipment?.brand || null,
+          model: t?.model || t?.equipment?.model || null,
+          equipment: t?.equipment || t?.equipment_details || null,
+          exchangeItems: [
+            {
+              name: t?.equipment_name || t?.item || '-',
+              brand: 'Equipment',
+              details: t?.description || '',
+              icon: '💻',
+            },
+          ],
+        };
+      });
+
+    return (
+      <ApprovedTransactions
+        onBack={() => setCurrentView('transactions')}
+        transactionStats={transactionStats}
+        approvedTransactions={approvedData}
+      />
+    );
+  }
+
+  // Show full On Process list when requested
+  if (showPendings) {
+    const visiblePending = (pendingTransactions || []).filter((t) => {
+      const idOk = cancelledReqIds.includes(String(t?.id)) ? false : true;
+      const eqOk = cancelledEquipIds.includes(String(t?.equipment_id || '')) ? false : true;
+      return idOk && eqOk;
+    });
+    const requestsData = visiblePending.map((t, index) => {
+      const dsrc = t?.created_at || t?.expected_start_date || null;
+      const date = dsrc ? new Date(dsrc).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '';
+      return {
+        id: t?.id || index + 1,
+        equipment_id: t?.equipment_id || t?.equipment?.id || null,
+        date: date || '-',
+        item: t?.equipment_name || t?.item || '-',
+        status: t?.status || 'Pending',
+        details: [
+          {
+            name: t?.equipment_name || t?.item || '-',
+            description: t?.description || '',
+            icon: 'https://cdn-icons-png.flaticon.com/512/1086/1086933.png',
+          },
+        ],
+      };
+    });
+
+    return (
+      <OnProcessTransactions
+        onBack={() => setShowPendings(false)}
+        requests={requestsData}
+        deniedRequests={deniedRequests}
+        setDeniedRequests={setDeniedRequests}
+        fetchDeniedRequests={fetchDeniedRequests}
+      />
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+      <div className="col-span-12 md:col-span-8 space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-4xl font-bold text-[#2262C6] transition-all duration-300">Home</h1>
         </div>
 
-        <div className="rounded-xl col-span-12 md:col-span-5 bg-white">
-          <div className="rounded-xl shadow-lg shadow-gray-600 p-6 overflow-y-auto h-138 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" data-employee-search-target>
-          <h2 className="text-lg font-semibold text-gray-900 mb-6">
-  {selectedCategory ? `${selectedCategory} Types` : 'Equipment Types'}
-        </h2>
-            <div className="space-y-4">
-              <div className="grid grid-cols-12 gap-4 text-sm font-medium text-gray-600 pb-2">
-                <div className="col-span-3">Brand</div>
-                <div className="col-span-7">Specs</div>
-                <div className="col-span-2"></div>
-              </div>
-              
-              {getGroupedEquipment().slice(0, 4).map((group) => (
-                <div key={group.key} className="grid grid-cols-12 gap-4 items-center py-3 border-b border-gray-100">
+        <StatsCards 
+          transactionStats={transactionStats} 
+          onBorrowedClick={async () => { await fetchBorrowedItems(); setIsBorrowedOpen(true); }} 
+          onOverdueClick={async () => { await fetchOverdueItems(); setIsOverdueOpen(true); }} 
+        />
+
+
+        <div className="bg-gray-100 rounded-lg border border-gray-200 mb-8">
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold text-[#2262C6]">On Process</h2>
+              <button
+                onClick={async () => {
+                  await fetchDeniedRequests(); // Refresh denied requests immediately
+                  await fetchPendingTransactions(); // Ensure fresh pending data for the full view
+                  logActivity('Opened On Process view', 'info');
+                  setShowPendings(true);
+                }}
+                className="text-right text-blue-600 text-sm font-medium hover:text-blue-700">
+                View all
+              </button>
+            </div>
+          </div>
+
+          <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+            <div className="grid grid-cols-12 gap-6 text-sm font-medium text-gray-700">
+              <div className="col-span-3">Item</div>
+              <div className="col-span-3">Start Date</div>
+              <div className="col-span-3">Return Date</div>
+              <div className="col-span-3">Status</div>
+            </div>
+          </div>
+
+          <div className="divide-y divide-gray-100">
+            {(pendingTransactions.filter((t) => !cancelledReqIds.includes(String(t?.id)) && !cancelledEquipIds.includes(String(t?.equipment_id || ''))).length > 0) ? [...pendingTransactions]
+              .filter((t) => !cancelledReqIds.includes(String(t?.id)) && !cancelledEquipIds.includes(String(t?.equipment_id || '')))
+              .sort((a, b) => {
+                const aDate = new Date(a.created_at || a.expected_start_date || 0).getTime();
+                const bDate = new Date(b.created_at || b.expected_start_date || 0).getTime();
+                return bDate - aDate; // newest first
+              })
+              .slice(0, 3)
+              .map((transaction, index) => (
+              <div
+                key={transaction.id || index}
+                className="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer"
+                onClick={() => logActivity(`Clicked pending row: ${transaction.equipment_name || transaction.item || 'Item'} (${transaction.id || index})`, 'info')}
+              >
+                <div className="grid grid-cols-12 gap-6 items-center">
                   <div className="col-span-3">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center overflow-hidden">
-                        <img
-                          src={group.image ? (
-                            group.image.startsWith('http') ? group.image :
-                            group.image.startsWith('/storage') ? `${window.location.origin}${group.image}` :
-                            `${window.location.origin}/storage/${group.image}`
-                          ) : `${window.location.origin}/images/placeholder-equipment.png`}
-                          alt={group.brand || group.name || 'Equipment'}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            e.target.onerror = null;
-                            e.target.src = `${window.location.origin}/images/placeholder-equipment.png`;
-                          }}
-                        />
-                      </div>
-                      <div>
-                        <div className="font-medium text-gray-900">{group.brand || group.name || 'Unknown'}</div>
-                      </div>
-                    </div>
+                    <span className="text-sm text-gray-900">
+                      {transaction.type || transaction.category || transaction.category_name || transaction.equipment_type || transaction.item_type || transaction?.equipment?.type || transaction?.equipment?.category || transaction?.equipment?.category_name || transaction.item || transaction.equipment_name || transaction?.equipment?.name || '-'}
+                    </span>
                   </div>
-                  <div className="col-span-7">
-                    <p className="text-sm text-gray-600">{group.specifications || 'No specs available'}</p>
-                    <div className="text-xs text-gray-500 mt-1">Stocks available: {group.availableCount}</div>
+                  <div className="col-span-3">
+                    <span className="text-sm text-gray-900">
+                      {transaction.expected_start_date
+                        ? new Date(transaction.expected_start_date).toLocaleDateString("en-US", {
+                          month: "2-digit",
+                          day: "2-digit",
+                          year: "numeric",
+                        })
+                        : '-'}
+                    </span>
                   </div>
-                  <div className="col-span-2 flex justify-end">
-                    <button 
-                      onClick={() => {
-                        const unit = group.items.find(i => !i.status || i.status === 'available');
-                        if (unit) handlePlusClick(unit);
-                      }}
-                      disabled={group.availableCount === 0 || isAtLimitForCategoryId(group.category_id)}
-                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${group.availableCount === 0 || isAtLimitForCategoryId(group.category_id) ? 'bg-gray-200 cursor-not-allowed' : 'bg-blue-100 hover:bg-blue-200'}`}
-                    >
-                      <Plus className="h-4 w-4 text-blue-600" />
-                    </button>
+                  <div className="col-span-3">
+                    <span className="text-sm text-gray-900">
+                      {transaction.expected_end_date
+                        ? new Date(transaction.expected_end_date).toLocaleDateString("en-US", {
+                          month: "2-digit",
+                          day: "2-digit",
+                          year: "numeric",
+                        })
+                        : '-'}
+                    </span>
                   </div>
-                </div>
-              ))}
-              {equipment.length === 0 && (
-                <div className="text-sm"></div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div id="items-section" className="shadow-lg shadow-gray-600 rounded-xl col-span-12 md:col-span-4 w-full md:w-auto mb-4 bg-white md:h-[552px] h-auto flex flex-col">
-          <div className="rounded-xl shadow-lg shadow-gray-600 w-full h-full flex flex-col">
-            {/* Header */}
-            <div className="p-6 pb-3">
-              <h2 className="text-lg font-semibold text-gray-900">Items</h2>
-            </div>
-
-            {/* Scrollable Items Section - Fixed height of 138px */}
-            <div className=" px-6 h-[200px] flex-shrink-0 border-b border-gray-200">
-              <div className="h-[140px] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                <div className="space-y-2">
-                  {cartItems.map((item) =>  (
-                    <div key={item.groupKey} className="flex items-center justify-between py-1.5">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
-                          {item.image ? (
-                            <img
-                              src={item.image.startsWith('http') ? item.image :
-                                   item.image.startsWith('/storage') ? `${window.location.origin}${item.image}` :
-                                   `${window.location.origin}/storage/${item.image}`}
-                              alt={item.name || item.brand || 'Equipment'}
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                e.target.onerror = null;
-                                e.target.style.display = 'none';
-                                e.target.nextSibling.style.display = 'flex';
-                              }}
-                            />
-                          ) : null}
-                          <div className={`w-full h-full flex items-center justify-center ${item.image ? 'hidden' : 'flex'}`}>
-                            <Laptop className="h-5 w-5 text-gray-600" />
-                          </div>
-                        </div>
-                        <div>
-                          <div className="font-medium text-gray-900 text-sm">{item.name || item.brand}</div>
-                          <div className="text-xs text-gray-500">{item.specifications || item.brand}</div>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <button 
-                          onClick={() => handleQuantityChange(item.groupKey, item.quantity - 1)}
-                          className="w-6 h-6 bg-red-50 border border-red-200 hover:bg-red-100 rounded-full flex items-center justify-center"
-                        >
-                          <span className="text-red-600 text-sm font-bold">−</span>
-                        </button>
-                        <span className="text-xs text-gray-600 min-w-[20px] text-center font-medium">x{item.quantity}</span>
-                        <button 
-                          onClick={() => handleQuantityChange(item.groupKey, item.quantity + 1)}
-                          disabled={item?.units?.[0]?.category_id ? isAtLimitForCategoryId(item.units[0].category_id) : false}
-                          className="w-6 h-6 bg-blue-50 border border-blue-200 hover:bg-blue-100 rounded-full flex items-center justify-center disabled:bg-gray-200 disabled:border-gray-200 disabled:cursor-not-allowed">
-                          <Plus className="h-3 w-3 text-blue-600" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  {cartItems.length === 0 && (
-                    <div className="text-gray-400 text-sm text-center py-6">
-                      <Laptop className="h-10 w-10 text-gray-300 mx-auto mb-2" />
-                      <div className="text-xs">Your cart is empty</div>
-                      <div className="text-xs">Click + buttons to add items</div>
-                    </div>
-                  )}
+                  <div className="col-span-3">
+                    {(() => {
+                      const s = String(transaction.status || 'pending').toLowerCase();
+                      const isApproved = /approved|released|borrowed|active/.test(s);
+                      const cls = isApproved
+                        ? 'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200'
+                        : 'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200';
+                      const label = isApproved ? 'Approved' : (transaction.status || 'Pending');
+                      return (
+                        <span className={cls}>{label}</span>
+                      );
+                    })()}
+                  </div>
                 </div>
               </div>
-            </div>
-
-          {cartItems.length > 0 && (
-              <div className="px-6 pt-2 pb-2 border-t border-gray-200 flex-shrink-0">
-                <div className="flex gap-2">
-                  <div className="flex-1">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-                    <div className="relative">
-                      <input
-                        type="date"
-                        value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
-                        className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-gray-300"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex-1">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Return Date</label>
-                    <div className="relative">
-                      <input
-                        type="date"
-                        value={returnDate}
-                        onChange={(e) => setReturnDate(e.target.value)}
-                        min={startDate}
-                        className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-gray-300"
-                      />
-                    </div>
-                  </div>
-                </div>
+            )) : (
+              <div className="px-6 py-6 text-sm text-gray-500">
+                No requests are currently in process.
               </div>
             )}
-            
-            {/* Request Summary Section - Fixed at bottom, compact */}
-            {cartItems.length > 0 && (
-              <div className="px-6 pt-2 pb-4 border-t border-gray-200 bg-white rounded-b-xl flex-shrink-0">
-                <div className="bg-gray-50 rounded-lg p-3 mb-3">
-                  <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wide mb-1">Request Summary</h2>
-                  <div className="space-y-1.5 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600 text-sm">Total Items</span>
-                      <span className="font-semibold text-gray-900 text-sm">x{cartItems.reduce((sum, item) => sum + item.quantity, 0)}</span>
+          </div>
+        </div>
+
+        <div className="bg-gray-100 rounded-lg border border-gray-200">
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold text-[#2262C6]">Approved</h2>
+              <button
+                onClick={async () => {
+                  setSelectedRow(null);
+                  await fetchApprovedTransactions();
+                  setCurrentView('approved');
+                  logActivity('Opened Approved view', 'info');
+                }}
+                className="text-right text-blue-600 text-sm font-medium hover:text-blue-700">
+                View all
+              </button>
+            </div>
+          </div>
+
+          <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+            <div className="grid grid-cols-12 gap-6 text-sm font-medium text-gray-700">
+              <div className="col-span-3">Item</div>
+              <div className="col-span-3">Start Date</div>
+              <div className="col-span-3">Return Date</div>
+              <div className="col-span-3">Status</div>
+            </div>
+          </div>
+
+          <div className="divide-y divide-gray-100">
+            {transactions.length > 0 ? (() => {
+              const sorted = [...transactions].sort((a, b) => {
+                const aDate = new Date(a.created_at || a.expected_start_date || a.start_date || 0).getTime();
+                const bDate = new Date(b.created_at || b.expected_start_date || b.start_date || 0).getTime();
+                return bDate - aDate; // newest first
+              });
+              const filtered = sorted.filter(t => {
+                const s = String(t.status || '').toLowerCase();
+                return ['approved', 'released', 'borrowed', 'active'].includes(s);
+              });
+              const useList = (filtered.length > 0 ? filtered : sorted).slice(0, 3);
+              return useList.map((transaction, index) => (
+                <div
+                  key={transaction.id || index}
+                  className="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer"
+                  onClick={() => logActivity(`Clicked approved row: ${transaction.equipment_name || transaction.item || 'Item'} (${transaction.id || index})`, 'info')}
+                >
+                  <div className="grid grid-cols-12 gap-6 items-center">
+                    <div className="col-span-3">
+                      <span className="text-sm text-gray-900">
+                        {transaction.type || transaction.category || transaction.category_name || transaction.equipment_type || transaction.item_type || transaction?.equipment?.type || transaction?.equipment?.category || transaction?.equipment?.category_name || transaction.item || transaction.equipment_name || transaction?.equipment?.name || '-'}
+                      </span>
                     </div>
-                    <div className="pt-1 mt-1 border-t border-gray-200 space-y-0.5">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Start</span>
-                        <span className="font-medium text-gray-900">
-                          {new Date(startDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Return</span>
-                        <span className="font-medium text-gray-900">
-                          {new Date(returnDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Duration</span>
-                        <span className="font-medium text-gray-900">
-                          {Math.ceil((new Date(returnDate) - new Date(startDate)) / (1000 * 60 * 60 * 24))} days
-                        </span>
-                      </div>
+                    <div className="col-span-3">
+                      <span className="text-sm text-gray-900">
+                        {(transaction.expected_start_date || transaction.start_date || transaction.created_at || transaction.borrow_date || transaction.borrowed_at || transaction.release_date || transaction.start || transaction.expected_start || transaction.startDate)
+                          ? new Date(
+                              transaction.expected_start_date || transaction.start_date || transaction.created_at ||
+                              transaction.borrow_date || transaction.borrowed_at || transaction.release_date ||
+                              transaction.start || transaction.expected_start || transaction.startDate
+                            ).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
+                          : '-'}
+                      </span>
+                    </div>
+                    <div className="col-span-3">
+                      <span className="text-sm text-gray-900">
+                        {(transaction.expected_end_date || transaction.return_date || transaction.end_date || transaction.due_date || transaction.expected_return_date || transaction.return_due || transaction.end || transaction.expected_end || transaction.endDate)
+                          ? new Date(
+                              transaction.expected_end_date || transaction.return_date || transaction.end_date ||
+                              transaction.due_date || transaction.expected_return_date || transaction.return_due ||
+                              transaction.end || transaction.expected_end || transaction.endDate
+                            ).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
+                          : '-'}
+                      </span>
+                    </div>
+                    <div className="col-span-3">
+                      {(() => {
+                        const s = String(transaction.status || 'approved').toLowerCase();
+                        const isApproved = /approved|released|borrowed|active/.test(s);
+                        const cls = isApproved
+                          ? 'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200'
+                          : 'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200';
+                        const label = isApproved ? 'Approved' : (transaction.status || 'Approved');
+                        return (
+                          <span className={cls}>{label}</span>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <button 
-                    onClick={handleCancel}
-                    className="flex-1 bg-white border border-red-300 hover:bg-red-50 text-red-600 py-2 px-4 rounded-lg text-sm font-medium transition-colors">
-                    Cancel
-                  </button>
-                  <button 
-                    onClick={submitRequest}
-                    disabled={loading || cartItems.length === 0}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white py-2 px-4 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1">
-                    {loading ? 'Submitting...' : (
-                      <>
-                        Request
-                        <span>→</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
+              ));
+            })() : (
+              <></>
             )}
           </div>
         </div>
       </div>
+
+      <div className="col-span-12 md:col-span-4 space-y-6">
+        <div className="flex justify-end">
+          <button
+            onClick={() => {
+              logActivity('Opened History', 'info');
+              // Reset unseen counter when user opens history
+              try { localStorage.setItem('employee_history_unseen', '0'); } catch (_) { }
+              setNotificationCount(0);
+              // Force refetch history to show latest
+              fetchTransactionHistory();
+              setShowHistory(true);
+            }}
+            className="relative flex items-center justify-center bg-white border border-gray-300 rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 shadow-md shadow-gray-400/60 hover:shadow-lg hover:shadow-gray-500/70 hover:-translate-y-1 transition-all duration-300 active:translate-y-0 active:shadow-sm w-full sm:w-auto"
+          >
+            History
+
+            {/* Notification Badge */}
+            <div className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center shadow-md shadow-red-700/70">
+              <span className="text-white text-xs font-bold">{notificationCount > 99 ? '99+' : notificationCount}</span>
+            </div>
+          </button>
+        </div>
+
+        <RecentActivities activities={recentCombined} iconFor={iconFor} timeAgo={timeAgo} />
+      </div>
+      {isBorrowedOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm">
+          <div className="relative w-full max-w-lg bg-white rounded-xl shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-bold text-gray-900">Borrowed Item Details</h2>
+              <button
+                onClick={() => setIsBorrowedOpen(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-100 rounded-lg"
+              >
+                <X size={22} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center">📦</div>
+                <div>
+                  <div className="font-semibold text-gray-900">Currently Borrowed</div>
+                  <div className="text-sm text-gray-600">Total items: {transactionStats?.borrowed || 0}</div>
+                </div>
+              </div>
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {(borrowedItems || []).map((it, i) => (
+                  <div key={it.id || i} className="border border-gray-200 rounded-lg p-3">
+                    <div className="font-semibold text-gray-900">{it.equipment_name || it.item || '-'}</div>
+                  </div>
+                ))}
+                {(!borrowedItems || borrowedItems.length === 0) && (
+                  <div className="text-sm text-gray-500">No borrowed items</div>
+                )}
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t bg-gray-50 text-right">
+              <button
+                onClick={() => setIsBorrowedOpen(false)}
+                className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isOverdueOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm">
+          <div className="relative w-full max-w-lg bg-white rounded-xl shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-bold text-gray-900">Overdue Items</h2>
+              <button
+                onClick={() => setIsOverdueOpen(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-100 rounded-lg"
+              >
+                <X size={22} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {(overdueItems || []).map((it, i) => (
+                  <div key={it.id || i} className="border border-gray-200 rounded-lg p-3">
+                    <div className="font-semibold text-gray-900">{it.equipment_name || it.item || '-'}</div>
+                  </div>
+                ))}
+                {(!overdueItems || overdueItems.length === 0) && (
+                  <div className="text-sm text-gray-500">No overdue items</div>
+                )}
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t bg-gray-50 text-right">
+              <button
+                onClick={() => setIsOverdueOpen(false)}
+                className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
 
 export default EmployeeHome;
