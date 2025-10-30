@@ -64,6 +64,15 @@ const ExchangePanel = ({
     ? new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(Number(priceRaw))
     : null;
   const imageUrl = equipment?.image_url || equipment?.image || equipment?.photo_url || transaction?.image || transaction?.image_url || null;
+  const resolvedSerial = (
+    equipment?.serial_number ||
+    equipment?.serial ||
+    transaction?.serial_number ||
+    transaction?.serial ||
+    transaction?.equipment?.serial_number ||
+    transaction?.equipment?.serial ||
+    null
+  );
   const displayTitle = itemBrandOrName || 'Item';
   const displaySub = null;
   const baseDetails = {
@@ -79,7 +88,8 @@ const ExchangePanel = ({
   };
 
   const excludeKeys = new Set([
-    'id','equipment_id','transaction_id','request_id','user_id','employee_id','status','date','created_at','updated_at','deleted_at','exchangeitems','serial','serial_no','serial_number','sn','equipment_name','item','name','image','avatar','avatar_url','photo','photo_url'
+    'id','equipment_id','transaction_id','request_id','user_id','employee_id','status','date','created_at','updated_at','deleted_at','exchangeitems','serial','serial_no','serial_number','sn','equipment_name','item','name','image','avatar','avatar_url','photo','photo_url',
+    'purchase_date','item_image','receipt_image','item_image_url','receipt_image_url'
   ]);
   const shouldInclude = (k, v) => {
     if (v == null) return false;
@@ -88,6 +98,14 @@ const ExchangePanel = ({
     const key = String(k).toLowerCase();
     if (key.includes('serial')) return false;
     if (excludeKeys.has(key)) return false;
+    if ((key.includes('purchase') && key.includes('date')))
+      return false;
+    if (key.includes('receipt') && key.includes('image'))
+      return false;
+    if (key.includes('item') && key.includes('image'))
+      return false;
+    if (key.includes('image') && key.includes('url'))
+      return false;
     return String(v).trim() !== '';
   };
   const labelize = (k) => String(k)
@@ -96,12 +114,22 @@ const ExchangePanel = ({
 
   const extraFromEquipment = Object.entries(equipment || {})
     .filter(([k, v]) => shouldInclude(k, v))
-    .reduce((acc, [k, v]) => ({ ...acc, [labelize(k)]: v }), {});
+    .reduce((acc, [k, v]) => {
+      const lower = String(k).toLowerCase();
+      const label = lower === 'category_id' ? 'Serial no.' : labelize(k);
+      const value = lower === 'category_id' ? resolvedSerial : v;
+      return { ...acc, [label]: value };
+    }, {});
 
   const extraFromTransaction = Object.entries(transaction || {})
     .filter(([k]) => !['equipment'].includes(k))
     .filter(([k, v]) => shouldInclude(k, v))
-    .reduce((acc, [k, v]) => ({ ...acc, [labelize(k)]: v }), {});
+    .reduce((acc, [k, v]) => {
+      const lower = String(k).toLowerCase();
+      const label = lower === 'category_id' ? 'Serial no.' : labelize(k);
+      const value = lower === 'category_id' ? resolvedSerial : v;
+      return { ...acc, [label]: value };
+    }, {});
 
   const detailPairs = Object.entries({ ...baseDetails, ...extraFromTransaction, ...extraFromEquipment })
     .filter(([_, v]) => v && String(v).trim() !== '');
@@ -151,12 +179,7 @@ const ExchangePanel = ({
             <div className="text-sm text-gray-800 font-semibold">{price}</div>
           </div>
         ) : null}
-        {imageUrl ? (
-          <div>
-            <div className="text-xs text-gray-500 mb-1">Image</div>
-            <img src={imageUrl} alt={itemBrandOrName} className="w-full max-h-48 object-contain rounded-lg border border-gray-200" />
-          </div>
-        ) : null}
+        {null}
       </div>
 
       {/* Details section (excludes serial numbers) */}
