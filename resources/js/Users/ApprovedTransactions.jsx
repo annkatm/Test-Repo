@@ -1537,10 +1537,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                   <div className="text-gray-500">Borrowed Date</div>
                   <div className="text-gray-900 font-semibold">{borrowedDetails?.borrowDate || '-'}</div>
                 </div>
-                <div>
-                  <div className="text-gray-500">Return Date</div>
-                  <div className="text-gray-900 font-semibold">{borrowedDetails?.returnDate || '-'}</div>
-                </div>
+                {/* Return date removed per policy */}
               </div>
               <div className="border-t pt-4">
                 <div className="text-sm text-gray-500 mb-2">Items</div>

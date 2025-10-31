@@ -10,10 +10,20 @@ const RecentActivities = ({ activities = [], iconFor, timeAgo }) => {
     if (/(approved|approve|success|released|borrowed|active)/.test(hay)) return 'approved';
     if (/(cancel|cancelled|canceled)/.test(hay)) return 'cancel';
     if (/(denied|deny|declined|rejected)/.test(hay)) return 'denied';
-    if (/(request|requested|pending|processing|in\s*process|on\s*process|open|awaiting|waiting|review)/.test(hay)) return 'request';
+    // Treat true workflow states as request; avoid mapping generic UI actions like open/view
+    if (/(request|requested|pending|processing|in\s*process|on\s*process|awaiting|waiting)/.test(hay)) return 'request';
     if (/(return|returned)/.test(hay)) return 'return';
     if (/(exchange|exchanged)/.test(hay)) return 'exchange';
     return '';
+  };
+
+  const isNoise = (a) => {
+    const text = ((a?.message || a?.item || a?.action || a?.status || '') + '').toLowerCase();
+    // Exclude generic UI/navigation events
+    if (/(^|\b)(open|opened|opening|view|viewed|page|navigat|clicked|click|closed|search|filter|sorted)(\b|$)/.test(text)) {
+      return true;
+    }
+    return false;
   };
 
   const within24h = (a) => {
@@ -27,6 +37,7 @@ const RecentActivities = ({ activities = [], iconFor, timeAgo }) => {
 
   const items = activities
     .map((a) => ({ ...a, __type: pickType(a) }))
+    .filter((a) => !isNoise(a))
     .filter((a) => allowed.has(a.__type))
     .filter(within24h);
 

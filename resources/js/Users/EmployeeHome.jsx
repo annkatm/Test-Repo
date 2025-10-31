@@ -463,10 +463,7 @@ const EmployeeHome = () => {
         } catch (_) {}
       }
 
-      if (!Array.isArray(list) || list.length === 0) {
-        const derived = (transactions || []).filter(t => (t.status || '').toLowerCase() === 'approved' && !t.return_date);
-        list = derived;
-      }
+      // Do not derive using return_date; keep API-driven list only
 
       setBorrowedItems(list);
       return list;
@@ -477,34 +474,9 @@ const EmployeeHome = () => {
   };
 
   const fetchOverdueItems = async () => {
-    try {
-      let list = [];
-      try {
-        const res = await fetch('/api/transactions/overdue');
-        if (res.ok) {
-          const data = await res.json();
-          list = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
-        }
-      } catch (_) {}
-
-      if (!Array.isArray(list) || list.length === 0) {
-        const now = Date.now();
-        const derived = (transactions || []).filter(t => {
-          const end = t.expected_end_date || t.return_date;
-          if (!end) return false;
-          const endTs = new Date(end).getTime();
-          const isReturned = Boolean(t.return_date && new Date(t.return_date).getTime());
-          return !isReturned && endTs && endTs < now;
-        });
-        list = derived;
-      }
-
-      setOverdueItems(list);
-      return list;
-    } catch (_) {
-      setOverdueItems([]);
-      return [];
-    }
+    // Overdue concept disabled for Users: no expected/return dates used for calculations
+    setOverdueItems([]);
+    return [];
   };
 
   // Global function for other parts of the app to notify this component about new events
@@ -1239,10 +1211,9 @@ const EmployeeHome = () => {
 
           <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
             <div className="grid grid-cols-12 gap-6 text-sm font-medium text-gray-700">
-              <div className="col-span-3">Item</div>
-              <div className="col-span-3">Start Date</div>
-              <div className="col-span-3">Return Date</div>
-              <div className="col-span-3">Status</div>
+              <div className="col-span-4">Item</div>
+              <div className="col-span-4">Start Date</div>
+              <div className="col-span-4">Status</div>
             </div>
           </div>
 
@@ -1268,12 +1239,12 @@ const EmployeeHome = () => {
                 onClick={() => logActivity(`Clicked pending row: ${transaction.equipment_name || transaction.item || 'Item'} (${transaction.id || index})`, 'info')}
               >
                 <div className="grid grid-cols-12 gap-6 items-center">
-                  <div className="col-span-3">
+                  <div className="col-span-4">
                     <span className="text-sm text-gray-900">
                       {transaction.type || transaction.category || transaction.category_name || transaction.equipment_type || transaction.item_type || transaction?.equipment?.type || transaction?.equipment?.category || transaction?.equipment?.category_name || transaction.item || transaction.equipment_name || transaction?.equipment?.name || '-'}
                     </span>
                   </div>
-                  <div className="col-span-3">
+                  <div className="col-span-4">
                     <span className="text-sm text-gray-900">
                       {transaction.expected_start_date
                         ? new Date(transaction.expected_start_date).toLocaleDateString("en-US", {
@@ -1284,18 +1255,7 @@ const EmployeeHome = () => {
                         : '-'}
                     </span>
                   </div>
-                  <div className="col-span-3">
-                    <span className="text-sm text-gray-900">
-                      {transaction.expected_end_date
-                        ? new Date(transaction.expected_end_date).toLocaleDateString("en-US", {
-                          month: "2-digit",
-                          day: "2-digit",
-                          year: "numeric",
-                        })
-                        : '-'}
-                    </span>
-                  </div>
-                  <div className="col-span-3">
+                  <div className="col-span-4">
                     {(() => {
                       const s = String(transaction.status || 'pending').toLowerCase();
                       const isApproved = /approved|released|borrowed|active/.test(s);
@@ -1337,10 +1297,9 @@ const EmployeeHome = () => {
 
           <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
             <div className="grid grid-cols-12 gap-6 text-sm font-medium text-gray-700">
-              <div className="col-span-3">Item</div>
-              <div className="col-span-3">Start Date</div>
-              <div className="col-span-3">Return Date</div>
-              <div className="col-span-3">Status</div>
+              <div className="col-span-4">Item</div>
+              <div className="col-span-4">Start Date</div>
+              <div className="col-span-4">Status</div>
             </div>
           </div>
 
@@ -1363,12 +1322,12 @@ const EmployeeHome = () => {
                   onClick={() => logActivity(`Clicked approved row: ${transaction.equipment_name || transaction.item || 'Item'} (${transaction.id || index})`, 'info')}
                 >
                   <div className="grid grid-cols-12 gap-6 items-center">
-                    <div className="col-span-3">
+                    <div className="col-span-4">
                       <span className="text-sm text-gray-900">
                         {transaction.type || transaction.category || transaction.category_name || transaction.equipment_type || transaction.item_type || transaction?.equipment?.type || transaction?.equipment?.category || transaction?.equipment?.category_name || transaction.item || transaction.equipment_name || transaction?.equipment?.name || '-'}
                       </span>
                     </div>
-                    <div className="col-span-3">
+                    <div className="col-span-4">
                       <span className="text-sm text-gray-900">
                         {(transaction.expected_start_date || transaction.start_date || transaction.created_at || transaction.borrow_date || transaction.borrowed_at || transaction.release_date || transaction.start || transaction.expected_start || transaction.startDate)
                           ? new Date(
@@ -1379,18 +1338,7 @@ const EmployeeHome = () => {
                           : '-'}
                       </span>
                     </div>
-                    <div className="col-span-3">
-                      <span className="text-sm text-gray-900">
-                        {(transaction.expected_end_date || transaction.return_date || transaction.end_date || transaction.due_date || transaction.expected_return_date || transaction.return_due || transaction.end || transaction.expected_end || transaction.endDate)
-                          ? new Date(
-                              transaction.expected_end_date || transaction.return_date || transaction.end_date ||
-                              transaction.due_date || transaction.expected_return_date || transaction.return_due ||
-                              transaction.end || transaction.expected_end || transaction.endDate
-                            ).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
-                          : '-'}
-                      </span>
-                    </div>
-                    <div className="col-span-3">
+                    <div className="col-span-4">
                       {(() => {
                         const s = String(transaction.status || 'approved').toLowerCase();
                         const isApproved = /approved|released|borrowed|active/.test(s);
