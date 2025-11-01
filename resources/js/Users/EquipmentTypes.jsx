@@ -15,7 +15,7 @@ const EquipmentTypes = ({ groups = [], onAdd, isAtLimit, selectedCategory, hasEq
             <div className="col-span-2"></div>
           </div>
 
-          {groups.map((group) => (
+          {groups.filter(g => (g?.availableCount ?? 0) > 0).map((group) => (
             <div key={group.key} className="grid grid-cols-12 gap-4 items-center py-3 border-b border-gray-100">
               <div className="col-span-3">
                 <div className="flex items-center space-x-3">

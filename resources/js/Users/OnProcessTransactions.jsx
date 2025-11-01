@@ -52,7 +52,12 @@ const OnProcessTransactions = ({
     try {
       const userRes = await fetch('/check-auth', { credentials: 'same-origin' });
       const userData = await userRes.json();
-      if (userData?.authenticated && userData?.user?.employee_id) return userData.user.employee_id;
+      if (userData?.authenticated && userData?.user?.employee_id) {
+        const raw = userData.user.employee_id;
+        const numId = Number(raw);
+        if (Number.isFinite(numId) && String(numId) !== '0') return numId;
+        // Non-numeric employee code; resolve via employees API below
+      }
       if (userData?.authenticated && userData?.user?.id) {
         const empRes = await fetch(`/api/employees?user_id=${userData.user.id}`);
         const empData = await empRes.json();

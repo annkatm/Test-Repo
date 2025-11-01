@@ -56,6 +56,44 @@ class RequestController extends Controller
         // Fallback: use timestamp-based number
         return 'TXN-' . date('YmdHis');
     }
+    
+    /**
+     * Generate a unique request number
+     */
+    private function generateUniqueRequestNumber(): string
+    {
+        $maxAttempts = 10;
+        $attempt = 0;
+
+        do {
+            $attempt++;
+
+            $lastRequest = DB::table('requests')
+                ->where('request_number', 'LIKE', 'REQ-%')
+                ->orderBy('request_number', 'desc')
+                ->first();
+
+            if ($lastRequest) {
+                $lastNumber = (int) substr($lastRequest->request_number, 4);
+                $nextNumber = $lastNumber + 1;
+            } else {
+                $nextNumber = 1;
+            }
+
+            $requestNumber = 'REQ-' . str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
+
+            $exists = DB::table('requests')
+                ->where('request_number', $requestNumber)
+                ->exists();
+
+            if (!$exists) {
+                return $requestNumber;
+            }
+
+        } while ($attempt < $maxAttempts);
+
+        return 'REQ-' . date('YmdHis');
+    }
     /**
      * Display a listing of the resource.
      */
@@ -89,9 +127,20 @@ class RequestController extends Controller
                 )
                 ->orderBy('requests.created_at', 'desc');
 
-        // Filter by status
+        // Filter by status (robust, case-insensitive and supports common aliases)
         if ($request->has('status')) {
-                $query->where('requests.status', $request->status);
+                $status = strtolower(trim((string) $request->status));
+                $variants = [$status, ucfirst($status)];
+                if ($status === 'pending' || $status === 'on process' || $status === 'on_process' || $status === 'processing' || $status === 'in process' || $status === 'in_process') {
+                    $variants = ['pending', 'Pending', 'on process', 'On process', 'on_process', 'processing', 'Processing', 'in process', 'In process', 'in_process'];
+                } elseif ($status === 'approved') {
+                    $variants = ['approved', 'Approved'];
+                } elseif ($status === 'rejected' || $status === 'denied') {
+                    $variants = ['rejected', 'Rejected', 'denied', 'Denied'];
+                } elseif ($status === 'fulfilled' || $status === 'released' || $status === 'borrowed' || $status === 'active') {
+                    $variants = ['fulfilled', 'Fulfilled', 'released', 'Released', 'borrowed', 'Borrowed', 'active', 'Active'];
+                }
+                $query->whereIn('requests.status', $variants);
             }
 
             // Filter by employee
@@ -181,7 +230,7 @@ class RequestController extends Controller
                     ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
                     ->where('requests.employee_id', $validated['employee_id'])
                     ->where('requests.equipment_id', $validated['equipment_id'])
-                    ->where('status', 'pending')
+                    ->where('requests.status', 'pending')
                     ->select(
                         'requests.*',
                         DB::raw("CONCAT(COALESCE(employees.first_name, ''), ' ', COALESCE(employees.last_name, '')) as full_name"),
@@ -214,8 +263,8 @@ class RequestController extends Controller
                 ], 422);
             }
 
-            // Generate request number
-            $requestNumber = 'REQ-' . str_pad(DB::table('requests')->count() + 1, 6, '0', STR_PAD_LEFT);
+            // Generate unique request number
+            $requestNumber = $this->generateUniqueRequestNumber();
 
             $requestData = [
                 'request_number' => $requestNumber,

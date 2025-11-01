@@ -675,8 +675,13 @@ const EmployeeHome = () => {
           console.log('[EmployeeHome] User data:', userData);
           
           if (userData?.authenticated && userData?.user?.employee_id) {
-            console.log('[EmployeeHome] Found employee_id in user:', userData.user.employee_id);
-            return userData.user.employee_id;
+            const raw = userData.user.employee_id;
+            const numId = Number(raw);
+            if (Number.isFinite(numId) && String(numId) !== '0') {
+              console.log('[EmployeeHome] Using numeric employee_id from user:', numId);
+              return numId;
+            }
+            console.log('[EmployeeHome] Non-numeric employee_id in user profile, will resolve via employees API:', raw);
           }
           
           // Fallback: try to get employee by user_id
@@ -699,10 +704,13 @@ const EmployeeHome = () => {
 
       console.log('[EmployeeHome] Current employee ID:', currentEmployeeId);
 
-      // Fetch ALL pending requests first, then filter client-side
+      // Fetch pending requests for current employee when possible
       let list = [];
       try {
-        const response = await fetch('/api/requests?status=pending', { credentials: 'same-origin' });
+        const url = currentEmployeeId
+          ? `/api/requests?status=pending&employee_id=${encodeURIComponent(currentEmployeeId)}`
+          : '/api/requests?status=pending';
+        const response = await fetch(url, { credentials: 'same-origin' });
         const data = await response.json();
         console.log('[EmployeeHome] API response:', data);
         
@@ -754,8 +762,21 @@ const EmployeeHome = () => {
         type: t?.type || t?.category || t?.category_name || t?.equipment_type || t?.item_type || (t?.equipment && (t?.equipment.type || t?.equipment.category || t?.equipment.category_name)) || null,
       }));
 
-      console.log('[EmployeeHome] Final pending transactions:', mapped.length, 'items', mapped);
-      setPendingTransactions(mapped);
+      console.log('[EmployeeHome] Final pending transactions (server):', mapped.length, 'items', mapped);
+      // Merge with any locally-added entries (e.g., from ireply:request:created) to avoid flicker/disappear
+      setPendingTransactions((prev) => {
+        const base = Array.isArray(prev) ? prev : [];
+        const merged = [...mapped, ...base];
+        const seen = new Set();
+        const deduped = [];
+        for (const r of merged) {
+          const key = `${String(r?.id ?? '')}::${String(r?.equipment_id ?? '')}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          deduped.push(r);
+        }
+        return deduped;
+      });
       
       // Clean up stale cancelled IDs - if a request ID is in cancelled list but not in pending list, remove it
       const currentPendingIds = new Set(mapped.map(t => String(t.id)));
