@@ -113,8 +113,7 @@ const EmployeeTransaction = () => {
       const availableIds = new Set(equipmentData.map(eq => String(eq.id)));
       let needsCleanup = false;
       reservedIds.forEach(id => {
-        // Only clean up reserved IDs that are no longer present in the available list
-        if (!availableIds.has(id)) {
+        if (availableIds.has(id)) {
           reservedIds.delete(id);
           needsCleanup = true;
         }
@@ -160,7 +159,9 @@ const EmployeeTransaction = () => {
       const data = await res.json();
       const list = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
       const ids = list.map(r => r?.equipment_id || r?.equipment?.id).filter(Boolean);
-      if (ids.length > 0) addReservedIds(ids);
+      try {
+        localStorage.setItem(userKey('employee_reserved_equipment_ids'), JSON.stringify(ids.map(String)));
+      } catch (_) {}
     } catch (_) {}
   };
 

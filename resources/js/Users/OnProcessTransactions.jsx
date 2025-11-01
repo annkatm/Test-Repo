@@ -22,6 +22,11 @@ const OnProcessTransactions = ({
   const [pageSize, setPageSize] = useState(10); // page size not used for the main scroll list
 
   const totalPages = Math.max(1, Math.ceil((list?.length || 0) / pageSize));
+
+  // Keep local list in sync with parent-provided requests to avoid any visual delay
+  useEffect(() => {
+    setList(Array.isArray(requests) ? requests : []);
+  }, [requests]);
   const paginatedRequests = useMemo(() => {
     const start = (page - 1) * pageSize;
     const end = start + pageSize;
