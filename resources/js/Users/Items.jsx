@@ -80,7 +80,7 @@ const Items = ({
           <div className="px-6 pt-2 pb-2 border-t border-gray-200 flex-shrink-0">
             <div className="flex gap-2">
               <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Request Date</label>
                 <div className="relative">
                   <input
                     type="date"
@@ -106,12 +106,11 @@ const Items = ({
                 </div>
                 <div className="pt-1 mt-1 border-t border-gray-200 space-y-0.5">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Start</span>
+                    <span className="text-gray-600">Request Start</span>
                     <span className="font-medium text-gray-900">
                       {new Date(startDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
                     </span>
                   </div>
-                  {/* No Return date per policy */}
                 </div>
               </div>
             </div>

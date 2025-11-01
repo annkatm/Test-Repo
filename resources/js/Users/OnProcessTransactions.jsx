@@ -12,6 +12,8 @@ const OnProcessTransactions = ({
 }) => {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [list, setList] = useState(requests || []);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [isDeniedModalOpen, setIsDeniedModalOpen] = useState(false);
   const [isViewAllOpen, setIsViewAllOpen] = useState(false);
@@ -31,6 +33,101 @@ const OnProcessTransactions = ({
   useEffect(() => {
     setList(Array.isArray(requests) ? requests : []);
   }, [requests]);
+
+  const mapPending = (arr) => {
+    const list = Array.isArray(arr) ? arr : [];
+    return list.map((r, idx) => ({
+      id: r.id ?? idx + 1,
+      date: r.created_at ? new Date(r.created_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : (r.date || ''),
+      item: r.equipment_name || r.item || r.title || 'Item',
+      brand: r.brand || '',
+      model: r.model || '',
+      status: r.status || 'Pending',
+      equipment_id: r.equipment_id || r.equipment?.id,
+      details: Array.isArray(r.details) ? r.details : []
+    }));
+  };
+
+  const fetchCurrentEmployeeId = async () => {
+    try {
+      const userRes = await fetch('/check-auth', { credentials: 'same-origin' });
+      const userData = await userRes.json();
+      if (userData?.authenticated && userData?.user?.employee_id) return userData.user.employee_id;
+      if (userData?.authenticated && userData?.user?.id) {
+        const empRes = await fetch(`/api/employees?user_id=${userData.user.id}`);
+        const empData = await empRes.json();
+        const employees = Array.isArray(empData) ? empData : (Array.isArray(empData?.data) ? empData.data : []);
+        if (employees.length > 0) return employees[0].id;
+      }
+    } catch (_) {}
+    return null;
+  };
+
+  const loadPending = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const employeeId = await fetchCurrentEmployeeId();
+      let list = [];
+      try {
+        const res = await fetch('/api/requests?status=pending', { credentials: 'same-origin' });
+        const data = await res.json();
+        list = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+      } catch (_) {}
+      if (employeeId) list = list.filter(r => String(r.employee_id) === String(employeeId));
+      setList(mapPending(list));
+    } catch (e) {
+      setError('Failed to load pending requests');
+      setList([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPending();
+    try {
+      const raw = localStorage.getItem('ireply_created_queue');
+      const arr = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
+      if (arr && arr.length > 0) setList(prev => {
+        const base = Array.isArray(prev) ? prev : [];
+        const mapped = mapPending(arr);
+        const exist = new Set(base.map(x => String(x.id)));
+        const merged = [...mapped.filter(x => !exist.has(String(x.id))), ...base];
+        return merged;
+      });
+    } catch (_) {}
+
+    const onCreated = (e) => {
+      const d = e?.detail || {};
+      if (!d) return;
+      setList(prev => {
+        const base = Array.isArray(prev) ? prev : [];
+        const mapped = mapPending([d]);
+        const exist = new Set(base.map(x => String(x.id)));
+        const add = mapped.filter(x => !exist.has(String(x.id)));
+        return [...add, ...base];
+      });
+    };
+    const onCancelled = (e) => {
+      const reqId = e?.detail?.request_id;
+      const equipId = e?.detail?.equipment_id;
+      setList(prev => Array.isArray(prev) ? prev.filter(r => (reqId ? String(r.id) !== String(reqId) : true) && (equipId ? String(r.equipment_id || '') !== String(equipId) : true)) : prev);
+    };
+    const onApproved = (e) => {
+      const reqId = e?.detail?.request_id;
+      const equipId = e?.detail?.equipment_id;
+      setList(prev => Array.isArray(prev) ? prev.filter(r => (reqId ? String(r.id) !== String(reqId) : true) && (equipId ? String(r.equipment_id || '') !== String(equipId) : true)) : prev);
+    };
+    window.addEventListener('ireply:request:created', onCreated);
+    window.addEventListener('ireply:request:cancelled', onCancelled);
+    window.addEventListener('ireply:request:approved', onApproved);
+    return () => {
+      window.removeEventListener('ireply:request:created', onCreated);
+      window.removeEventListener('ireply:request:cancelled', onCancelled);
+      window.removeEventListener('ireply:request:approved', onApproved);
+    };
+  }, []);
 
   const handleRowClick = (request) => {
     setSelectedRequest(request.id);

@@ -559,7 +559,7 @@ const EmployeeHome = () => {
   // Fetch denied requests
   const fetchDeniedRequests = async () => {
     try {
-      const res = await fetch('/api/requests?status=denied');
+      const res = await fetch('/api/requests?status=denied', { credentials: 'same-origin' });
       const data = await res.json();
 
 
@@ -702,7 +702,7 @@ const EmployeeHome = () => {
       // Fetch ALL pending requests first, then filter client-side
       let list = [];
       try {
-        const response = await fetch('/api/requests?status=pending');
+        const response = await fetch('/api/requests?status=pending', { credentials: 'same-origin' });
         const data = await response.json();
         console.log('[EmployeeHome] API response:', data);
         
@@ -717,7 +717,7 @@ const EmployeeHome = () => {
       // Fallback: fetch all requests and filter to pending-like statuses
       if (!Array.isArray(list) || list.length === 0) {
         try {
-          const res2 = await fetch('/api/requests');
+          const res2 = await fetch('/api/requests', { credentials: 'same-origin' });
           const j2 = await res2.json();
           const all = Array.isArray(j2) ? j2 : (Array.isArray(j2?.data) ? j2.data : []);
           const pendingLike = (all || []).filter((r) => {
