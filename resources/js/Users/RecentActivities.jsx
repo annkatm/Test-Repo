@@ -39,18 +39,24 @@ const RecentActivities = ({ activities = [], iconFor, timeAgo }) => {
     .map((a) => ({ ...a, __type: pickType(a) }))
     .filter((a) => !isNoise(a))
     .filter((a) => allowed.has(a.__type))
-    .filter(within24h);
+    // Only show entries from the last 24 hours for ALL types
+    .filter((a) => within24h(a));
 
-  // Persist qualifying activities into a durable History store
+  // Persist ALL valid activities (not time-limited) into a durable History store
   useEffect(() => {
     try {
       const key = 'ireply_history';
       const raw = localStorage.getItem(key);
       const existing = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
+      // Build a persist list from full activities (ignore UI noise), but do not 24h-filter
+      const persistList = (activities || [])
+        .map((a) => ({ ...a, __type: pickType(a) }))
+        .filter((a) => !isNoise(a))
+        .filter((a) => allowed.has(a.__type));
       const byKey = new Map(
         existing.map((x) => [String(x.id || (x.message || x.item || '') + String(x.time || x.date || '')), x])
       );
-      for (const a of items) {
+      for (const a of persistList) {
         const k = String(a.id || (a.message || a.item || '') + String(a.time || a.date || ''));
         if (!byKey.has(k)) byKey.set(k, a);
       }
@@ -60,7 +66,7 @@ const RecentActivities = ({ activities = [], iconFor, timeAgo }) => {
     } catch (_) {
       // ignore storage errors
     }
-  }, [items]);
+  }, [activities]);
 
   const safeIconFor = (variant) => {
     try {
@@ -96,7 +102,7 @@ const RecentActivities = ({ activities = [], iconFor, timeAgo }) => {
                   const detected = a.__type || pickType(a);
                   const normalized = detected === 'success' ? 'approved' : detected === 'borrowed' ? 'approved' : detected === 'pending' ? 'request' : detected === 'processing' ? 'request' : detected === 'declined' ? 'denied' : detected === 'rejected' ? 'denied' : detected;
                   const { Icon, bg, text } = safeIconFor(normalized || a?.variant);
-                  const message = a?.message || a?.item || 'Activity';
+                  const message = normalized === 'denied' ? 'Your request has been denied' : (a?.message || a?.item || 'Activity');
                   const when = formatTime(a?.time || a?.date);
                   return (
                     <li key={a.id || message + String(a?.time || a?.date)} className="py-3">
