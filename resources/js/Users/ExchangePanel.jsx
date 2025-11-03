@@ -158,6 +158,104 @@ const ExchangePanel = ({
     if (actionLoading) return;
     setActionLoading(true);
     try {
+      // For directly issued items, use employee return endpoint directly
+      const equipmentId = transaction?.equipment_id || transaction?.id;
+      const equipmentName = transaction?.equipment_name || transaction?.item || transaction?.match_name || 'Item';
+      
+      console.log('ExchangePanel performReturn - Equipment ID:', equipmentId);
+      console.log('ExchangePanel performReturn - Equipment Name:', equipmentName);
+      
+      if (!equipmentId) {
+        alert('Missing equipment information. Please try again.');
+        setActionLoading(false);
+        return;
+      }
+
+      // Try to get current employee ID and use employee return endpoint
+      try {
+        const userRes = await fetch('/check-auth', { credentials: 'same-origin' });
+        const userData = await userRes.json();
+        
+        if (userData?.authenticated && userData?.user) {
+          // Try to find employee ID
+          let employeeId = userData.user.employee_id || userData.user.linked_employee_id;
+          
+          if (!employeeId && userData.user.email) {
+            const empRes = await fetch('/api/employees', { credentials: 'same-origin' });
+            const empData = await empRes.json();
+            const employees = Array.isArray(empData?.data) ? empData.data : [];
+            const emp = employees.find(e => e.email?.toLowerCase() === userData.user.email.toLowerCase());
+            if (emp) employeeId = emp.id;
+          }
+          
+          if (employeeId) {
+            console.log(`ExchangePanel - Attempting return via /api/employees/${employeeId}/return-item`);
+            
+            const returnRes = await fetch(`/api/employees/${employeeId}/return-item`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+              },
+              credentials: 'same-origin',
+              body: JSON.stringify({
+                equipment_id: equipmentId,
+                return_condition: 'good_condition',
+                notes: 'Returned via exchange panel'
+              })
+            });
+            
+            const returnData = await returnRes.json();
+            console.log('ExchangePanel - Employee return response:', returnData);
+            
+            if (returnData.success) {
+              // Success - dispatch events and close modal
+              try {
+                window.dispatchEvent(new CustomEvent('ireply:equipment:restore', { 
+                  detail: { equipment_id: equipmentId } 
+                }));
+                window.dispatchEvent(new CustomEvent('ireply:approved:changed'));
+                
+                const now = new Date();
+                const returnedItem = {
+                  id: transaction?.id || transaction?.tx_id || equipmentId,
+                  item: equipmentName,
+                  equipment_name: equipmentName,
+                  date: now.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
+                  status: 'Returned'
+                };
+                window.dispatchEvent(new CustomEvent('ireply:returned:add', { detail: returnedItem }));
+              } catch (_) {}
+              
+              setShowReturnModal(false);
+              setActionLoading(false);
+              onReturnNow(); // Call the callback to update parent component
+              alert('Item returned successfully!');
+              return;
+            } else {
+              alert(returnData.message || 'Failed to return item');
+              setActionLoading(false);
+              return;
+            }
+          } else {
+            alert('Unable to identify current employee. Please contact support.');
+            setActionLoading(false);
+            return;
+          }
+        } else {
+          alert('Authentication required. Please log in again.');
+          setActionLoading(false);
+          return;
+        }
+      } catch (e) {
+        console.error('ExchangePanel - Employee return failed:', e);
+        alert('Failed to return item. Please try again or contact support.');
+        setActionLoading(false);
+        return;
+      }
+
+      // Fallback to transaction-based return for items that have transaction records
       const txId = await resolveTxId();
       if (!txId) {
         alert('Missing transaction information. Please try again from the Approved list.');
@@ -169,9 +267,8 @@ const ExchangePanel = ({
       // Verify status
       const statusCheckRes = await fetch(`/api/transactions/${txId}`, { method: 'GET', headers: { 'Accept':'application/json','Content-Type':'application/json' }, credentials: 'same-origin' });
       if (!statusCheckRes.ok) {
-        let msg = 'Failed to verify transaction status';
-        try { const d = await statusCheckRes.json(); msg = d.message || msg; } catch(_){}
-        alert(`Error: ${msg}`);
+        // If transaction doesn't exist, we already tried employee return above
+        alert('Transaction not found and employee return failed. Please contact support.');
         setActionLoading(false);
         return;
       }

@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 
-const RecentActivities = ({ activities = [], iconFor, timeAgo }) => {
+const RecentActivities = ({ activities = [], iconFor, timeAgo, employeeId }) => {
   const allowed = new Set(['approved', 'cancel', 'denied', 'request', 'return', 'exchange']);
 
   const pickType = (a) => {
@@ -45,7 +45,10 @@ const RecentActivities = ({ activities = [], iconFor, timeAgo }) => {
   // Persist ALL valid activities (not time-limited) into a durable History store
   useEffect(() => {
     try {
-      const key = 'ireply_history';
+      // Use employee-specific localStorage key to separate history per employee
+      const key = employeeId ? `ireply_history_emp_${employeeId}` : 'ireply_history';
+      const countKey = employeeId ? `ireply_history_count_emp_${employeeId}` : 'ireply_history_count';
+      
       const raw = localStorage.getItem(key);
       const existing = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
       // Build a persist list from full activities (ignore UI noise), but do not 24h-filter
@@ -62,11 +65,11 @@ const RecentActivities = ({ activities = [], iconFor, timeAgo }) => {
       }
       const merged = Array.from(byKey.values());
       localStorage.setItem(key, JSON.stringify(merged));
-      localStorage.setItem('ireply_history_count', String(merged.length));
+      localStorage.setItem(countKey, String(merged.length));
     } catch (_) {
       // ignore storage errors
     }
-  }, [activities]);
+  }, [activities, employeeId]);
 
   const safeIconFor = (variant) => {
     try {

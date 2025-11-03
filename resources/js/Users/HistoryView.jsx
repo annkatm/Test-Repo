@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
 
-export const readHistory = () => {
+export const readHistory = (employeeId) => {
   try {
-    const raw = localStorage.getItem('ireply_history');
+    const key = employeeId ? `ireply_history_emp_${employeeId}` : 'ireply_history';
+    const raw = localStorage.getItem(key);
     const arr = JSON.parse(raw);
     return Array.isArray(arr) ? arr : [];
   } catch (_) {
@@ -10,11 +11,12 @@ export const readHistory = () => {
   }
 };
 
-export const getHistoryCount = () => {
+export const getHistoryCount = (employeeId) => {
   try {
-    const c = localStorage.getItem('ireply_history_count');
+    const countKey = employeeId ? `ireply_history_count_emp_${employeeId}` : 'ireply_history_count';
+    const c = localStorage.getItem(countKey);
     if (c != null) return Number(c) || 0;
-    return readHistory().length;
+    return readHistory(employeeId).length;
   } catch (_) {
     return 0;
   }
@@ -31,6 +33,7 @@ const HistoryView = ({
   totalPages,
   sortedData,
   logActivity,
+  employeeId,
 }) => {
   const noop = () => {};
   const [localSearch, setLocalSearch] = useState('');
@@ -45,7 +48,7 @@ const HistoryView = ({
   const setPage = setCurrentPage ?? setLocalPage;
   const log = logActivity ?? noop;
 
-  const sourceData = (sortedData && sortedData.length ? sortedData : readHistory());
+  const sourceData = (sortedData && sortedData.length ? sortedData : readHistory(employeeId));
 
   const olderThan24h = (a) => {
     const raw = a?.time ?? a?.date ?? null;

@@ -572,51 +572,65 @@ const EmployeePage = () => {
     // Prepare issued equipment data
     const equipmentData = issuedEquipment.map(eq => ({
       id: eq.id,
-      name: eq.name,
-      brand: eq.brand,
+      name: eq.name || eq.brand || 'Unknown',
+      brand: eq.brand || eq.name || 'Unknown',
       specs: eq.specifications || eq.description || 'N/A',
-      item_image: eq.item_image,
-      category: eq.category,
-      status: eq.status,
+      item_image: eq.item_image || null,
+      category: eq.category || null,
+      status: eq.status || 'available',
       serial_numbers: eq.serial_numbers || [],
       available_count: eq.available_count || 0
     }));
+
+    const requestBody = {
+      first_name: form.firstName.trim(),
+      last_name: form.lastName.trim(),
+      email: form.email.trim(),
+      phone: form.contact.trim(),
+      address: form.address.trim(),
+      employee_type: form.employeeType || 'Regular',
+      client: form.client ? form.client.trim() : '',
+      position: form.position ? form.position.trim() : '',
+      department: form.department ? form.department.trim() : '',
+      issued_item: JSON.stringify(equipmentData),
+      issued_equipment_ids: issuedEquipment.map(eq => eq.id),
+      status: 'active'
+    };
 
     fetch('/api/employees', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
       },
-      body: JSON.stringify({
-        first_name: form.firstName.trim(),
-        last_name: form.lastName.trim(),
-        email: form.email.trim(),
-        phone: form.contact.trim(),
-        address: form.address.trim(),
-        employee_type: form.employeeType,
-        client: form.client.trim(),
-        position: form.position.trim(),
-        department: form.department.trim(),
-        issued_item: JSON.stringify(equipmentData),
-        issued_equipment_ids: issuedEquipment.map(eq => eq.id),
-        status: 'active',
-      })
+      body: JSON.stringify(requestBody)
     })
-      .then(res => res.json())
+      .then(async res => {
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.message || `HTTP error! status: ${res.status}`);
+        }
+        return data;
+      })
       .then(data => {
         if (data.success) {
           closeModal();
           resetAll();
           refreshEmployees();
-          // Dispatch event to refresh equipment page
+          // Dispatch events to refresh equipment page and dashboard
           window.dispatchEvent(new Event('equipment:updated'));
+          window.dispatchEvent(new Event('employee:updated'));
           showToast('Employee added successfully');
         } else {
+          console.error('Save failed:', data);
           alert(data.message || 'Failed to save employee');
         }
       })
-      .catch(() => alert('Failed to save employee'));
+      .catch(error => {
+        console.error('Save error:', error);
+        alert(`Failed to save employee: ${error.message}`);
+      });
   };
 
   const openView = (emp) => setViewing(emp);
@@ -676,48 +690,70 @@ const EmployeePage = () => {
     // Prepare issued equipment data
     const equipmentData = issuedEquipment.map(eq => ({
       id: eq.id,
-      name: eq.name,
-      brand: eq.brand,
+      name: eq.name || eq.brand || 'Unknown',
+      brand: eq.brand || eq.name || 'Unknown',
       specs: eq.specifications || eq.description || 'N/A',
-      item_image: eq.item_image,
-      category: eq.category,
-      status: eq.status,
+      item_image: eq.item_image || null,
+      category: eq.category || null,
+      status: eq.status || 'available',
       serial_numbers: eq.serial_numbers || [],
       available_count: eq.available_count || 0
     }));
+
+    // Prepare the request body - only include password if it's provided
+    const requestBody = {
+      first_name: form.firstName.trim(),
+      last_name: form.lastName.trim(),
+      email: form.email.trim(),
+      phone: form.contact.trim(),
+      address: form.address.trim(),
+      employee_type: form.employeeType || 'Regular',
+      client: form.client ? form.client.trim() : '',
+      position: form.position ? form.position.trim() : '',
+      department: form.department ? form.department.trim() : '',
+      issued_item: JSON.stringify(equipmentData),
+      issued_equipment_ids: issuedEquipment.map(eq => eq.id),
+      status: 'active'
+    };
+
+    // Only add password if it's provided and not empty
+    if (form.password && form.password.trim()) {
+      requestBody.password = form.password.trim();
+    }
     
     fetch(`/api/employees/${editing.id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({
-        first_name: form.firstName.trim(),
-        last_name: form.lastName.trim(),
-        email: form.email.trim(),
-        password: form.password || undefined,
-        phone: form.contact.trim(),
-        address: form.address.trim(),
-        employee_type: form.employeeType,
-        client: form.client.trim(),
-        position: form.position.trim(),
-        department: form.department.trim(),
-        issued_item: JSON.stringify(equipmentData),
-        issued_equipment_ids: issuedEquipment.map(eq => eq.id),
-        status: 'active'
-      })
+      headers: { 
+        'Content-Type': 'application/json', 
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: JSON.stringify(requestBody)
     })
-      .then(res => res.json())
+      .then(async res => {
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.message || `HTTP error! status: ${res.status}`);
+        }
+        return data;
+      })
       .then(data => {
         if (data.success) {
           closeEdit();
           refreshEmployees();
-          // Dispatch event to refresh equipment page
+          // Dispatch events to refresh equipment page and dashboard
           window.dispatchEvent(new Event('equipment:updated'));
+          window.dispatchEvent(new Event('employee:updated'));
           showToast('Employee updated successfully');
         } else {
+          console.error('Update failed:', data);
           alert(data.message || 'Failed to update employee');
         }
       })
-      .catch(() => alert('Failed to update employee'));
+      .catch(error => {
+        console.error('Update error:', error);
+        alert(`Failed to update employee: ${error.message}`);
+      });
   };
 
   const openDelete = (emp) => setDeleting(emp);
@@ -731,8 +767,9 @@ const EmployeePage = () => {
         if (data.success) {
           closeDelete();
           refreshEmployees();
-          // Dispatch event to refresh equipment page
+          // Dispatch events to refresh equipment page and dashboard
           window.dispatchEvent(new Event('equipment:updated'));
+          window.dispatchEvent(new Event('employee:updated'));
           showToast('Employee deleted successfully');
         } else {
           alert(data.message || 'Failed to delete employee');

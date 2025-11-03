@@ -25,6 +25,9 @@ Route::get('/employees/current-holders', [EmployeeController::class, 'currentHol
 Route::get('/employees/pending-requests', [EmployeeController::class, 'pendingRequests']);
 Route::get('/employees/verify-returns', [EmployeeController::class, 'verifyReturns']);
 Route::get('/employees/available-users', [EmployeeController::class, 'getAvailableUsers']);
+Route::get('/employees/dashboard-stats', [EmployeeController::class, 'getDashboardStats']);
+Route::get('/employees/{id}/history', [EmployeeController::class, 'getEmployeeHistory']);
+Route::post('/employees/{id}/return-item', [EmployeeController::class, 'returnItem']);
 Route::post('/employees', [EmployeeController::class, 'store']);
 Route::get('/employees/{id}', [EmployeeController::class, 'show']);
 Route::put('/employees/{id}', [EmployeeController::class, 'update']);
@@ -114,3 +117,8 @@ Route::middleware(['web','auth'])->group(function () {
 // Reports
 Route::get('/reports/overview', [ReportController::class, 'overview']);
 Route::get('/reports/export', [ReportController::class, 'exportCsv']);
+
+// Dashboard statistics
+use App\Http\Controllers\Api\DashboardController;
+Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);
+Route::get('/dashboard/counts', [DashboardController::class, 'getCounts']);

@@ -48,6 +48,7 @@ const EmployeeHome = () => {
   const [isOverdueOpen, setIsOverdueOpen] = useState(false);
   const [borrowedItems, setBorrowedItems] = useState([]);
   const [overdueItems, setOverdueItems] = useState([]);
+  const [currentEmployeeId, setCurrentEmployeeId] = useState(null);
   const [selectedDeniedId, setSelectedDeniedId] = useState(null);
   // Track locally-cancelled requests to immediately hide them from On Process
   const [cancelledReqIds, setCancelledReqIds] = useState(() => {
@@ -170,14 +171,20 @@ const EmployeeHome = () => {
       return activities || [];
     }
   }, [activities, pendingTransactions, transactions, deniedRequests]);
-  const [notificationCount, setNotificationCount] = useState(() => {
-    try {
-      const v = Number(localStorage.getItem('employee_history_unseen') || '0');
-      return Number.isNaN(v) ? 0 : v;
-    } catch (_e) {
-      return 0;
+  const [notificationCount, setNotificationCount] = useState(0);
+  
+  // Load notification count when employeeId is available
+  useEffect(() => {
+    if (currentEmployeeId) {
+      try {
+        const key = `employee_history_unseen_emp_${currentEmployeeId}`;
+        const v = Number(localStorage.getItem(key) || '0');
+        setNotificationCount(Number.isNaN(v) ? 0 : v);
+      } catch (_e) {
+        setNotificationCount(0);
+      }
     }
-  });
+  }, [currentEmployeeId]);
   const prevHistoryLenRef = useRef(0);
 
   useEffect(() => {
@@ -435,7 +442,8 @@ const EmployeeHome = () => {
   const incrementNotification = (count = 1, entry = null) => {
     setNotificationCount((prev) => {
       const next = prev + count;
-      try { localStorage.setItem('employee_history_unseen', String(next)); } catch (_) { }
+      const key = currentEmployeeId ? `employee_history_unseen_emp_${currentEmployeeId}` : 'employee_history_unseen';
+      try { localStorage.setItem(key, String(next)); } catch (_) { }
       return next;
     });
 
@@ -453,27 +461,85 @@ const EmployeeHome = () => {
   const fetchBorrowedItems = async () => {
     try {
       let list = [];
+      
+      // First, try to get data from our new dashboard stats endpoint
       try {
-        const res = await fetch('/api/transactions/borrowed');
+        const res = await fetch('/api/dashboard/stats');
         if (res.ok) {
           const data = await res.json();
-          list = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
+          if (data.success && data.data) {
+            // Get detailed borrowed items from employees with issued items
+            const employeesRes = await fetch('/api/employees');
+            const employeesData = await employeesRes.json();
+            
+            if (employeesData.success && Array.isArray(employeesData.data)) {
+              const employeesWithItems = employeesData.data.filter(emp => 
+                emp.issued_item && emp.issued_item !== '' && emp.issued_item !== '[]'
+              );
+              
+              // Extract all issued items from employees
+              const allIssuedItems = [];
+              employeesWithItems.forEach(emp => {
+                try {
+                  const issuedItems = JSON.parse(emp.issued_item);
+                  if (Array.isArray(issuedItems)) {
+                    issuedItems.forEach(item => {
+                      allIssuedItems.push({
+                        id: item.id || Date.now() + Math.random(),
+                        equipment_name: item.name || item.brand || 'Unknown Item',
+                        item: item.name || item.brand || 'Unknown Item',
+                        brand: item.brand || '',
+                        specifications: item.specs || item.specifications || '',
+                        employee_name: `${emp.first_name || ''} ${emp.last_name || ''}`.trim(),
+                        employee_id: emp.id,
+                        category_name: item.category?.name || 'Uncategorized',
+                        status: 'borrowed'
+                      });
+                    });
+                  }
+                } catch (e) {
+                  console.error('Error parsing issued items for employee:', emp.id, e);
+                }
+              });
+              
+              list = allIssuedItems;
+            }
+          }
         }
-      } catch (_) {}
-
-      if (!Array.isArray(list) || list.length === 0) {
-        try {
-          const res2 = await fetch('/api/employees/current-holders');
-          const data2 = await res2.json();
-          list = Array.isArray(data2?.data) ? data2.data : (Array.isArray(data2) ? data2 : []);
-        } catch (_) {}
+      } catch (e) {
+        console.error('Error fetching from dashboard stats:', e);
       }
 
-      // Do not derive using return_date; keep API-driven list only
+      // Fallback to original methods if no items found
+      if (!Array.isArray(list) || list.length === 0) {
+        try {
+          const res = await fetch('/api/transactions/borrowed');
+          if (res.ok) {
+            const data = await res.json();
+            list = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
+          }
+        } catch (_) {}
+
+        if (!Array.isArray(list) || list.length === 0) {
+          try {
+            const res2 = await fetch('/api/employees/current-holders');
+            const data2 = await res2.json();
+            list = Array.isArray(data2?.data) ? data2.data : (Array.isArray(data2) ? data2 : []);
+          } catch (_) {}
+        }
+      }
 
       setBorrowedItems(list);
+      
+      // Update transaction stats to reflect the actual count
+      setTransactionStats(prev => ({
+        ...prev,
+        borrowed: list.length
+      }));
+      
       return list;
-    } catch (_) {
+    } catch (error) {
+      console.error('Error in fetchBorrowedItems:', error);
       setBorrowedItems([]);
       return [];
     }
@@ -813,7 +879,47 @@ const EmployeeHome = () => {
 
   const fetchApprovedTransactions = async () => {
     try {
-      // 1) Fetch from approved endpoint
+      // Get current employee ID first
+      const currentEmployeeId = await getCurrentEmployeeId();
+      
+      if (currentEmployeeId) {
+        // Fetch employee-specific history
+        try {
+          const res = await fetch(`/api/employees/${currentEmployeeId}/history`, { credentials: 'same-origin' });
+          const data = await res.json();
+          
+          if (data.success) {
+            // Use current items from employee record as approved/borrowed items
+            const currentItems = data.data.current_items || [];
+            const transactionHistory = data.data.transaction_history || [];
+            
+            // Transform current items to match expected format
+            const approvedItems = currentItems.map((item, index) => ({
+              id: item.id || index,
+              equipment_id: item.id,
+              equipment_name: item.name || item.brand || 'Unknown Item',
+              item: item.name || item.brand || 'Unknown Item',
+              brand: item.brand || '',
+              specifications: item.specs || item.specifications || '',
+              category_name: item.category?.name || 'Uncategorized',
+              status: 'borrowed',
+              created_at: new Date().toISOString(),
+              expected_start_date: new Date().toISOString(),
+              can_return: true // Flag to show return button
+            }));
+            
+            setTransactions(approvedItems);
+            setTransactionStats(prev => ({ ...prev, borrowed: approvedItems.length }));
+            
+            console.log('[EmployeeHome] Employee-specific approved items:', approvedItems);
+            return approvedItems;
+          }
+        } catch (e) {
+          console.error('Error fetching employee history:', e);
+        }
+      }
+
+      // Fallback to original logic if employee-specific fetch fails
       const respApproved = await fetch('/api/transactions/approved', { credentials: 'same-origin' });
       const jsonApproved = await respApproved.json().catch(() => ({}));
       const listApproved = Array.isArray(jsonApproved)
@@ -822,71 +928,62 @@ const EmployeeHome = () => {
           ? jsonApproved.data
           : (Array.isArray(jsonApproved?.data?.data) ? jsonApproved.data.data : []));
 
-      // 2) Fetch from generic transactions and filter approved-like
-      let listGeneric = [];
-      try {
-        const res2 = await fetch('/api/transactions', { credentials: 'same-origin' });
-        const j2 = await res2.json().catch(() => ({}));
-        const raw2 = Array.isArray(j2) ? j2 : (Array.isArray(j2?.data) ? j2.data : (Array.isArray(j2?.data?.data) ? j2.data.data : []));
-        const allowed = ['approved', 'released', 'borrowed', 'active'];
-        listGeneric = (raw2 || []).filter(t => allowed.includes(String(t?.status || '').toLowerCase()));
-      } catch (_) {}
-
-      // Merge approved + generic and de-duplicate
-      let merged = [...(Array.isArray(listApproved) ? listApproved : []), ...(Array.isArray(listGeneric) ? listGeneric : [])];
-      if (merged.length > 0) {
-        const seen = new Set();
-        merged = merged.filter((t) => {
-          const id = t?.id ?? t?.transaction_id ?? t?.request_id ?? null;
-          const eq = t?.equipment_id ?? t?.equipment?.id ?? null;
-          // Only de-duplicate when BOTH id and equipment_id exist and are non-empty
-          if (id != null && id !== '' && eq != null && eq !== '') {
-            const key = `${String(id)}::${String(eq)}`;
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return true;
-          }
-          // Otherwise, keep the entry to avoid accidental collapsing
-          return true;
-        });
+      // Filter for current employee if we have the ID
+      let filtered = listApproved;
+      if (currentEmployeeId) {
+        filtered = listApproved.filter(t => 
+          String(t.employee_id || '') === String(currentEmployeeId)
+        );
       }
 
-      // 3) Fallback to current holders if still empty
-      if (!Array.isArray(merged) || merged.length === 0) {
-        try {
-          const res3 = await fetch('/api/employees/current-holders', { credentials: 'same-origin' });
-          const j3 = await res3.json().catch(() => ({}));
-          merged = Array.isArray(j3) ? j3 : (Array.isArray(j3?.data) ? j3.data : []);
-        } catch (_) {}
-      }
-
-      // 4) Additional fallback to approved requests
-      if (!Array.isArray(merged) || merged.length === 0) {
-        try {
-          const res4 = await fetch('/api/requests?status=approved', { credentials: 'same-origin' });
-          const j4 = await res4.json().catch(() => ({}));
-          const reqs = Array.isArray(j4) ? j4 : (Array.isArray(j4?.data) ? j4.data : []);
-          merged = (reqs || []).map(r => ({
-            id: r.id,
-            equipment_id: r.equipment_id || r.equipment?.id,
-            equipment_name: r.equipment_name || r.item || '-',
-            expected_start_date: r.expected_start_date || r.start_date,
-            expected_end_date: r.expected_end_date || r.return_date,
-            status: r.status || 'approved',
-          }));
-        } catch (_) {}
-      }
-
-      const finalList = Array.isArray(merged) ? merged : [];
-      try {
-        console.log('[EmployeeTransaction] Approved fetch result count:', finalList.length, finalList.slice(0, 3));
-      } catch (_) {}
+      const finalList = Array.isArray(filtered) ? filtered : [];
       setTransactions(finalList);
-      // Ensure the dashboard 'Item Currently Borrowed' reflects approved items count
-      try { setTransactionStats((prev) => ({ ...prev, borrowed: Array.isArray(finalList) ? finalList.length : 0 })); } catch (_) {}
+      setTransactionStats(prev => ({ ...prev, borrowed: finalList.length }));
+      
+      return finalList;
     } catch (error) {
       console.error('Failed to fetch approved transactions:', error);
       setTransactions([]);
+      return [];
+    }
+  };
+
+  // Helper function to get current employee ID
+  const getCurrentEmployeeId = async () => {
+    try {
+      const userRes = await fetch('/check-auth', { credentials: 'same-origin' });
+      const userData = await userRes.json();
+      const user = userData?.user || {};
+      
+      if (userData?.authenticated && user?.employee_id) {
+        const n = Number(user.employee_id);
+        if (Number.isFinite(n) && String(n) !== '0') return n;
+      }
+      
+      if (userData?.authenticated && user?.linked_employee_id) {
+        return user.linked_employee_id;
+      }
+      
+      if (userData?.authenticated && user?.id) {
+        const empRes = await fetch(`/api/employees?user_id=${user.id}`);
+        const empData = await empRes.json();
+        const employees = Array.isArray(empData) ? empData : (Array.isArray(empData?.data) ? empData.data : []);
+        if (employees.length > 0) return employees[0].id;
+      }
+      
+      // Try to find by email
+      if (userData?.authenticated && user?.email) {
+        const allRes = await fetch('/api/employees', { credentials: 'same-origin' });
+        const all = await allRes.json();
+        const list = Array.isArray(all) ? all : (Array.isArray(all?.data) ? all.data : []);
+        const byEmail = list.find(e => (e.email || '').toLowerCase() === String(user.email).toLowerCase());
+        if (byEmail) return byEmail.id;
+      }
+      
+      return null;
+    } catch (e) {
+      console.error('Error getting current employee ID:', e);
+      return null;
     }
   };
 
@@ -1009,6 +1106,11 @@ const EmployeeHome = () => {
           } catch (_) { }
         }
 
+        // Store employeeId in state for history separation
+        if (employeeId) {
+          setCurrentEmployeeId(employeeId);
+        }
+
         if (employeeId && Echo) {
           try {
             subscribedChannel = Echo.private(`user.history.${employeeId}`);
@@ -1086,6 +1188,67 @@ const EmployeeHome = () => {
     setTimeout(() => setCurrentView('transactions'), 300);
   };
 
+  // Return item functionality
+  const handleReturnItem = async (equipmentId, equipmentName) => {
+    try {
+      const currentEmployeeId = await getCurrentEmployeeId();
+      if (!currentEmployeeId) {
+        showToast('Unable to identify current employee', 'error');
+        return;
+      }
+
+      const confirmed = window.confirm(`Are you sure you want to return "${equipmentName}"?`);
+      if (!confirmed) return;
+
+      setActionLoading(true);
+
+      const response = await fetch(`/api/employees/${currentEmployeeId}/return-item`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          equipment_id: equipmentId,
+          return_condition: 'good',
+          notes: 'Returned via employee portal'
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        showToast('Item returned successfully!', 'success');
+        
+        // Refresh the approved transactions to reflect the return
+        await fetchApprovedTransactions();
+        
+        // Refresh borrowed items count
+        await fetchBorrowedItems();
+        
+        // Log the activity
+        logActivity(`Returned item: ${equipmentName}`, 'return');
+        
+        // Dispatch events to update other components
+        window.dispatchEvent(new Event('equipment:updated'));
+        window.dispatchEvent(new Event('employee:updated'));
+        
+      } else {
+        showToast(data.message || 'Failed to return item', 'error');
+      }
+    } catch (error) {
+      console.error('Error returning item:', error);
+      showToast('Failed to return item', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Global return handler for ApprovedTransactions component
+  window.handleEmployeeReturn = handleReturnItem;
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -1117,6 +1280,7 @@ const EmployeeHome = () => {
         totalPages={totalPages}
         sortedData={currentItems}
         logActivity={logActivity}
+        employeeId={currentEmployeeId}
       />
     );
   }
@@ -1164,6 +1328,7 @@ const EmployeeHome = () => {
         onBack={() => setCurrentView('transactions')}
         transactionStats={transactionStats}
         approvedTransactions={approvedData}
+        onReturnItem={handleReturnItem}
       />
     );
   }
@@ -1220,7 +1385,12 @@ const EmployeeHome = () => {
 
         <StatsCards 
           transactionStats={transactionStats} 
-          onBorrowedClick={async () => { await fetchBorrowedItems(); setIsBorrowedOpen(true); }} 
+          onBorrowedClick={async () => { 
+            console.log('Fetching borrowed items...');
+            const items = await fetchBorrowedItems(); 
+            console.log('Fetched items:', items);
+            setIsBorrowedOpen(true); 
+          }} 
           onOverdueClick={async () => { await fetchDeniedRequests(); setSelectedDeniedId(null); setIsOverdueOpen(true); }} 
         />
 
@@ -1400,7 +1570,8 @@ const EmployeeHome = () => {
             onClick={() => {
               logActivity('Opened History', 'info');
               // Reset unseen counter when user opens history
-              try { localStorage.setItem('employee_history_unseen', '0'); } catch (_) { }
+              const key = currentEmployeeId ? `employee_history_unseen_emp_${currentEmployeeId}` : 'employee_history_unseen';
+              try { localStorage.setItem(key, '0'); } catch (_) { }
               setNotificationCount(0);
               // Force refetch history to show latest
               fetchTransactionHistory();
@@ -1417,7 +1588,7 @@ const EmployeeHome = () => {
           </button>
         </div>
 
-        <RecentActivities activities={recentCombined} iconFor={iconFor} timeAgo={timeAgo} />
+        <RecentActivities activities={recentCombined} iconFor={iconFor} timeAgo={timeAgo} employeeId={currentEmployeeId} />
       </div>
       {isBorrowedOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm">
@@ -1433,20 +1604,45 @@ const EmployeeHome = () => {
             </div>
             <div className="p-6 space-y-4">
               <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center">📦</div>
+                <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center">📦</div>
                 <div>
                   <div className="font-semibold text-gray-900">Currently Borrowed</div>
-                  <div className="text-sm text-gray-600">Total items: {transactionStats?.borrowed || 0}</div>
+                  <div className="text-sm text-gray-600">Total items: {borrowedItems?.length || 0}</div>
                 </div>
               </div>
               <div className="space-y-3 max-h-96 overflow-y-auto">
                 {(borrowedItems || []).map((it, i) => (
-                  <div key={it.id || i} className="border border-gray-200 rounded-lg p-3">
-                    <div className="font-semibold text-gray-900">{it.equipment_name || it.item || '-'}</div>
+                  <div key={it.id || i} className="border border-gray-200 rounded-lg p-3 hover:bg-gray-50 transition-colors">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="font-semibold text-gray-900">{it.equipment_name || it.item || 'Unknown Item'}</div>
+                        {it.brand && (
+                          <div className="text-xs text-gray-500 mt-1">Brand: {it.brand}</div>
+                        )}
+                        {it.specifications && (
+                          <div className="text-xs text-gray-500 mt-1">Specs: {it.specifications}</div>
+                        )}
+                        {it.employee_name && (
+                          <div className="text-xs text-blue-600 mt-1">Assigned to: {it.employee_name}</div>
+                        )}
+                        {it.category_name && (
+                          <div className="text-xs text-gray-500 mt-1">Category: {it.category_name}</div>
+                        )}
+                      </div>
+                      <div className="ml-3">
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          Borrowed
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 ))}
                 {(!borrowedItems || borrowedItems.length === 0) && (
-                  <div className="text-sm text-gray-500">No borrowed items</div>
+                  <div className="text-center py-8">
+                    <div className="text-gray-400 text-4xl mb-2">📦</div>
+                    <div className="text-sm text-gray-500 font-medium">No borrowed items found</div>
+                    <div className="text-xs text-gray-400 mt-1">Items will appear here when they are issued to employees</div>
+                  </div>
                 )}
               </div>
             </div>
