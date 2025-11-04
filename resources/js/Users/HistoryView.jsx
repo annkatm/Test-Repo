@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 export const readHistory = () => {
   try {
@@ -45,7 +45,56 @@ const HistoryView = ({
   const setPage = setCurrentPage ?? setLocalPage;
   const log = logActivity ?? noop;
 
-  const sourceData = (sortedData && sortedData.length ? sortedData : readHistory());
+  const [bootData, setBootData] = useState(null);
+  useEffect(() => {
+    // Bootstrap from server if storage is empty
+    try {
+      const existing = readHistory();
+      if (Array.isArray(existing) && existing.length > 0) return;
+      // Try local fallback: employee_activities
+      try {
+        const rawEA = localStorage.getItem('employee_activities');
+        const arrEA = JSON.parse(rawEA);
+        if (Array.isArray(arrEA) && arrEA.length > 0) {
+          const normEA = arrEA.map((a, i) => ({
+            id: a.id ?? i + 1,
+            item: a.item || a.message || 'Activity',
+            status: a.status || a.variant || a.type || '-',
+            date: a.date || a.time || new Date().toISOString(),
+            time: a.time || a.date || new Date().toISOString(),
+          }));
+          setBootData(normEA);
+          try { localStorage.setItem('ireply_history', JSON.stringify(normEA)); } catch (_) {}
+          try { localStorage.setItem('ireply_history_count', String(normEA.length)); } catch (_) {}
+          return; // use employee_activities and skip server call
+        }
+      } catch (_) {}
+    } catch (_) {}
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/transactions/history', { credentials: 'same-origin' });
+        const data = await res.json();
+        const arr = Array.isArray(data?.data) ? data.data : [];
+        // Normalize minimal fields HistoryView uses
+        const norm = arr.map((t, i) => ({
+          id: t.id ?? t.transaction_id ?? t.request_id ?? i + 1,
+          item: t.item || t.equipment_name || t.title || 'Activity',
+          status: t.status || t.variant || '-',
+          date: t.date || t.created_at || t.time || new Date().toISOString(),
+          time: t.time || t.date || t.created_at || new Date().toISOString(),
+        }));
+        if (!cancelled && norm.length > 0) {
+          setBootData(norm);
+          try { localStorage.setItem('ireply_history', JSON.stringify(norm)); } catch (_) {}
+          try { localStorage.setItem('ireply_history_count', String(norm.length)); } catch (_) {}
+        }
+      } catch (_) { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const sourceData = (sortedData && sortedData.length ? sortedData : (bootData && bootData.length ? bootData : readHistory()));
 
   const olderThan24h = (a) => {
     const raw = a?.time ?? a?.date ?? null;
@@ -63,7 +112,8 @@ const HistoryView = ({
       ? arr.filter((it) => (it?.item || it?.message || '').toString().toLowerCase().includes(q))
       : arr;
     const onlyOld = base.filter(olderThan24h);
-    return onlyOld
+    const view = onlyOld.length > 0 ? onlyOld : base; // fallback to all if no older-than-24h yet
+    return view
       .slice()
       .sort((a, b) => new Date(b.date || b.time || 0) - new Date(a.date || a.time || 0));
   }, [sourceData, sTerm]);
@@ -96,6 +146,8 @@ const HistoryView = ({
       {/* Search bar */}
       <div className="flex justify-between items-center">
         <input
+          id="history-search"
+          name="historySearch"
           type="text"
           placeholder="Search by item name..."
           value={sTerm}

@@ -272,7 +272,7 @@ const OnProcessTransactions = ({
               </div>
 
               {/* Scrollable Table Rows Container */}
-              <div className="max-h-[60vh] overflow-y-auto no-scrollbar">
+              <div className="overflow-y-auto h-[50vh] sm:h-[55vh] lg:h-[360px] xl:h-[420px] bg-white [&::-webkit-scrollbar]:hidden">
                 <div className="divide-y divide-gray-100">
                   {(list || []).map((row, i) => (
                     <div

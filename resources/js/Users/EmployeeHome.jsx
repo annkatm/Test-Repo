@@ -246,7 +246,7 @@ const EmployeeHome = () => {
         const entry = {
           id: `cancel:${reqId || equipId || when}`,
           item: e?.detail?.equipment_name || e?.detail?.item || 'Request',
-          message: 'Request cancelled',
+          message: 'Successfully request cancelled',
           variant: 'cancel',
           date: when,
           time: when,
@@ -305,7 +305,7 @@ const EmployeeHome = () => {
         const entry = {
           id: `req:${d.id || d.equipment_id || when}`,
           item: d.equipment_name || d.item || 'Request',
-          message: 'Item requested',
+          message: 'Item successfully requested',
           variant: 'request',
           date: when,
           time: when,
@@ -350,7 +350,7 @@ const EmployeeHome = () => {
           const entry = {
             id: `appr:${reqId || equipId || when}`,
             item: e?.detail?.equipment_name || e?.detail?.item || 'Request',
-            message: 'Request approved',
+            message: 'Request has been approved',
             variant: 'approved',
             date: when,
             time: when,
@@ -561,6 +561,54 @@ const EmployeeHome = () => {
 
   // History data will be fetched from API
   const [historyData, setHistoryData] = useState([]);
+
+  // Ensure activities are persisted to the shared History store for HistoryView
+  useEffect(() => {
+    try {
+      const key = 'ireply_history';
+      const raw = localStorage.getItem(key);
+      const existing = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
+      const byKey = new Map(
+        existing.map((x) => [String(x.id || (x.message || x.item || '') + String(x.time || x.date || '')), x])
+      );
+      for (const a of (activities || [])) {
+        const k = String(a.id || (a.message || a.item || '') + String(a.time || a.date || ''));
+        if (!byKey.has(k)) byKey.set(k, a);
+      }
+      const merged = Array.from(byKey.values());
+      localStorage.setItem(key, JSON.stringify(merged));
+      localStorage.setItem('ireply_history_count', String(merged.length));
+    } catch (_) { /* ignore */ }
+  }, [activities]);
+
+  // Also persist normalized recentCombined feed
+  useEffect(() => {
+    try {
+      const key = 'ireply_history';
+      const raw = localStorage.getItem(key);
+      const existing = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
+      const byKey = new Map(
+        existing.map((x) => [String(x.id || (x.message || x.item || '') + String(x.time || x.date || '')), x])
+      );
+      const list = Array.isArray(recentCombined) ? recentCombined : [];
+      for (const a of list) {
+        const normalized = {
+          id: a.id || Date.now() + Math.random(),
+          item: a.item || a.message || 'Activity',
+          message: a.message || a.item || 'Activity',
+          status: a.status || a.variant || 'info',
+          variant: a.variant || a.status || 'info',
+          date: a.date || a.time || new Date().toISOString(),
+          time: a.time || a.date || new Date().toISOString(),
+        };
+        const k = String(normalized.id || (normalized.message || normalized.item || '') + String(normalized.time || normalized.date || ''));
+        if (!byKey.has(k)) byKey.set(k, normalized);
+      }
+      const merged = Array.from(byKey.values());
+      localStorage.setItem(key, JSON.stringify(merged));
+      localStorage.setItem('ireply_history_count', String(merged.length));
+    } catch (_) { /* ignore */ }
+  }, [recentCombined]);
 
   // Fetch denied requests
   const fetchDeniedRequests = async () => {
@@ -896,24 +944,27 @@ const EmployeeHome = () => {
       const data = await response.json();
 
       if (data.success && Array.isArray(data.data)) {
-        // Merge server history with any local-only entries we have in historyData
+        // Merge server history with any local-only entries we have in historyData and persist to localStorage
+        let mergedOut = [];
         setHistoryData((prevLocal) => {
           const server = data.data || [];
           // Keep local entries that are marked as local or have ids not found in server
           const localOnly = (prevLocal || []).filter((h) => {
-            if (!h) return false;
-            // if item has a flag local === true keep it
-            if (h.local) return true;
-            // if id is missing or not present in server, keep it
-            if (!h.id) return true;
-            return !server.some((s) => String(s.id) === String(h.id));
+            const id = String(h?.id || h?.time || '');
+            const inServer = (server || []).some((s) => String(s?.id || s?.time || '') === id);
+            return !inServer;
           });
 
           const merged = [...localOnly, ...server];
-          try { prevHistoryLenRef.current = Array.isArray(merged) ? merged.length : 0; } catch (_) { }
+          mergedOut = merged;
+          try {
+            prevHistoryLenRef.current = Array.isArray(merged) ? merged.length : 0;
+            localStorage.setItem('ireply_history', JSON.stringify(merged));
+            localStorage.setItem('ireply_history_count', String(merged.length));
+          } catch (_) { }
           return merged;
         });
-        return data.data;
+        return mergedOut;
       } else {
         // keep local entries if server returns no data
         setHistoryData((prev) => prev || []);
@@ -1115,7 +1166,6 @@ const EmployeeHome = () => {
         currentPage={currentPage}
         setCurrentPage={setCurrentPage}
         totalPages={totalPages}
-        sortedData={currentItems}
         logActivity={logActivity}
       />
     );
@@ -1230,11 +1280,12 @@ const EmployeeHome = () => {
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-[#2262C6]">On Process</h2>
               <button
-                onClick={async () => {
-                  await fetchDeniedRequests(); // Refresh denied requests immediately
-                  await fetchPendingTransactions(); // Ensure fresh pending data for the full view
-                  logActivity('Opened On Process view', 'info');
+                onClick={() => {
+                  // Show the view immediately to avoid UX delay; fetch in background
                   setShowPendings(true);
+                  try { fetchDeniedRequests(); } catch (_) {}
+                  try { fetchPendingTransactions(); } catch (_) {}
+                  logActivity('Opened On Process view', 'info');
                 }}
                 className="text-right text-blue-600 text-sm font-medium hover:text-blue-700">
                 View all
@@ -1316,10 +1367,11 @@ const EmployeeHome = () => {
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-[#2262C6]">Approved</h2>
               <button
-                onClick={async () => {
+                onClick={() => {
+                  // Switch immediately; fetch in background
                   setSelectedRow(null);
-                  await fetchApprovedTransactions();
                   setCurrentView('approved');
+                  try { fetchApprovedTransactions(); } catch (_) {}
                   logActivity('Opened Approved view', 'info');
                 }}
                 className="text-right text-blue-600 text-sm font-medium hover:text-blue-700">
@@ -1388,7 +1440,9 @@ const EmployeeHome = () => {
                 </div>
               ));
             })() : (
-              <></>
+              <div className="px-6 py-6 text-sm text-gray-500">
+                Currently no item has been approved
+              </div>
             )}
           </div>
         </div>
@@ -1404,6 +1458,32 @@ const EmployeeHome = () => {
               setNotificationCount(0);
               // Force refetch history to show latest
               fetchTransactionHistory();
+              // Also flush current activities into local history immediately
+              try {
+                const key = 'ireply_history';
+                const raw = localStorage.getItem(key);
+                const existing = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
+                const byKey = new Map(
+                  existing.map((x) => [String(x.id || (x.message || x.item || '') + String(x.time || x.date || '')), x])
+                );
+                const list = Array.isArray(activities) ? activities : [];
+                for (const a of list) {
+                  const normalized = {
+                    id: a.id || Date.now() + Math.random(),
+                    item: a.item || a.message || 'Activity',
+                    message: a.message || a.item || 'Activity',
+                    status: a.status || a.variant || 'info',
+                    variant: a.variant || a.status || 'info',
+                    date: a.date || a.time || new Date().toISOString(),
+                    time: a.time || a.date || new Date().toISOString(),
+                  };
+                  const k = String(normalized.id || (normalized.message || normalized.item || '') + String(normalized.time || normalized.date || ''));
+                  if (!byKey.has(k)) byKey.set(k, normalized);
+                }
+                const merged = Array.from(byKey.values());
+                localStorage.setItem(key, JSON.stringify(merged));
+                localStorage.setItem('ireply_history_count', String(merged.length));
+              } catch (_) { }
               setShowHistory(true);
             }}
             className="relative flex items-center justify-center bg-white border border-gray-300 rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 shadow-md shadow-gray-400/60 hover:shadow-lg hover:shadow-gray-500/70 hover:-translate-y-1 transition-all duration-300 active:translate-y-0 active:shadow-sm w-full sm:w-auto"
