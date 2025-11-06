@@ -252,21 +252,8 @@ const HomePage = () => {
         />
 
         {/* Main Content Area */}
-        <main className="px-10 pt-3 pb-6 flex-1 flex flex-col overflow-hidden">
-          {/* Scrollable Content Container */}
-          <div 
-            ref={scrollContainerRef}
-            className="flex-1 overflow-y-auto transaction-scrollbar sticky-transition"
-            style={{ maxHeight: 'calc(100vh - 200px)' }}
-          >
-            {/* Labels that fade out on scroll */}
-            <div 
-              className={`transition-all duration-500 ease-in-out ${
-                scrollY > 50 ? 'opacity-0 transform -translate-y-2' : 'opacity-100 transform translate-y-0'
-              }`}
-            >
-              <h2 className="text-4xl font-bold text-[#2262C6] transition-all duration-300">Dashboard</h2>
-            </div>
+        <main className="px-10 pt-3 pb-0 flex-1 overflow-y-auto">
+          <h2 className="text-4xl font-bold text-[#2262C6] mb-6">Dashboard</h2>
 
             {/* Stats Cards - scroll with content initially, then stick at top */}
             <div className="sticky top-0 z-10 bg-white pb-4 mt-6">
@@ -450,7 +437,7 @@ const HomePage = () => {
             </div>
             
             {/* Additional Boxes */}
-            <div className="mt-6 mb-6">
+            <div className="mt-6 mb-0">
               {/* Report Overview */}
               <div className="bg-[#F8FAFF] rounded-2xl border border-gray-100 shadow-sm p-4 md:p-6 transition-all duration-300">
                 <div className="flex items-center justify-between mb-6">
@@ -464,7 +451,7 @@ const HomePage = () => {
                   </div>
 
                   {/* Equipment Rows */}
-                  <div className="space-y-5">
+                  <div className="space-y-2">
                     {(() => {
                       // Prefer category-driven reportStats; fallback to equipmentStats if empty
                       const stats = (dashboardData.reportStats && Object.keys(dashboardData.reportStats).length > 0)
@@ -507,7 +494,6 @@ const HomePage = () => {
               </div>
               {/* Add Category */}
             </div>
-          </div>
         </main>
       </div>
     </div>
