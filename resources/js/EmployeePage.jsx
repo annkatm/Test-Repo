@@ -247,8 +247,20 @@ const EmployeePage = () => {
   const loadAvailableEquipment = async () => {
     try {
       // Get paginated equipment list with category info
-      const res = await fetch('/api/equipment?per_page=100&status=available');
-      const data = await res.json();
+      const res = await fetch('/api/equipment?per_page=100&status=available', {
+        headers: {
+          'Accept': 'application/json',
+        },
+        credentials: 'include',
+      });
+      
+      const contentType = res.headers.get('content-type');
+      let data;
+      if (contentType && contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        throw new Error('Server returned non-JSON response');
+      }
       
       if (data.success) {
         // Extract equipment from paginated response
@@ -299,8 +311,20 @@ const EmployeePage = () => {
 
       const promises = Object.entries(endpoints).map(async ([key, endpoint]) => {
         try {
-          const res = await fetch(endpoint);
-          const data = await res.json();
+          const res = await fetch(endpoint, {
+            headers: {
+              'Accept': 'application/json',
+            },
+            credentials: 'include',
+          });
+          
+          const contentType = res.headers.get('content-type');
+          let data;
+          if (contentType && contentType.includes('application/json')) {
+            data = await res.json();
+          } else {
+            throw new Error('Server returned non-JSON response');
+          }
           return [key, data.success && Array.isArray(data.data) ? data.data.map(item => ({ value: item.name, label: item.name })) : []];
         } catch (e) {
           return [key, []];
@@ -333,8 +357,21 @@ const EmployeePage = () => {
         }
       });
 
-      const response = await fetch(`/api/employees?${params}`);
-      const data = await response.json();
+      const response = await fetch(`/api/employees?${params}`, {
+        headers: {
+          'Accept': 'application/json',
+        },
+        credentials: 'include',
+      });
+
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get('content-type');
+      let data;
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        throw new Error('Server returned non-JSON response');
+      }
 
       if (data.success && Array.isArray(data.data)) {
         const list = data.data.map(e => ({
@@ -611,12 +648,17 @@ const EmployeePage = () => {
       available_count: eq.available_count || 0
     }));
 
+    // Get CSRF token
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
     fetch('/api/employees', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
+        ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken }),
       },
+      credentials: 'include',
       body: JSON.stringify({
         first_name: form.firstName.trim(),
         last_name: form.lastName.trim(),
@@ -632,7 +674,15 @@ const EmployeePage = () => {
         status: 'active',
       })
     })
-      .then(res => res.json())
+      .then(async res => {
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          return res.json();
+        } else {
+          const text = await res.text();
+          throw new Error(`Server returned an error (${res.status}). Please check your connection and try again.`);
+        }
+      })
       .then(data => {
         if (data.success) {
           closeModal();
@@ -715,9 +765,17 @@ const EmployeePage = () => {
       available_count: eq.available_count || 0
     }));
     
+    // Get CSRF token
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
     fetch(`/api/employees/${editing.id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json', 
+        'Accept': 'application/json',
+        ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken }),
+      },
+      credentials: 'include',
       body: JSON.stringify({
         first_name: form.firstName.trim(),
         last_name: form.lastName.trim(),
@@ -734,7 +792,15 @@ const EmployeePage = () => {
         status: 'active'
       })
     })
-      .then(res => res.json())
+      .then(async res => {
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          return res.json();
+        } else {
+          const text = await res.text();
+          throw new Error(`Server returned an error (${res.status}). Please check your connection and try again.`);
+        }
+      })
       .then(data => {
         if (data.success) {
           closeEdit();
@@ -754,8 +820,26 @@ const EmployeePage = () => {
 
   const confirmDelete = () => {
     if (!deleting) return;
-    fetch(`/api/employees/${deleting.id}`, { method: 'DELETE', headers: { 'Accept': 'application/json' } })
-      .then(res => res.json())
+    // Get CSRF token
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+    fetch(`/api/employees/${deleting.id}`, { 
+      method: 'DELETE', 
+      headers: { 
+        'Accept': 'application/json',
+        ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken }),
+      },
+      credentials: 'include',
+    })
+      .then(async res => {
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          return res.json();
+        } else {
+          const text = await res.text();
+          throw new Error(`Server returned an error (${res.status}). Please check your connection and try again.`);
+        }
+      })
       .then(data => {
         if (data.success) {
           closeDelete();
@@ -912,7 +996,7 @@ const EmployeePage = () => {
           <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/20" onClick={closeView} />
             <div className="relative bg-white rounded-3xl shadow-2xl w-[600px] max-w-[95vw] max-h-[90vh] overflow-y-auto p-6 border border-gray-200">
-              <button onClick={closeView} className="absolute right-6 top-6 text-gray-400 hover:text-gray-600 text-xl">✕</button>
+              <button onClick={closeView} className="sticky top-0 float-right text-gray-400 hover:text-gray-600 text-xl z-10 bg-white rounded-full w-8 h-8 flex items-center justify-center -mt-2 -mr-2 mb-2">✕</button>
               <h3 className="text-2xl font-semibold text-blue-600 mb-8">Employee Details</h3>
               
               <div className="grid grid-cols-2 gap-6 mb-6">
@@ -1043,7 +1127,7 @@ const EmployeePage = () => {
           <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/20" onClick={closeModal} />
             <div className="relative bg-white rounded-2xl shadow-2xl w-[600px] max-w-[95vw] max-h-[70vh] overflow-y-auto modal-scrollbar p-6 border border-gray-200">
-              <button onClick={closeModal} className="absolute right-4 top-4 text-gray-400 hover:text-gray-600 text-xl">✕</button>
+              <button onClick={closeModal} className="sticky top-0 float-right text-gray-400 hover:text-gray-600 text-xl z-10 bg-white rounded-full w-8 h-8 flex items-center justify-center -mt-2 -mr-2 mb-2">✕</button>
               <h3 className="text-xl font-semibold text-blue-500 text-center mb-8">Add employee</h3>
 
               <div className="grid grid-cols-2 gap-6">
@@ -1250,7 +1334,7 @@ const EmployeePage = () => {
           <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/20" onClick={closeEdit} />
             <div className="relative bg-white rounded-2xl shadow-2xl w-[600px] max-w-[95vw] max-h-[70vh] overflow-y-auto modal-scrollbar p-6 border border-gray-200">
-              <button onClick={closeEdit} className="absolute right-4 top-4 text-gray-400 hover:text-gray-600 text-xl">✕</button>
+              <button onClick={closeEdit} className="sticky top-0 float-right text-gray-400 hover:text-gray-600 text-xl z-10 bg-white rounded-full w-8 h-8 flex items-center justify-center -mt-2 -mr-2 mb-2">✕</button>
               <h3 className="text-xl font-semibold text-blue-500 text-center mb-8">Edit employee</h3>
               <div className="grid grid-cols-2 gap-6">
                 {/* LEFT SIDE - Z-pattern: 1, 3, 5, 7, 9 */}

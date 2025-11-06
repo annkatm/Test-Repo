@@ -10,6 +10,7 @@ const UsersPage = () => {
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
   const [usersError, setUsersError] = useState("");
+  const [currentUser, setCurrentUser] = useState(null); // Current logged-in user
   const [activeFilter, setActiveFilter] = useState("ADMIN");
 
   const [showAddModal, setShowAddModal] = useState(false);
@@ -93,6 +94,26 @@ const UsersPage = () => {
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
+
+  // Load current user
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const res = await fetch('/api/user');
+        const data = await res.json();
+        if (data) {
+          setCurrentUser(data);
+          // If user is not admin, default to EMPLOYEE tab
+          if (data.position?.toLowerCase() === 'employee' || data.role?.name === 'employee') {
+            setActiveFilter("EMPLOYEE");
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load current user:', err);
+      }
+    };
+    fetchCurrentUser();
+  }, []);
 
   // Load users from API
   useEffect(() => {
@@ -463,16 +484,19 @@ const UsersPage = () => {
           <div className="mb-8">
             <div className="flex items-center justify-between mb-4">
               <div className="flex space-x-4">
-                <button
-                  onClick={() => setActiveFilter("ADMIN")}
-                  className={`px-6 py-2 rounded-lg font-medium transition-colors duration-200 ${
-                    activeFilter === "ADMIN"
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                  }`}
-                >
-                  ADMIN
-                </button>
+                {/* Only show ADMIN tab if current user is not an employee */}
+                {currentUser && currentUser.position?.toLowerCase() !== 'employee' && currentUser.role?.name !== 'employee' && (
+                  <button
+                    onClick={() => setActiveFilter("ADMIN")}
+                    className={`px-6 py-2 rounded-lg font-medium transition-colors duration-200 ${
+                      activeFilter === "ADMIN"
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
+                  >
+                    ADMIN
+                  </button>
+                )}
                 <button
                   onClick={() => setActiveFilter("EMPLOYEE")}
                   className={`px-6 py-2 rounded-lg font-medium transition-colors duration-200 ${
@@ -787,17 +811,7 @@ const UsersPage = () => {
                 </div>
               </div>
               
-              <div className="flex justify-between mt-8 pt-6 border-t border-gray-200">
-                <button
-                  onClick={() => {
-                    setShowAddModal(false);
-                    resetForm();
-                  }}
-                  className="inline-flex items-center px-6 py-3 border-2 border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
-                >
-                  <X className="h-4 w-4 mr-2" />
-                  Back
-                </button>
+              <div className="flex justify-end mt-8 pt-6 border-t border-gray-200">
                 <button
                   onClick={handleAddUser}
                   className="inline-flex items-center px-8 py-3 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 shadow-lg hover:shadow-xl"
@@ -982,18 +996,7 @@ const UsersPage = () => {
                 </div>
               </div>
               
-              <div className="flex justify-between mt-6">
-                <button
-                  onClick={() => {
-                    setShowEditModal(false);
-                    setSelectedUser(null);
-                    resetForm();
-                  }}
-                  className="inline-flex items-center px-6 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <X className="h-4 w-4 mr-2" />
-                  Back
-                </button>
+              <div className="flex justify-end mt-6">
                 <button
                   onClick={handleEditUser}
                   className="inline-flex items-center px-6 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -1043,18 +1046,8 @@ const UsersPage = () => {
         <div className="fixed inset-0 bg-gray-900/30 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="relative bg-white backdrop-blur-md rounded-lg shadow-xl w-full max-w-2xl mx-4 border border-white/20">
             <div className="p-8">
-              <div className="flex items-center justify-between mb-6">
+              <div className="mb-6">
                 <h3 className="text-2xl font-bold text-blue-600">User Details</h3>
-                <button
-                  onClick={() => {
-                    setShowViewModal(false);
-                    setSelectedUser(null);
-                  }}
-                  className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100"
-                  title="Close"
-                >
-                  <X className="h-5 w-5" />
-                </button>
               </div>
               <div className="space-y-4">
                 <div className="flex flex-col">
