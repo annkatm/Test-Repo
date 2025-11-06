@@ -94,6 +94,7 @@ const AddStocks = () => {
   const [addedBatchesByProduct, setAddedBatchesByProduct] = useState({}); // key: productKey -> [{ count, at }]
   const [expandedRows, setExpandedRows] = useState({}); // { '<productKey>-<timestamp>': true }
   const toggleExpanded = (rowId) => setExpandedRows(prev => ({ ...prev, [rowId]: !prev[rowId] }));
+  const [receiptPreview, setReceiptPreview] = useState(null); // { src, alt } for receipt lightbox
 
   // Fetch equipment data
   useEffect(() => {
@@ -103,8 +104,20 @@ const AddStocks = () => {
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch('/api/categories');
-      const data = await response.json();
+      const response = await fetch('/api/categories', {
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+      
+      const contentType = response.headers.get('content-type');
+      let data;
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        throw new Error('Server returned non-JSON response');
+      }
+      
       if (data.success) {
         setCategories(data.data);
       } else {
@@ -119,8 +132,19 @@ const AddStocks = () => {
     try {
       setLoading(true);
       // Request all equipment without status filter and with high per_page to show all items
-      const response = await fetch('/api/equipment?per_page=1000');
-      const data = await response.json();
+      const response = await fetch('/api/equipment?per_page=1000', {
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+      
+      const contentType = response.headers.get('content-type');
+      let data;
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        throw new Error('Server returned non-JSON response');
+      }
       
       if (data.success) {
         const equipmentWithCategories = data.data.data.map(item => ({
@@ -169,14 +193,25 @@ const AddStocks = () => {
 
     let filteredEquipment = Object.values(grouped);
 
-    // Apply search filter
+    // Apply search filter at product level
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
       filteredEquipment = filteredEquipment.filter(
-        item =>
-          item.name?.toLowerCase().includes(searchLower) ||
-          item.brand?.toLowerCase().includes(searchLower) ||
-          item.category?.name?.toLowerCase().includes(searchLower)
+        item => {
+          // Search in product name (item name)
+          const nameMatch = item.name?.toLowerCase().includes(searchLower);
+          
+          // Search in brand
+          const brandMatch = item.brand?.toLowerCase().includes(searchLower);
+          
+          // Search in category
+          const categoryMatch = item.category?.name?.toLowerCase().includes(searchLower);
+          
+          // Search in price (convert to string for searching)
+          const priceMatch = item.purchase_price?.toString().includes(searchTerm);
+          
+          return nameMatch || brandMatch || categoryMatch || priceMatch;
+        }
       );
     }
 
@@ -208,21 +243,156 @@ const AddStocks = () => {
     return filteredEquipment;
   };
 
-  // Build display rows: duplicate product row per added batch
+  // Helper function to get all products without search filter
+  const getAllProducts = () => {
+    // Group equipment by product (name + brand)
+    const grouped = equipment.reduce((acc, item) => {
+      const key = `${item.name || 'Unknown'}_${item.brand || 'Unknown'}`;
+      if (!acc[key]) {
+        acc[key] = {
+          key,
+          name: item.name || 'Unknown',
+          brand: item.brand || 'Unknown',
+          category: item.category || { id: null, name: 'Uncategorized' },
+          purchase_price: parseFloat(item.purchase_price) || 0,
+          image: item.item_image || null,
+          total_count: 0,
+          available_count: 0,
+          borrowed_count: 0,
+          issued_count: 0,
+          created_at: item.created_at || null,
+        };
+      }
+      acc[key].total_count += 1;
+      if (item.status === 'available') acc[key].available_count += 1;
+      if (item.status === 'borrowed') acc[key].borrowed_count += 1;
+      if (item.status === 'issued') acc[key].issued_count += 1;
+      return acc;
+    }, {});
+    
+    return Object.values(grouped);
+  };
+
+  // Build display rows: one row per product, with count of recently added items
   const getDisplayRows = () => {
-    const products = getFilteredAndSortedEquipment();
-    const rows = [];
-    products.forEach((p) => {
-      const batches = addedBatchesByProduct[p.key] || [];
-      if (batches.length === 0) {
-        rows.push({ ...p, _batch: null });
-      } else {
-        batches.forEach((b) => {
-          rows.push({ ...p, _batch: b });
+    let products = getFilteredAndSortedEquipment();
+    
+    // If searching, also check individual items and include products with matching items
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      
+      // Find all unique product keys that have matching items
+      const matchingProductKeys = new Set();
+      
+      // First, add products that match at product level (already filtered in getFilteredAndSortedEquipment)
+      products.forEach(p => {
+        matchingProductKeys.add(p.key);
+      });
+      
+      // Then, find products with matching individual items
+      equipment.forEach(item => {
+        // Search in serial number
+        const serialMatch = item.serial_number?.toLowerCase().includes(searchLower);
+        
+        // Search in specs/description
+        const specsMatch = item.specifications?.toLowerCase().includes(searchLower) ||
+                          item.description?.toLowerCase().includes(searchLower);
+        
+        // Search in price (convert to string for searching)
+        const priceMatch = item.purchase_price?.toString().includes(searchTerm);
+        
+        // Search in date (format date and search)
+        let dateMatch = false;
+        if (item.created_at) {
+          const dateStr = new Date(item.created_at).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+          }).toLowerCase();
+          dateMatch = dateStr.includes(searchLower);
+        }
+        
+        if (serialMatch || specsMatch || priceMatch || dateMatch) {
+          const eqKey = `${item.name || 'Unknown'}_${item.brand || 'Unknown'}`;
+          matchingProductKeys.add(eqKey);
+        }
+      });
+      
+      // Get all products (without search filter) to find products with matching items
+      const allProducts = getAllProducts();
+      
+      // Combine products that match at product level OR have matching items
+      const finalProducts = new Map();
+      
+      // Add products that match at product level
+      products.forEach(p => {
+        finalProducts.set(p.key, p);
+      });
+      
+      // Add products that have matching items
+      allProducts.forEach(p => {
+        if (matchingProductKeys.has(p.key) && !finalProducts.has(p.key)) {
+          finalProducts.set(p.key, p);
+        }
+      });
+      
+      products = Array.from(finalProducts.values());
+    }
+    
+    return products.map((p) => {
+      // Get all equipment items for this product
+      let allItems = equipment.filter(eq => {
+        const eqKey = `${eq.name || 'Unknown'}_${eq.brand || 'Unknown'}`;
+        return eqKey === p.key;
+      });
+      
+      // If search term exists, filter items by search criteria
+      if (searchTerm) {
+        const searchLower = searchTerm.toLowerCase();
+        allItems = allItems.filter(item => {
+          // Search in serial number
+          const serialMatch = item.serial_number?.toLowerCase().includes(searchLower);
+          
+          // Search in specs/description
+          const specsMatch = item.specifications?.toLowerCase().includes(searchLower) ||
+                            item.description?.toLowerCase().includes(searchLower);
+          
+          // Search in price (convert to string for searching)
+          const priceMatch = item.purchase_price?.toString().includes(searchTerm);
+          
+          // Search in date (format date and search)
+          let dateMatch = false;
+          if (item.created_at) {
+            const dateStr = new Date(item.created_at).toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric'
+            }).toLowerCase();
+            dateMatch = dateStr.includes(searchLower);
+          }
+          
+          return serialMatch || specsMatch || priceMatch || dateMatch;
         });
       }
+      
+      // Get the most recent batch for this product (batches are ordered newest first)
+      const batches = addedBatchesByProduct[p.key] || [];
+      const mostRecentBatch = batches.length > 0 ? batches[0] : null;
+      
+      // Determine which items are from the most recent batch only
+      const recentlyAddedItems = mostRecentBatch ? allItems.filter(item => {
+        // Check if this item's serial is in the most recent batch
+        return mostRecentBatch.serials && mostRecentBatch.serials.includes(item.serial_number);
+      }) : [];
+      
+      return {
+        ...p,
+        allItems: allItems, // All items for dropdown (filtered by search if search term exists)
+        recentlyAddedItems: recentlyAddedItems, // Items to highlight (only from most recent batch)
+        recentlyAddedCount: mostRecentBatch ? mostRecentBatch.count : 0, // Count from most recent batch only
+        mostRecentBatch: mostRecentBatch, // Store the most recent batch for reference
+      };
     });
-    return rows;
   };
 
   const handleInputChange = (e) => {
@@ -271,15 +441,33 @@ const AddStocks = () => {
         }
       });
 
+      // Add CSRF token for Laravel
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      if (csrfToken) {
+        formDataToSend.append('_token', csrfToken);
+      }
+
       const response = await fetch('/api/equipment', {
         method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+        },
         body: formDataToSend
       });
 
-      const data = await response.json();
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get('content-type');
+      let data;
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        // If not JSON, it's likely an HTML error page
+        const text = await response.text();
+        throw new Error(`Server returned an error (${response.status}). Please check your connection and try again.`);
+      }
 
       if (!response.ok) {
-        throw new Error(data.message || 'Error adding equipment');
+        throw new Error(data.message || data.error || 'Error adding equipment');
       }
 
       // Trigger equipment update event for dynamic refresh
@@ -399,7 +587,7 @@ const AddStocks = () => {
                   </thead>
                   <tbody>
                     {getDisplayRows().map((item, index) => {
-                      const rowId = `${item.key}-${item._batch ? item._batch.at : 'base'}`;
+                      const rowId = `${item.key}`;
                       const isOpen = !!expandedRows[rowId];
                       return (
                       <React.Fragment key={rowId}>
@@ -433,7 +621,7 @@ const AddStocks = () => {
                           {item.category?.name || 'Uncategorized'}
                         </td>
                         <td className="py-4 px-6 text-gray-700 font-semibold text-right">
-                          {item._batch ? `+${item._batch.count}` : '+0'}
+                          {item.recentlyAddedCount > 0 ? `+${item.recentlyAddedCount}` : '+0'}
                         </td>
                       </tr>
                       {isOpen && (
@@ -450,32 +638,67 @@ const AddStocks = () => {
                                 </div>
                               </div>
                               <div className="divide-y divide-gray-200 max-h-64 overflow-y-auto">
-                                {(item._batch?.serials || []).map((serial, i) => (
-                                  <div key={`${rowId}-row-${i}`} className={`px-4 py-3 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
-                                    <div className="grid grid-cols-5 gap-4 items-center text-sm">
-                                      <div className="font-medium text-gray-900">{serial || 'N/A'}</div>
-                                      <div className="text-gray-700 truncate">{item._batch?.specs || item.specifications || '—'}</div>
-                                      <div className="text-right text-gray-800">
-                                        ₱{Number(item._batch?.price ?? item.purchase_price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                      </div>
-                                      <div className="text-gray-700">
-                                        {(() => {
-                                          const dateRaw = item._batch?.at || item.created_at;
-                                          return dateRaw ? new Date(dateRaw).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
-                                        })()}
-                                      </div>
-                                      <div>
-                                        {item._batch?.receiptUrl ? (
-                                          <img src={item._batch.receiptUrl} alt="Receipt" className="h-10 w-auto object-contain bg-white rounded border" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                                        ) : (
-                                          <span className="text-gray-400 text-xs">No receipt</span>
-                                        )}
+                                {(item.allItems || []).map((equipmentItem, i) => {
+                                  const isRecentlyAdded = item.recentlyAddedItems.some(rai => rai.id === equipmentItem.id);
+                                  const addedDate = equipmentItem.created_at 
+                                    ? new Date(equipmentItem.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                                    : 'N/A';
+                                  
+                                  return (
+                                    <div 
+                                      key={`${rowId}-item-${equipmentItem.id}`} 
+                                      className={`px-4 py-3 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'} ${isRecentlyAdded ? 'bg-blue-50 border-l-4 border-blue-500' : ''}`}
+                                    >
+                                      <div className="grid grid-cols-5 gap-4 items-center text-sm">
+                                        <div className="font-medium text-gray-900">
+                                          {equipmentItem.serial_number || 'N/A'}
+                                          {isRecentlyAdded && (
+                                            <span className="ml-2 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-xs font-semibold">
+                                              NEW
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="text-gray-700 truncate">
+                                          {equipmentItem.specifications || equipmentItem.description || '—'}
+                                        </div>
+                                        <div className="text-right text-gray-800">
+                                          ₱{Number(equipmentItem.purchase_price || 0).toLocaleString(undefined, { 
+                                            minimumFractionDigits: 2, 
+                                            maximumFractionDigits: 2 
+                                          })}
+                                        </div>
+                                        <div className="text-gray-700">
+                                          {addedDate}
+                                          {isRecentlyAdded && (
+                                            <span className="ml-1 text-blue-600 text-xs font-medium">(New)</span>
+                                          )}
+                                        </div>
+                                        <div>
+                                          {(() => {
+                                            const receiptUrl = equipmentItem.receipt_image_url || 
+                                                              (equipmentItem.receipt_image ? `/storage/${equipmentItem.receipt_image}` : null);
+                                            return receiptUrl ? (
+                                              <img 
+                                                src={receiptUrl} 
+                                                alt="Receipt" 
+                                                className="h-10 w-auto object-contain bg-white rounded border cursor-pointer hover:opacity-80 transition-opacity"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setReceiptPreview({ src: receiptUrl, alt: `Receipt - ${equipmentItem.serial_number || 'Item'}` });
+                                                }}
+                                                onError={(e) => { e.currentTarget.style.display = 'none'; }} 
+                                              />
+                                            ) : (
+                                              <span className="text-gray-400 text-xs">No receipt</span>
+                                            );
+                                          })()}
+                                        </div>
                                       </div>
                                     </div>
-                                  </div>
-                                ))}
-                                {(!item._batch?.serials || item._batch.serials.length === 0) && (
-                                  <div className="px-4 py-3 bg-white text-sm text-gray-500">No items captured for this batch.</div>
+                                  );
+                                })}
+                                {(!item.allItems || item.allItems.length === 0) && (
+                                  <div className="px-4 py-3 bg-white text-sm text-gray-500">No items found for this product.</div>
                                 )}
                               </div>
                             </div>
@@ -550,6 +773,9 @@ const AddStocks = () => {
                   ...(prev[productKey] || []),
                 ],
               }));
+              
+              // Refresh equipment to get the newly added items
+              fetchEquipment();
             }}
           />
         )}
@@ -559,6 +785,33 @@ const AddStocks = () => {
             categories={categories}
             onSuccess={fetchEquipment}
           />
+        )}
+
+        {/* Receipt Lightbox Modal */}
+        {receiptPreview && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/80" onClick={() => setReceiptPreview(null)} />
+            <div className="relative max-w-5xl w-full max-h-[95vh] px-4">
+              <button
+                onClick={() => setReceiptPreview(null)}
+                className="absolute -top-10 right-6 text-white/80 hover:text-white transition-colors"
+                aria-label="Close preview"
+              >
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              <img
+                src={receiptPreview.src}
+                alt={receiptPreview.alt || 'Receipt preview'}
+                className="mx-auto max-h-[90vh] w-auto object-contain rounded-lg shadow-2xl"
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = '/images/placeholder-equipment.png';
+                }}
+              />
+            </div>
+          </div>
         )}
       </div>
     </div>
@@ -591,8 +844,19 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
     try {
       setLoading(true);
       // Fetch all equipment for the category without pagination limits
-      const response = await fetch(`/api/equipment?category_id=${categoryId}&per_page=1000`);
-      const data = await response.json();
+      const response = await fetch(`/api/equipment?category_id=${categoryId}&per_page=1000`, {
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+      
+      const contentType = response.headers.get('content-type');
+      let data;
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        throw new Error('Server returned non-JSON response');
+      }
       
       if (data.success) {
         // Group equipment by name/brand to show only item types, not individual units
@@ -711,15 +975,33 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
       formData.append('serial_numbers', JSON.stringify(serialNumbers));
       formData.append('receipt_image', receipt);
 
+      // Add CSRF token for Laravel
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      if (csrfToken) {
+        formData.append('_token', csrfToken);
+      }
+
       const response = await fetch('/api/equipment/add-stock', {
         method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+        },
         body: formData,
       });
 
-      const data = await response.json();
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get('content-type');
+      let data;
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        // If not JSON, it's likely an HTML error page
+        const text = await response.text();
+        throw new Error(`Server returned an error (${response.status}). Please check your connection and try again.`);
+      }
 
       if (!response.ok) {
-        throw new Error(data.message || 'Error adding stocks');
+        throw new Error(data.message || data.error || 'Error adding stocks');
       }
 
       // Trigger equipment update event for dynamic refresh
@@ -1140,16 +1422,34 @@ const AddItemModal = ({ onClose, categories = [], onSuccess }) => {
         formDataToSend.append('receipt_image', formData.receipt_image);
       }
 
+      // Add CSRF token for Laravel
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      if (csrfToken) {
+        formDataToSend.append('_token', csrfToken);
+      }
+
       const response = await fetch('/api/equipment', {
         method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+        },
         body: formDataToSend,
       });
 
-      const data = await response.json();
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get('content-type');
+      let data;
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        // If not JSON, it's likely an HTML error page
+        const text = await response.text();
+        throw new Error(`Server returned an error (${response.status}). Please check your connection and try again.`);
+      }
 
       if (!response.ok) {
         console.error('Server response:', data);
-        throw new Error(data.message || 'Error adding equipment');
+        throw new Error(data.message || data.error || 'Error adding equipment');
       }
 
       // Trigger equipment update event for dynamic refresh
