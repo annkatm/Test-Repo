@@ -912,7 +912,7 @@ const EmployeePage = () => {
           <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/20" onClick={closeView} />
             <div className="relative bg-white rounded-3xl shadow-2xl w-[600px] max-w-[95vw] max-h-[90vh] overflow-y-auto p-6 border border-gray-200">
-              <button onClick={closeView} className="absolute right-6 top-6 text-gray-400 hover:text-gray-600 text-xl">✕</button>
+              <button onClick={closeView} className="sticky top-0 float-right text-gray-400 hover:text-gray-600 text-xl z-10 bg-white rounded-full w-8 h-8 flex items-center justify-center -mt-2 -mr-2 mb-2">✕</button>
               <h3 className="text-2xl font-semibold text-blue-600 mb-8">Employee Details</h3>
               
               <div className="grid grid-cols-2 gap-6 mb-6">
@@ -1043,7 +1043,7 @@ const EmployeePage = () => {
           <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/20" onClick={closeModal} />
             <div className="relative bg-white rounded-2xl shadow-2xl w-[600px] max-w-[95vw] max-h-[70vh] overflow-y-auto modal-scrollbar p-6 border border-gray-200">
-              <button onClick={closeModal} className="absolute right-4 top-4 text-gray-400 hover:text-gray-600 text-xl">✕</button>
+              <button onClick={closeModal} className="sticky top-0 float-right text-gray-400 hover:text-gray-600 text-xl z-10 bg-white rounded-full w-8 h-8 flex items-center justify-center -mt-2 -mr-2 mb-2">✕</button>
               <h3 className="text-xl font-semibold text-blue-500 text-center mb-8">Add employee</h3>
 
               <div className="grid grid-cols-2 gap-6">
@@ -1250,7 +1250,7 @@ const EmployeePage = () => {
           <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/20" onClick={closeEdit} />
             <div className="relative bg-white rounded-2xl shadow-2xl w-[600px] max-w-[95vw] max-h-[70vh] overflow-y-auto modal-scrollbar p-6 border border-gray-200">
-              <button onClick={closeEdit} className="absolute right-4 top-4 text-gray-400 hover:text-gray-600 text-xl">✕</button>
+              <button onClick={closeEdit} className="sticky top-0 float-right text-gray-400 hover:text-gray-600 text-xl z-10 bg-white rounded-full w-8 h-8 flex items-center justify-center -mt-2 -mr-2 mb-2">✕</button>
               <h3 className="text-xl font-semibold text-blue-500 text-center mb-8">Edit employee</h3>
               <div className="grid grid-cols-2 gap-6">
                 {/* LEFT SIDE - Z-pattern: 1, 3, 5, 7, 9 */}
