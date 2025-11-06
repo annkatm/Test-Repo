@@ -91,6 +91,10 @@ const AddStocks = () => {
   });
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [addedBatchesByProduct, setAddedBatchesByProduct] = useState({}); // key: productKey -> [{ count, at }]
+  const [expandedRows, setExpandedRows] = useState({}); // { '<productKey>-<timestamp>': true }
+  const toggleExpanded = (rowId) => setExpandedRows(prev => ({ ...prev, [rowId]: !prev[rowId] }));
+  const [receiptPreview, setReceiptPreview] = useState(null); // { src, alt } for receipt lightbox
 
   // Fetch equipment data
   useEffect(() => {
@@ -100,8 +104,20 @@ const AddStocks = () => {
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch('/api/categories');
-      const data = await response.json();
+      const response = await fetch('/api/categories', {
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+      
+      const contentType = response.headers.get('content-type');
+      let data;
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        throw new Error('Server returned non-JSON response');
+      }
+      
       if (data.success) {
         setCategories(data.data);
       } else {
@@ -117,12 +133,18 @@ const AddStocks = () => {
       setLoading(true);
       // Request all equipment without status filter and with high per_page to show all items
       const response = await fetch('/api/equipment?per_page=1000', {
-        credentials: 'same-origin',
         headers: {
           'Accept': 'application/json',
         },
       });
-      const data = await response.json();
+      
+      const contentType = response.headers.get('content-type');
+      let data;
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        throw new Error('Server returned non-JSON response');
+      }
       
       if (data.success) {
         const equipmentWithCategories = data.data.data.map(item => ({
@@ -141,19 +163,55 @@ const AddStocks = () => {
     }
   };
 
-  // Filter and sort equipment
+  // Filter and sort equipment (group by product)
   const getFilteredAndSortedEquipment = () => {
-    let filteredEquipment = [...equipment];
+    // Group equipment by product (name + brand)
+    const grouped = equipment.reduce((acc, item) => {
+      const key = `${item.name || 'Unknown'}_${item.brand || 'Unknown'}`;
+      if (!acc[key]) {
+        acc[key] = {
+          key,
+          name: item.name || 'Unknown',
+          brand: item.brand || 'Unknown',
+          category: item.category || { id: null, name: 'Uncategorized' },
+          purchase_price: parseFloat(item.purchase_price) || 0,
+          image: item.item_image || null,
+          total_count: 0,
+          available_count: 0,
+          borrowed_count: 0,
+          issued_count: 0,
+          // capture an example created_at for display
+          created_at: item.created_at || null,
+        };
+      }
+      acc[key].total_count += 1;
+      if (item.status === 'available') acc[key].available_count += 1;
+      if (item.status === 'borrowed') acc[key].borrowed_count += 1;
+      if (item.status === 'issued') acc[key].issued_count += 1;
+      return acc;
+    }, {});
 
-    // Apply search filter
+    let filteredEquipment = Object.values(grouped);
+
+    // Apply search filter at product level
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
       filteredEquipment = filteredEquipment.filter(
-        item =>
-          item.name?.toLowerCase().includes(searchLower) ||
-          item.brand?.toLowerCase().includes(searchLower) ||
-          item.serial_number?.toLowerCase().includes(searchLower) ||
-          item.category?.name?.toLowerCase().includes(searchLower)
+        item => {
+          // Search in product name (item name)
+          const nameMatch = item.name?.toLowerCase().includes(searchLower);
+          
+          // Search in brand
+          const brandMatch = item.brand?.toLowerCase().includes(searchLower);
+          
+          // Search in category
+          const categoryMatch = item.category?.name?.toLowerCase().includes(searchLower);
+          
+          // Search in price (convert to string for searching)
+          const priceMatch = item.purchase_price?.toString().includes(searchTerm);
+          
+          return nameMatch || brandMatch || categoryMatch || priceMatch;
+        }
       );
     }
 
@@ -183,6 +241,158 @@ const AddStocks = () => {
     }
 
     return filteredEquipment;
+  };
+
+  // Helper function to get all products without search filter
+  const getAllProducts = () => {
+    // Group equipment by product (name + brand)
+    const grouped = equipment.reduce((acc, item) => {
+      const key = `${item.name || 'Unknown'}_${item.brand || 'Unknown'}`;
+      if (!acc[key]) {
+        acc[key] = {
+          key,
+          name: item.name || 'Unknown',
+          brand: item.brand || 'Unknown',
+          category: item.category || { id: null, name: 'Uncategorized' },
+          purchase_price: parseFloat(item.purchase_price) || 0,
+          image: item.item_image || null,
+          total_count: 0,
+          available_count: 0,
+          borrowed_count: 0,
+          issued_count: 0,
+          created_at: item.created_at || null,
+        };
+      }
+      acc[key].total_count += 1;
+      if (item.status === 'available') acc[key].available_count += 1;
+      if (item.status === 'borrowed') acc[key].borrowed_count += 1;
+      if (item.status === 'issued') acc[key].issued_count += 1;
+      return acc;
+    }, {});
+    
+    return Object.values(grouped);
+  };
+
+  // Build display rows: one row per product, with count of recently added items
+  const getDisplayRows = () => {
+    let products = getFilteredAndSortedEquipment();
+    
+    // If searching, also check individual items and include products with matching items
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      
+      // Find all unique product keys that have matching items
+      const matchingProductKeys = new Set();
+      
+      // First, add products that match at product level (already filtered in getFilteredAndSortedEquipment)
+      products.forEach(p => {
+        matchingProductKeys.add(p.key);
+      });
+      
+      // Then, find products with matching individual items
+      equipment.forEach(item => {
+        // Search in serial number
+        const serialMatch = item.serial_number?.toLowerCase().includes(searchLower);
+        
+        // Search in specs/description
+        const specsMatch = item.specifications?.toLowerCase().includes(searchLower) ||
+                          item.description?.toLowerCase().includes(searchLower);
+        
+        // Search in price (convert to string for searching)
+        const priceMatch = item.purchase_price?.toString().includes(searchTerm);
+        
+        // Search in date (format date and search)
+        let dateMatch = false;
+        if (item.created_at) {
+          const dateStr = new Date(item.created_at).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+          }).toLowerCase();
+          dateMatch = dateStr.includes(searchLower);
+        }
+        
+        if (serialMatch || specsMatch || priceMatch || dateMatch) {
+          const eqKey = `${item.name || 'Unknown'}_${item.brand || 'Unknown'}`;
+          matchingProductKeys.add(eqKey);
+        }
+      });
+      
+      // Get all products (without search filter) to find products with matching items
+      const allProducts = getAllProducts();
+      
+      // Combine products that match at product level OR have matching items
+      const finalProducts = new Map();
+      
+      // Add products that match at product level
+      products.forEach(p => {
+        finalProducts.set(p.key, p);
+      });
+      
+      // Add products that have matching items
+      allProducts.forEach(p => {
+        if (matchingProductKeys.has(p.key) && !finalProducts.has(p.key)) {
+          finalProducts.set(p.key, p);
+        }
+      });
+      
+      products = Array.from(finalProducts.values());
+    }
+    
+    return products.map((p) => {
+      // Get all equipment items for this product
+      let allItems = equipment.filter(eq => {
+        const eqKey = `${eq.name || 'Unknown'}_${eq.brand || 'Unknown'}`;
+        return eqKey === p.key;
+      });
+      
+      // If search term exists, filter items by search criteria
+      if (searchTerm) {
+        const searchLower = searchTerm.toLowerCase();
+        allItems = allItems.filter(item => {
+          // Search in serial number
+          const serialMatch = item.serial_number?.toLowerCase().includes(searchLower);
+          
+          // Search in specs/description
+          const specsMatch = item.specifications?.toLowerCase().includes(searchLower) ||
+                            item.description?.toLowerCase().includes(searchLower);
+          
+          // Search in price (convert to string for searching)
+          const priceMatch = item.purchase_price?.toString().includes(searchTerm);
+          
+          // Search in date (format date and search)
+          let dateMatch = false;
+          if (item.created_at) {
+            const dateStr = new Date(item.created_at).toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric'
+            }).toLowerCase();
+            dateMatch = dateStr.includes(searchLower);
+          }
+          
+          return serialMatch || specsMatch || priceMatch || dateMatch;
+        });
+      }
+      
+      // Get the most recent batch for this product (batches are ordered newest first)
+      const batches = addedBatchesByProduct[p.key] || [];
+      const mostRecentBatch = batches.length > 0 ? batches[0] : null;
+      
+      // Determine which items are from the most recent batch only
+      const recentlyAddedItems = mostRecentBatch ? allItems.filter(item => {
+        // Check if this item's serial is in the most recent batch
+        return mostRecentBatch.serials && mostRecentBatch.serials.includes(item.serial_number);
+      }) : [];
+      
+      return {
+        ...p,
+        allItems: allItems, // All items for dropdown (filtered by search if search term exists)
+        recentlyAddedItems: recentlyAddedItems, // Items to highlight (only from most recent batch)
+        recentlyAddedCount: mostRecentBatch ? mostRecentBatch.count : 0, // Count from most recent batch only
+        mostRecentBatch: mostRecentBatch, // Store the most recent batch for reference
+      };
+    });
   };
 
   const handleInputChange = (e) => {
@@ -231,19 +441,33 @@ const AddStocks = () => {
         }
       });
 
+      // Add CSRF token for Laravel
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      if (csrfToken) {
+        formDataToSend.append('_token', csrfToken);
+      }
+
       const response = await fetch('/api/equipment', {
         method: 'POST',
-        credentials: 'same-origin',
         headers: {
           'Accept': 'application/json',
         },
         body: formDataToSend
       });
 
-      const data = await response.json();
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get('content-type');
+      let data;
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        // If not JSON, it's likely an HTML error page
+        const text = await response.text();
+        throw new Error(`Server returned an error (${response.status}). Please check your connection and try again.`);
+      }
 
       if (!response.ok) {
-        throw new Error(data.message || 'Error adding equipment');
+        throw new Error(data.message || data.error || 'Error adding equipment');
       }
 
       // Trigger equipment update event for dynamic refresh
@@ -347,26 +571,7 @@ const AddStocks = () => {
                         }}
                         className="text-left py-4 px-6 font-semibold text-gray-700 cursor-pointer hover:bg-gray-100"
                       >
-                        <div className="flex items-center">
-                          Items
-                          {sortConfig.key === 'name' && (
-                            <span className="ml-2">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
-                          )}
-                        </div>
-                      </th>
-                      <th 
-                        onClick={() => {
-                          const direction = sortConfig.key === 'serial_number' && sortConfig.direction === 'asc' ? 'desc' : 'asc';
-                          setSortConfig({ key: 'serial_number', direction });
-                        }}
-                        className="text-left py-4 px-6 font-semibold text-gray-700 cursor-pointer hover:bg-gray-100"
-                      >
-                        <div className="flex items-center">
-                          Serial Number
-                          {sortConfig.key === 'serial_number' && (
-                            <span className="ml-2">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
-                          )}
-                        </div>
+                        <div className="flex items-center">Items{sortConfig.key === 'name' && (<span className="ml-2">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>)}</div>
                       </th>
                       <th 
                         onClick={() => {
@@ -375,46 +580,29 @@ const AddStocks = () => {
                         }}
                         className="text-left py-4 px-6 font-semibold text-gray-700 cursor-pointer hover:bg-gray-100"
                       >
-                        <div className="flex items-center">
-                          Category
-                          {sortConfig.key === 'category' && (
-                            <span className="ml-2">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
-                          )}
-                        </div>
+                        <div className="flex items-center">Category{sortConfig.key === 'category' && (<span className="ml-2">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>)}</div>
                       </th>
-                      <th className="text-left py-4 px-6 font-semibold text-gray-700">Status</th>
-                      <th 
-                        onClick={() => {
-                          const direction = sortConfig.key === 'price' && sortConfig.direction === 'asc' ? 'desc' : 'asc';
-                          setSortConfig({ key: 'price', direction });
-                        }}
-                        className="text-left py-4 px-6 font-semibold text-gray-700 cursor-pointer hover:bg-gray-100"
-                      >
-                        <div className="flex items-center">
-                          Price
-                          {sortConfig.key === 'price' && (
-                            <span className="ml-2">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
-                          )}
-                        </div>
-                      </th>
-                      <th className="text-left py-4 px-6 font-semibold text-gray-700">Date Added</th>
-                      <th className="text-left py-4 px-6 font-semibold text-gray-700">Actions</th>
+                      <th className="text-right py-4 px-6 font-semibold text-gray-700">Added</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {getFilteredAndSortedEquipment().map((item, index) => (
+                    {getDisplayRows().map((item, index) => {
+                      const rowId = `${item.key}`;
+                      const isOpen = !!expandedRows[rowId];
+                      return (
+                      <React.Fragment key={rowId}>
                       <tr 
-                        key={item.id}
                         className={`
                           ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'} 
-                          hover:bg-blue-50 transition-colors duration-150 border-b border-gray-100 last:border-b-0
+                          hover:bg-blue-50 transition-colors duration-150 border-b border-gray-100 last:border-b-0 cursor-pointer
                         `}
+                        onClick={() => toggleExpanded(rowId)}
                       >
                         <td className="py-4 px-6">
                           <div className="flex items-center">
-                            {item.item_image ? (
+                            {item.image ? (
                               <img 
-                                src={`/storage/${item.item_image}`} 
+                                src={`/storage/${item.image}`} 
                                 alt={item.name}
                                 className="w-10 h-10 rounded-lg object-cover mr-3"
                               />
@@ -429,55 +617,106 @@ const AddStocks = () => {
                             </div>
                           </div>
                         </td>
-                        <td className="py-4 px-6 text-gray-700">{item.serial_number}</td>
                         <td className="py-4 px-6 text-gray-700">
                           {item.category?.name || 'Uncategorized'}
                         </td>
-                        <td className="py-4 px-6">
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium
-                            ${item.status === 'available' ? 'bg-green-100 text-green-800' : ''}
-                            ${item.status === 'borrowed' ? 'bg-blue-100 text-blue-800' : ''}
-                            ${item.status === 'issued' ? 'bg-orange-100 text-orange-800' : ''}
-                          `}>
-                            {item.status.replace('_', ' ')}
-                          </span>
-                        </td>
-                        <td className="py-4 px-6 text-gray-700 font-medium">
-                          ₱{Number(item.purchase_price).toLocaleString(undefined, {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2
-                          })}
-                        </td>
-                        <td className="py-4 px-6 text-gray-700 text-sm">
-                          {item.created_at ? new Date(item.created_at).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric'
-                          }) : 'N/A'}
-                        </td>
-                        <td className="py-4 px-6">
-                          <button 
-                            onClick={() => {
-                              setSelectedEquipment(item);
-                              setIsAddStocksOpen(true);
-                            }}
-                            className="p-2 rounded-lg bg-gray-50 text-gray-600 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                            title="Add Stock"
-                          >
-                            <Plus className="h-4 w-4" />
-                          </button>
+                        <td className="py-4 px-6 text-gray-700 font-semibold text-right">
+                          {item.recentlyAddedCount > 0 ? `+${item.recentlyAddedCount}` : '+0'}
                         </td>
                       </tr>
-                    ))}
+                      {isOpen && (
+                        <tr className="bg-white border-b border-gray-100">
+                          <td colSpan={3} className="px-6 py-4">
+                            <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+                              <div className="bg-gray-100 px-4 py-3 border-b border-gray-200">
+                                <div className="grid grid-cols-5 gap-4 text-xs font-semibold text-gray-700">
+                                  <div>Serial</div>
+                                  <div>Specs</div>
+                                  <div className="text-right">Price</div>
+                                  <div>Date Added</div>
+                                  <div>Receipt</div>
+                                </div>
+                              </div>
+                              <div className="divide-y divide-gray-200 max-h-64 overflow-y-auto">
+                                {(item.allItems || []).map((equipmentItem, i) => {
+                                  const isRecentlyAdded = item.recentlyAddedItems.some(rai => rai.id === equipmentItem.id);
+                                  const addedDate = equipmentItem.created_at 
+                                    ? new Date(equipmentItem.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                                    : 'N/A';
+                                  
+                                  return (
+                                    <div 
+                                      key={`${rowId}-item-${equipmentItem.id}`} 
+                                      className={`px-4 py-3 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'} ${isRecentlyAdded ? 'bg-blue-50 border-l-4 border-blue-500' : ''}`}
+                                    >
+                                      <div className="grid grid-cols-5 gap-4 items-center text-sm">
+                                        <div className="font-medium text-gray-900">
+                                          {equipmentItem.serial_number || 'N/A'}
+                                          {isRecentlyAdded && (
+                                            <span className="ml-2 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-xs font-semibold">
+                                              NEW
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="text-gray-700 truncate">
+                                          {equipmentItem.specifications || equipmentItem.description || '—'}
+                                        </div>
+                                        <div className="text-right text-gray-800">
+                                          ₱{Number(equipmentItem.purchase_price || 0).toLocaleString(undefined, { 
+                                            minimumFractionDigits: 2, 
+                                            maximumFractionDigits: 2 
+                                          })}
+                                        </div>
+                                        <div className="text-gray-700">
+                                          {addedDate}
+                                          {isRecentlyAdded && (
+                                            <span className="ml-1 text-blue-600 text-xs font-medium">(New)</span>
+                                          )}
+                                        </div>
+                                        <div>
+                                          {(() => {
+                                            const receiptUrl = equipmentItem.receipt_image_url || 
+                                                              (equipmentItem.receipt_image ? `/storage/${equipmentItem.receipt_image}` : null);
+                                            return receiptUrl ? (
+                                              <img 
+                                                src={receiptUrl} 
+                                                alt="Receipt" 
+                                                className="h-10 w-auto object-contain bg-white rounded border cursor-pointer hover:opacity-80 transition-opacity"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setReceiptPreview({ src: receiptUrl, alt: `Receipt - ${equipmentItem.serial_number || 'Item'}` });
+                                                }}
+                                                onError={(e) => { e.currentTarget.style.display = 'none'; }} 
+                                              />
+                                            ) : (
+                                              <span className="text-gray-400 text-xs">No receipt</span>
+                                            );
+                                          })()}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                                {(!item.allItems || item.allItems.length === 0) && (
+                                  <div className="px-4 py-3 bg-white text-sm text-gray-500">No items found for this product.</div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      </React.Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               )}
             </div>
             {equipment.length > 0 && (
               <div className="flex items-center justify-between p-4 border-t border-gray-200">
-                <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-4">
                   <span className="text-sm text-gray-600 font-medium">
-                    Total: {getFilteredAndSortedEquipment().length} {getFilteredAndSortedEquipment().length === 1 ? 'item' : 'items'}
+                    Total: {getDisplayRows().length} {getDisplayRows().length === 1 ? 'item' : 'items'}
                   </span>
                   <div className="flex items-center space-x-2">
                     <button
@@ -491,7 +730,7 @@ const AddStocks = () => {
                     </button>
                     <button
                       onClick={() => setCurrentPage(prev => prev + 1)}
-                      disabled={currentPage * itemsPerPage >= equipment.length}
+                      disabled={currentPage * itemsPerPage >= getDisplayRows().length}
                       className="p-1 rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -525,6 +764,19 @@ const AddStocks = () => {
             selectedEquipment={selectedEquipment}
             categories={categories}
             onSuccess={fetchEquipment}
+            onAdded={(productKey, count, meta) => {
+              const now = new Date().toISOString();
+              setAddedBatchesByProduct(prev => ({
+                ...prev,
+                [productKey]: [
+                  { count, at: now, ...meta },
+                  ...(prev[productKey] || []),
+                ],
+              }));
+              
+              // Refresh equipment to get the newly added items
+              fetchEquipment();
+            }}
           />
         )}
         {isAddItemOpen && (
@@ -534,6 +786,33 @@ const AddStocks = () => {
             onSuccess={fetchEquipment}
           />
         )}
+
+        {/* Receipt Lightbox Modal */}
+        {receiptPreview && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/80" onClick={() => setReceiptPreview(null)} />
+            <div className="relative max-w-5xl w-full max-h-[95vh] px-4">
+              <button
+                onClick={() => setReceiptPreview(null)}
+                className="absolute -top-10 right-6 text-white/80 hover:text-white transition-colors"
+                aria-label="Close preview"
+              >
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              <img
+                src={receiptPreview.src}
+                alt={receiptPreview.alt || 'Receipt preview'}
+                className="mx-auto max-h-[90vh] w-auto object-contain rounded-lg shadow-2xl"
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = '/images/placeholder-equipment.png';
+                }}
+              />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -542,7 +821,7 @@ const AddStocks = () => {
 export default AddStocks;
 
 // New AddStocksModal Component with Three Progressive Modes
-const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess }) => {
+const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess, onAdded }) => {
   const [currentMode, setCurrentMode] = useState('category'); // 'category', 'product', 'serial'
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -566,12 +845,18 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
       setLoading(true);
       // Fetch all equipment for the category without pagination limits
       const response = await fetch(`/api/equipment?category_id=${categoryId}&per_page=1000`, {
-        credentials: 'same-origin',
         headers: {
           'Accept': 'application/json',
         },
       });
-      const data = await response.json();
+      
+      const contentType = response.headers.get('content-type');
+      let data;
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        throw new Error('Server returned non-JSON response');
+      }
       
       if (data.success) {
         // Group equipment by name/brand to show only item types, not individual units
@@ -690,31 +975,56 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
       formData.append('serial_numbers', JSON.stringify(serialNumbers));
       formData.append('receipt_image', receipt);
 
+      // Add CSRF token for Laravel
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      if (csrfToken) {
+        formData.append('_token', csrfToken);
+      }
+
       const response = await fetch('/api/equipment/add-stock', {
         method: 'POST',
-        credentials: 'same-origin',
         headers: {
           'Accept': 'application/json',
         },
         body: formData,
       });
 
-      const data = await response.json();
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get('content-type');
+      let data;
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        // If not JSON, it's likely an HTML error page
+        const text = await response.text();
+        throw new Error(`Server returned an error (${response.status}). Please check your connection and try again.`);
+      }
 
       if (!response.ok) {
-        throw new Error(data.message || 'Error adding stocks');
+        throw new Error(data.message || data.error || 'Error adding stocks');
       }
 
       // Trigger equipment update event for dynamic refresh
       window.dispatchEvent(new Event('equipment:updated'));
       
-      if (onSuccess) onSuccess();
-      onClose();
+      // Inform parent how many were added and include batch meta for dropdown (before closing)
+      if (onAdded && selectedProduct) {
+        const productKey = `${selectedProduct.name || 'Unknown'}_${selectedProduct.brand || 'Unknown'}`;
+        onAdded(productKey, serialNumbers.length, {
+          serials: [...serialNumbers],
+          specs: selectedProduct?.specifications || '',
+          price: selectedProduct?.purchase_price || 0,
+          receiptUrl: receiptPreview || null,
+        });
+      }
       
       // Refresh the products list to show updated counts
       if (selectedCategory) {
         await fetchProducts(selectedCategory.id);
       }
+
+      if (onSuccess) onSuccess();
+      onClose();
     } catch (error) {
       setErrors({ submit: error.message });
     } finally {
@@ -885,7 +1195,7 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
             {/* Serial Numbers */}
             <div className="mb-6">
               <label className="text-sm text-gray-600 mb-2 block">Serial Numbers</label>
-              <div className={`space-y-3 ${serialNumbers.length >= 4 ? 'max-h-48 overflow-y-auto select-scrollbar' : ''}`}>
+              <div className="space-y-3 max-h-48 overflow-y-auto">
                 {serialNumbers.map((serial, idx) => (
                   <div key={idx} className="flex items-center space-x-3">
                     <label className="text-sm text-gray-500 w-20">Serial No.</label>
@@ -1112,20 +1422,34 @@ const AddItemModal = ({ onClose, categories = [], onSuccess }) => {
         formDataToSend.append('receipt_image', formData.receipt_image);
       }
 
+      // Add CSRF token for Laravel
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      if (csrfToken) {
+        formDataToSend.append('_token', csrfToken);
+      }
+
       const response = await fetch('/api/equipment', {
         method: 'POST',
-        credentials: 'same-origin',
         headers: {
           'Accept': 'application/json',
         },
         body: formDataToSend,
       });
 
-      const data = await response.json();
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get('content-type');
+      let data;
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        // If not JSON, it's likely an HTML error page
+        const text = await response.text();
+        throw new Error(`Server returned an error (${response.status}). Please check your connection and try again.`);
+      }
 
       if (!response.ok) {
         console.error('Server response:', data);
-        throw new Error(data.message || 'Error adding equipment');
+        throw new Error(data.message || data.error || 'Error adding equipment');
       }
 
       // Trigger equipment update event for dynamic refresh
