@@ -22,7 +22,7 @@ use App\Http\Controllers\ProfileController;
 Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/auth/reset-password', [AuthController::class, 'resetPassword']);
 
-<<<<<<< HEAD
+ 
 // Protected API routes (require authentication)
 Route::middleware(['web', 'auth'])->group(function () {
     Route::get('/user', function (Request $request) {
@@ -41,7 +41,7 @@ Route::middleware(['web', 'auth'])->group(function () {
     Route::delete('/employees/{id}', [EmployeeController::class, 'destroy']);
     Route::post('/employees/{id}/connect-user', [EmployeeController::class, 'connectUser']);
     Route::post('/employees/{id}/disconnect-user', [EmployeeController::class, 'disconnectUser']);
-=======
+
 // Employee routes
 Route::get('/employees', [EmployeeController::class, 'index']);
 Route::get('/employees/current-holders', [EmployeeController::class, 'currentHolders']);
@@ -69,7 +69,7 @@ Route::post('/requests/{id}/reject', [RequestController::class, 'reject']);
 Route::post('/requests/{id}/cancel', [RequestController::class, 'cancel']);
 Route::post('/requests/{id}/fulfill', [RequestController::class, 'fulfill']);
 Route::get('/requests/statistics', [RequestController::class, 'statistics']);
->>>>>>> 37db8905f6e79ced9ba389b3cc2005abea9ce811
+
 
     // Request routes
     Route::get('/requests', [RequestController::class, 'index']);
@@ -139,8 +139,7 @@ Route::get('/requests/statistics', [RequestController::class, 'statistics']);
     Route::get('/reports/overview', [ReportController::class, 'overview']);
     Route::get('/reports/export', [ReportController::class, 'exportCsv']);
 });
-<<<<<<< HEAD
-=======
+ 
 
 // Activity Logs API routes moved to web.php to use session authentication
 
@@ -155,4 +154,4 @@ Route::get('/reports/export', [ReportController::class, 'exportCsv']);
 use App\Http\Controllers\Api\DashboardController;
 Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);
 Route::get('/dashboard/counts', [DashboardController::class, 'getCounts']);
->>>>>>> 37db8905f6e79ced9ba389b3cc2005abea9ce811
+
