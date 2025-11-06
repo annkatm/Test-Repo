@@ -12,8 +12,6 @@ const OnProcessTransactions = ({
 }) => {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [list, setList] = useState(requests || []);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [isDeniedModalOpen, setIsDeniedModalOpen] = useState(false);
   const [isViewAllOpen, setIsViewAllOpen] = useState(false);
@@ -22,11 +20,6 @@ const OnProcessTransactions = ({
   const [pageSize, setPageSize] = useState(10); // page size not used for the main scroll list
 
   const totalPages = Math.max(1, Math.ceil((list?.length || 0) / pageSize));
-
-  // Keep local list in sync with parent-provided requests to avoid any visual delay
-  useEffect(() => {
-    setList(Array.isArray(requests) ? requests : []);
-  }, [requests]);
   const paginatedRequests = useMemo(() => {
     const start = (page - 1) * pageSize;
     const end = start + pageSize;
@@ -34,205 +27,17 @@ const OnProcessTransactions = ({
   }, [list, page, pageSize]);
 
   const selectedRequestData = (list || []).find(req => req.id === selectedRequest);
-  const [selectedEquipment, setSelectedEquipment] = useState(null);
 
   useEffect(() => {
     setList(Array.isArray(requests) ? requests : []);
   }, [requests]);
 
-  const mapPending = (arr) => {
-    const list = Array.isArray(arr) ? arr : [];
-    return list.map((r, idx) => ({
-      id: r.id ?? idx + 1,
-      date: r.created_at ? new Date(r.created_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : (r.date || ''),
-      item: r.equipment_name || r.item || r.title || 'Item',
-      brand: r.brand || r.equipment?.brand || '',
-      model: r.model || r.equipment?.model || '',
-      status: r.status || 'Pending',
-      equipment_id: r.equipment_id || r.equipment?.id,
-      category: r.category_name || r.equipment?.category_name || r.type || r.equipment_type || '',
-      details: Array.isArray(r.details) ? r.details : []
-    }));
-  };
-
-  const fetchCurrentEmployeeId = async () => {
-    try {
-      const userRes = await fetch('/check-auth', { credentials: 'same-origin' });
-      const userData = await userRes.json();
-      const user = userData?.user || {};
-      // 1) direct numeric employee_id
-      if (userData?.authenticated && user?.employee_id) {
-        const raw = user.employee_id;
-        const numId = Number(raw);
-        if (Number.isFinite(numId) && String(numId) !== '0') return numId;
-      }
-      // 2) linked_employee_id endpoint
-      if (userData?.authenticated && user?.linked_employee_id) {
-        try {
-          const empRes = await fetch(`/api/employees/${user.linked_employee_id}`, { credentials: 'same-origin' });
-          const empData = await empRes.json();
-          const emp = empData?.data || empData;
-          if (emp && emp.id) return emp.id;
-        } catch (_) {}
-      }
-      // 3) employees?user_id
-      if (userData?.authenticated && user?.id) {
-        try {
-          const empRes = await fetch(`/api/employees?user_id=${user.id}`, { credentials: 'same-origin' });
-          const empData = await empRes.json();
-          const employees = Array.isArray(empData) ? empData : (Array.isArray(empData?.data) ? empData.data : []);
-          if (employees.length > 0) return employees[0].id;
-        } catch (_) {}
-      }
-      // 4) fallback: match any employee by email/name
-      try {
-        const allRes = await fetch('/api/employees', { credentials: 'same-origin' });
-        const allData = await allRes.json();
-        const list = Array.isArray(allData) ? allData : (Array.isArray(allData?.data) ? allData.data : []);
-        if (user?.email) {
-          const byEmail = list.find(e => (e.email || '').toLowerCase() === String(user.email).toLowerCase());
-          if (byEmail) return byEmail.id;
-        }
-        if (user?.name) {
-          const parts = String(user.name).trim().split(/\s+/);
-          const first = parts[0] || '';
-          const last = parts.length > 1 ? parts[parts.length - 1] : '';
-          const byName = list.find(e => String(e.first_name || '').toLowerCase() === first.toLowerCase() && String(e.last_name || '').toLowerCase() === last.toLowerCase());
-          if (byName) return byName.id;
-        }
-      } catch (_) {}
-    } catch (_) {}
-    return null;
-  };
-
-  const loadPending = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const employeeId = await fetchCurrentEmployeeId();
-      // also keep current user for client-side filter fallback
-      let currentUser = null;
-      try {
-        const ur = await fetch('/check-auth', { credentials: 'same-origin' });
-        const uj = await ur.json();
-        currentUser = uj?.user || null;
-      } catch (_) {}
-      let url = '/api/requests?status=pending';
-      if (employeeId) url += `&employee_id=${encodeURIComponent(employeeId)}`;
-      let raw = [];
-      try {
-        const res = await fetch(url, { credentials: 'same-origin' });
-        const data = await res.json();
-        if (Array.isArray(data)) raw = data; else if (Array.isArray(data?.data)) raw = data.data; else if (Array.isArray(data?.data?.data)) raw = data.data.data;
-      } catch (_) { raw = []; }
-      // Fallback: if nothing returned for scoped call, try unscoped and filter client-side
-      if ((!raw || raw.length === 0)) {
-        try {
-          const res2 = await fetch('/api/requests?status=pending', { credentials: 'same-origin' });
-          const d2 = await res2.json();
-          let arr = Array.isArray(d2) ? d2 : (Array.isArray(d2?.data) ? d2.data : (Array.isArray(d2?.data?.data) ? d2.data.data : []));
-          if (employeeId) {
-            arr = (arr || []).filter(r => String(r?.employee_id || r?.employee?.id || '') === String(employeeId));
-          } else if (currentUser?.id) {
-            arr = (arr || []).filter(r => String(r?.user_id || r?.employee?.user_id || '') === String(currentUser.id));
-          }
-          raw = arr || [];
-        } catch (_) {}
-      }
-      const mapped = mapPending(raw.map(r => ({
-        ...r,
-        equipment_name: r?.equipment_name || r?.equipment?.name || r?.item || r?.title,
-        brand: r?.brand || r?.equipment?.brand || r?.equipment_brand,
-        model: r?.model || r?.equipment?.model || r?.equipment_model,
-        equipment_id: r?.equipment_id || r?.equipment?.id,
-        category_name: r?.category_name || r?.equipment?.category_name || r?.equipment_type,
-      })));
-      // Merge any locally created queue entries to avoid flicker
-      try {
-        const rawQueue = localStorage.getItem('ireply_created_queue');
-        const queued = Array.isArray(JSON.parse(rawQueue)) ? JSON.parse(rawQueue) : [];
-        const mappedQueued = mapPending(queued);
-        const seen = new Set(mapped.map(x => String(x.id)));
-        const merged = [...mappedQueued.filter(x => !seen.has(String(x.id))), ...mapped];
-        setList(merged);
-      } catch (_) {
-        setList(mapped);
-      }
-    } catch (e) {
-      setError('Failed to load pending requests');
-      setList([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadPending();
-    try {
-      const raw = localStorage.getItem('ireply_created_queue');
-      const arr = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
-      if (arr && arr.length > 0) setList(prev => {
-        const base = Array.isArray(prev) ? prev : [];
-        const mapped = mapPending(arr);
-        const exist = new Set(base.map(x => String(x.id)));
-        const merged = [...mapped.filter(x => !exist.has(String(x.id))), ...base];
-        return merged;
-      });
-    } catch (_) {}
-
-    const onCreated = (e) => {
-      const d = e?.detail || {};
-      if (!d) return;
-      setList(prev => {
-        const base = Array.isArray(prev) ? prev : [];
-        const mapped = mapPending([d]);
-        const exist = new Set(base.map(x => String(x.id)));
-        const add = mapped.filter(x => !exist.has(String(x.id)));
-        return [...add, ...base];
-      });
-    };
-    const onCancelled = (e) => {
-      const reqId = e?.detail?.request_id;
-      const equipId = e?.detail?.equipment_id;
-      setList(prev => Array.isArray(prev) ? prev.filter(r => (reqId ? String(r.id) !== String(reqId) : true) && (equipId ? String(r.equipment_id || '') !== String(equipId) : true)) : prev);
-    };
-    const onApproved = (e) => {
-      const reqId = e?.detail?.request_id;
-      const equipId = e?.detail?.equipment_id;
-      setList(prev => Array.isArray(prev) ? prev.filter(r => (reqId ? String(r.id) !== String(reqId) : true) && (equipId ? String(r.equipment_id || '') !== String(equipId) : true)) : prev);
-    };
-    window.addEventListener('ireply:request:created', onCreated);
-    window.addEventListener('ireply:request:cancelled', onCancelled);
-    window.addEventListener('ireply:request:approved', onApproved);
-    return () => {
-      window.removeEventListener('ireply:request:created', onCreated);
-      window.removeEventListener('ireply:request:cancelled', onCancelled);
-      window.removeEventListener('ireply:request:approved', onApproved);
-    };
-  }, []);
-
   const handleRowClick = (request) => {
     setSelectedRequest(request.id);
   };
 
-  // Fetch equipment details for the selected request to resolve serial/category/brand/model when missing
-  useEffect(() => {
-    const equipId = selectedRequestData?.equipment_id;
-    if (!equipId) { setSelectedEquipment(null); return; }
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(`/api/equipment/${equipId}`, { credentials: 'same-origin' });
-        const j = await res.json().catch(() => ({}));
-        const payload = j && (j.data || j);
-        if (!cancelled && payload && typeof payload === 'object') setSelectedEquipment(payload);
-      } catch (_) { if (!cancelled) setSelectedEquipment(null); }
-    })();
-    return () => { cancelled = true; };
-  }, [selectedRequestData?.equipment_id]);
-
   return (
-    <div className="h-full min-h-0 bg-white p-4 sm:p-6 lg:p-8">
+    <div className="h-full min-h-0 bg-gray-50 p-4 sm:p-6 lg:p-8">
       {/* Hide scrollbars but keep scroll behavior */}
       <style>
         {`
@@ -356,24 +161,20 @@ const OnProcessTransactions = ({
                     <div className="mb-6 grid grid-cols-2 gap-4 text-sm">
                       <div>
                         <div className="text-gray-500">Item</div>
-                        <div className="text-gray-900 font-semibold">{
-                          selectedRequestData.category ||
-                          selectedEquipment?.category_name ||
-                          (typeof selectedEquipment?.category === 'string'
-                            ? selectedEquipment?.category
-                            : (selectedEquipment?.category?.name || selectedEquipment?.category?.title)) ||
-                          selectedRequestData.item || '-'
-                        }</div>
+                        <div className="text-gray-900 font-semibold">{selectedRequestData.item || '-'}</div>
                       </div>
                       <div>
                         <div className="text-gray-500">Brand</div>
-                        <div className="text-gray-900 font-semibold">{selectedRequestData.brand || selectedEquipment?.brand || '-'}</div>
+                        <div className="text-gray-900 font-semibold">{selectedRequestData.brand || '-'}</div>
                       </div>
                       <div>
-                        <div className="text-gray-500">Serial No.</div>
-                        <div className="text-gray-900 font-semibold">{selectedEquipment?.serial_number || selectedEquipment?.serial || '-'}</div>
+                        <div className="text-gray-500">Model</div>
+                        <div className="text-gray-900 font-semibold">{selectedRequestData.model || '-'}</div>
                       </div>
-                      
+                      <div>
+                        <div className="text-gray-500">Request No.</div>
+                        <div className="text-gray-900 font-semibold">{selectedRequestData.number || selectedRequestData.request_number || '-'}</div>
+                      </div>
                       <div>
                         <div className="text-gray-500">Date</div>
                         <div className="text-gray-900 font-semibold">{selectedRequestData.date || '-'}</div>
@@ -384,12 +185,31 @@ const OnProcessTransactions = ({
                           {selectedRequestData.status || '-'}
                         </div>
                       </div>
+                      <div className="col-span-2">
+                        <div className="text-gray-500">Reason</div>
+                        <div className="text-gray-800">{selectedRequestData.reason || '—'}</div>
+                      </div>
                     </div>
                   ) : (
                     <div className="mb-6 text-sm text-gray-500">Select a request to see details.</div>
                   )}
 
-                  
+                  {/* Dynamic items based on selected request */}
+                  {selectedRequestData?.details.map((item, index) => (
+                    <div
+                      key={index}
+                      className={`flex items-start gap-4 pb-4 ${index < selectedRequestData.details.length - 1 ? 'mb-4 border-b border-gray-100' : 'mb-6'
+                        }`}
+                    >
+                      <div className="w-12 h-12 bg-gray-50 rounded-lg flex items-center justify-center border border-gray-200 shrink-0">
+                        <img src={item.icon} alt={item.name} className="w-7 h-7 object-contain" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-gray-900 mb-1">{item.name}</p>
+                        <p className="text-base text-gray-600 leading-relaxed">{item.description}</p>
+                      </div>
+                    </div>
+                  ))}
 
                   {/* Cancel Request Button */}
                   <button
@@ -397,6 +217,26 @@ const OnProcessTransactions = ({
                     className="w-full bg-red-50 text-red-600 font-medium px-4 py-2.5 rounded-lg hover:bg-red-100 transition-colors border border-red-200"
                   >
                     Cancel Request
+                  </button>
+                </div>
+
+                {/* Denied Request Card */}
+                <div className="bg-blue-600 rounded-2xl p-6 text-white shadow-lg">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-medium opacity-90">Denied Request</h3>
+                    <div className="w-10 h-10 bg-white bg-opacity-25 rounded-full flex items-center justify-center">
+                      <div className="w-4 h-4 bg-white bg-opacity-50 rounded-full"></div>
+                    </div>
+                  </div>
+                  <div className="text-4xl font-bold mb-4">{deniedRequests?.length || 0}</div>
+                  <button
+                    onClick={async () => {
+                      const fetched = await fetchDeniedRequests();
+                      setIsDeniedModalOpen(true);
+                    }}
+                    className="w-full text-sm bg-blue-700 text-white px-4 py-2 rounded-md hover:bg-blue-800 transition"
+                  >
+                    View All
                   </button>
                 </div>
               </div>
@@ -413,9 +253,7 @@ const OnProcessTransactions = ({
               onClick={() => setIsCancelModalOpen(false)}
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-100 rounded-lg"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X size={20} />
             </button>
             <h2 className="text-sm font-semibold text-gray-900 mb-6">Cancel Confirmation</h2>
 
@@ -449,95 +287,153 @@ const OnProcessTransactions = ({
                   try {
                     const reqId = selectedRequestData?.id;
                     const equipId = selectedRequestData?.equipment_id || selectedRequestData?.equipment?.id || selectedRequestData?.equipmentId || selectedRequestData?.item_id || null;
-                    
-                    // Cancel the request via API
+                    // Attempt to cancel via common endpoints (non-fatal if fail)
                     if (reqId) {
                       const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
                       const baseHeaders = { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
                       const headers = csrf ? { ...baseHeaders, 'X-CSRF-TOKEN': csrf } : baseHeaders;
-                      
-                      try {
-                        const response = await fetch(`/api/requests/${reqId}/cancel`, { 
-                          method: 'POST', 
-                          headers, 
-                          credentials: 'same-origin' 
-                        });
-                        
-                        const data = await response.json();
-                        
-                        if (response.ok && data.success) {
-                          console.log('Request cancelled successfully:', data);
-                          
-                          // Only dispatch events if cancel was successful
-                          // Notify EmployeeHome to restore this equipment to the available list
-                          if (equipId) {
-                            try {
-                              const key = 'ireply_restore_queue';
-                              const raw = localStorage.getItem(key);
-                              const arr = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
-                              if (!arr.includes(String(equipId))) arr.push(String(equipId));
-                              localStorage.setItem(key, JSON.stringify(arr));
-                            } catch (_) {}
-                            
-                            try { 
-                              window.dispatchEvent(new CustomEvent('ireply:equipment:restore', { 
-                                detail: { equipment_id: equipId } 
-                              })); 
-                            } catch (_) {}
-                          }
-                          
-                          // Tell dashboards to drop this request from any pending/on-process lists
-                          try { 
-                            window.dispatchEvent(new CustomEvent('ireply:request:cancelled', { 
-                              detail: { 
-                                request_id: reqId, 
-                                equipment_id: equipId,
-                                equipment_name: selectedRequestData?.item || selectedRequestData?.equipment_name
-                              } 
-                            })); 
-                            console.log('[OnProcessTransactions] Dispatched ireply:request:cancelled event for request', reqId);
-                          } catch (_) {}
-                          
-                          // Remove from local On Process list
-                          setList((prev) => {
-                            if (!Array.isArray(prev)) return prev;
-                            return prev.filter(r => String(r.id) !== String(reqId));
-                          });
-                        } else {
-                          console.warn('Cancel request returned non-success:', data);
-                          alert('Failed to cancel request: ' + (data.message || 'Unknown error'));
-                          return; // Don't proceed if cancel failed
-                        }
-                      } catch (error) {
-                        console.error('Error cancelling request:', error);
-                        alert('Error cancelling request. Please try again.');
-                        return; // Don't proceed if error
-                      }
+                      try { await fetch(`/api/requests/${reqId}/cancel`, { method: 'POST', headers, credentials: 'same-origin' }); } catch (_) {}
+                      try { await fetch(`/api/requests/${reqId}`, { method: 'DELETE', headers, credentials: 'same-origin' }); } catch (_) {}
                     }
-                    
-                    // Close modal and go back
+                    // Notify EmployeeHome to restore this equipment to the available list and un-reserve it for this user
+                    if (equipId) {
+                      // Persist a restore request so EmployeeHome can process it even if not mounted yet
+                      try {
+                        const key = 'ireply_restore_queue';
+                        const raw = localStorage.getItem(key);
+                        const arr = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
+                        if (!arr.includes(String(equipId))) arr.push(String(equipId));
+                        localStorage.setItem(key, JSON.stringify(arr));
+                      } catch (_) {}
+                      // Also dispatch a live event for when EmployeeHome is mounted
+                      try { window.dispatchEvent(new CustomEvent('ireply:equipment:restore', { detail: { equipment_id: equipId } })); } catch (_) {}
+                    } else {
+                      // If missing, still ask for a general refresh
+                      try { window.dispatchEvent(new CustomEvent('ireply:equipment:restore')); } catch (_) {}
+                    }
+                    // Tell dashboards to drop this request from any pending/on-process lists
+                    try { window.dispatchEvent(new CustomEvent('ireply:request:cancelled', { detail: { request_id: reqId, equipment_id: equipId } })); } catch (_) {}
+                    // Optimistically remove from local On Process list
+                    try { setList((prev) => (Array.isArray(prev) ? prev.filter(r => String(r.id) !== String(reqId) && String(r.equipment_id || '') !== String(equipId || '')) : prev)); } catch (_) {}
+                  } finally {
                     setIsCancelModalOpen(false);
                     setSelectedRequest(null);
-                    
-                    // Only go back if list is now empty, otherwise stay on page
-                    setTimeout(() => {
-                      const remainingCount = (list || []).filter(r => String(r.id) !== String(reqId)).length;
-                      if (remainingCount === 0) {
-                        onBack();
-                      }
-                    }, 100);
-                    
-                  } catch (error) {
-                    console.error('Error in cancel handler:', error);
-                  } finally {
+                    onBack();
                     setActionLoading(false);
                   }
                 }}
                 disabled={actionLoading}
                 className="px-8 py-2.5 bg-blue-600 text-white rounded-lg font-medium text-sm hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {actionLoading ? 'Cancelling...' : 'Confirm'}
+                Confirm
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Denied Requests Modal */}
+      {isDeniedModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm">
+          <div className="relative w-full max-w-6xl max-h-[90vh] bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
+              <h2 className="text-xl font-bold text-blue-600">Denied Requests</h2>
+              <button
+                onClick={() => setIsDeniedModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-100 rounded-lg"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+              {/* Table Section */}
+              <div className="overflow-x-auto max-h-[50vh] overflow-y-auto no-scrollbar">
+                <table className="w-full min-w-[480px]">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-gray-50">
+                      <th className="text-left p-3 text-base font-semibold text-gray-800">Date</th>
+                      <th className="text-left p-3 text-base font-semibold text-gray-800">Item</th>
+                      <th className="text-left p-3 text-base font-semibold text-gray-800">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {deniedRequests.map((request) => (
+                      <tr
+                        key={request.id}
+                        onClick={() => setSelectedRequest(request.id)}
+                        className={`cursor-pointer hover:bg-blue-50 transition-colors border-b border-gray-100 ${selectedRequest === request.id ? 'bg-blue-100' : ''
+                          }`}
+                      >
+                        <td className="p-3 text-base text-gray-800 font-semibold">{request.date}</td>
+                        <td className="p-3 text-base text-gray-800 font-semibold">{request.item}</td>
+                        <td className="p-3 text-sm">
+                          <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                            {request.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Inspect Section */}
+              <div className="w-full md:w-80 lg:w-96 bg-gray-50 p-6 border-t md:border-t-0 md:border-l border-gray-200 flex flex-col gap-4 overflow-y-auto">
+                <h3 className="font-semibold text-gray-800 text-lg">Inspect</h3>
+
+                {selectedRequest ? (
+                  <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
+                    <p className="font-semibold text-gray-800">
+                      {deniedRequests.find(r => r.id === selectedRequest)?.item}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      {deniedRequests.find(r => r.id === selectedRequest)?.brand}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      {deniedRequests.find(r => r.id === selectedRequest)?.model}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200 text-center">
+                    <p className="text-gray-500 text-sm">Select a request to inspect</p>
+                  </div>
+                )}
+
+                <div>
+                  <h4 className="font-semibold text-gray-800 mb-2 text-sm">View Denied Reason</h4>
+                  <textarea
+                    value={
+                      selectedRequest
+                        ? deniedRequests.find(r => r.id === selectedRequest)?.reason || ''
+                        : ''
+                    }
+                    readOnly
+                    placeholder="No request selected"
+                    className="w-full bg-gray-50 rounded-lg border border-gray-300 p-3 min-h-[100px] text-base text-gray-800 resize-none focus:outline-none cursor-default"
+                  />
+                </div>
+
+                <button
+                  disabled={!selectedRequest || actionLoading}
+                  onClick={() => {
+                    if (!selectedRequest || actionLoading) return;
+                    setActionLoading(true);
+                    setTimeout(() => {
+                      setIsDeniedModalOpen(false);
+                      setSelectedRequest(null);
+                      onBack();
+                      setActionLoading(false);
+                    }, 1000);
+                  }}
+                  className={`w-full py-2.5 rounded-lg font-medium text-sm shadow-sm transition-all ${selectedRequest
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    } disabled:opacity-60 disabled:cursor-not-allowed`}
+                >
+                  Appeal
+                </button>
+              </div>
             </div>
           </div>
         </div>

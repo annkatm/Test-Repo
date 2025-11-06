@@ -13,6 +13,7 @@ const EmployeeTransaction = () => {
   const [categories, setCategories] = useState([]);
   const [cartItems, setCartItems] = useState([]);
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [returnDate, setReturnDate] = useState(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
 
   // Per-user localStorage helpers
   const getUserTag = () => {
@@ -133,38 +134,6 @@ const EmployeeTransaction = () => {
     }
   };
 
-  const fetchCurrentEmployeeNumericId = async () => {
-    try {
-      const res = await fetch('/check-auth', { credentials: 'same-origin' });
-      const j = await res.json();
-      if (j?.authenticated && j?.user?.employee_id) {
-        const n = Number(j.user.employee_id);
-        if (Number.isFinite(n) && String(n) !== '0') return n;
-      }
-      if (j?.authenticated && j?.user?.id) {
-        const empRes = await fetch(`/api/employees?user_id=${j.user.id}`);
-        const empJ = await empRes.json();
-        const arr = Array.isArray(empJ) ? empJ : (Array.isArray(empJ?.data) ? empJ.data : []);
-        if (arr.length > 0) return arr[0].id;
-      }
-    } catch (_) {}
-    return null;
-  };
-
-  const syncReservedFromPending = async () => {
-    try {
-      const empId = await fetchCurrentEmployeeNumericId();
-      if (!empId) return;
-      const res = await fetch(`/api/requests?status=pending&employee_id=${encodeURIComponent(empId)}`, { credentials: 'same-origin' });
-      const data = await res.json();
-      const list = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
-      const ids = list.map(r => r?.equipment_id || r?.equipment?.id).filter(Boolean);
-      try {
-        localStorage.setItem(userKey('employee_reserved_equipment_ids'), JSON.stringify(ids.map(String)));
-      } catch (_) {}
-    } catch (_) {}
-  };
-
   // Load data on component mount
   useEffect(() => {
     const controller = new AbortController();
@@ -207,8 +176,20 @@ const EmployeeTransaction = () => {
           equipmentData = equipData.data;
         }
         
-        await syncReservedFromPending();
+        // Debug: Log equipment with images
+        const equipmentWithImages = equipmentData.filter(eq => eq.item_image || eq.item_image_url);
+        if (equipmentWithImages.length > 0) {
+          console.log('Equipment with images:', equipmentWithImages.map(eq => ({
+            id: eq.id,
+            brand: eq.brand,
+            item_image: eq.item_image,
+            item_image_url: eq.item_image_url
+          })));
+        }
+        
+        // Clean up reserved list: remove IDs that are now available
         cleanupReservedIds(equipmentData);
+        
         setEquipment(filterOutReserved(equipmentData));
       } catch (e) {
         if (e.name !== 'AbortError') setError('Failed to load data');
@@ -302,7 +283,6 @@ const EmployeeTransaction = () => {
 
   // Group equipment units into products (same brand/name/specs)
   const getGroupedEquipment = () => {
-    const reserved = getReservedIds();
     const groups = {};
     for (const eq of equipment) {
       const key = `${(eq.name || eq.brand || 'Unknown').toLowerCase()}||${(eq.specifications || '').toLowerCase()}||${eq.category_id || ''}`;
@@ -320,15 +300,11 @@ const EmployeeTransaction = () => {
       groups[key].items.push(eq);
     }
     return Object.values(groups)
-      .map(g => {
-        const availableUnits = g.items.filter(i => !reserved.has(String(i.id)) && (!i.status || i.status === 'available'));
-        return {
-          ...g,
-          availableCount: availableUnits.length,
-          representative: g.items[0] || null,
-          _availableUnits: availableUnits,
-        };
-      });
+      .map(g => ({
+        ...g,
+        availableCount: g.items.filter(i => !i.status || i.status === 'available').length,
+        representative: g.items[0] || null,
+      }));
   };
 
   const handleItemTableClick = async (category) => {
@@ -354,8 +330,20 @@ const EmployeeTransaction = () => {
         equipmentData = data.data;
       }
       
-      await syncReservedFromPending();
+      // Debug: Log equipment with images
+      const equipmentWithImages = equipmentData.filter(eq => eq.item_image || eq.item_image_url);
+      if (equipmentWithImages.length > 0) {
+        console.log('Equipment with images (category filter):', equipmentWithImages.map(eq => ({
+          id: eq.id,
+          brand: eq.brand,
+          item_image: eq.item_image,
+          item_image_url: eq.item_image_url
+        })));
+      }
+      
+      // Clean up reserved list: remove IDs that are now available
       cleanupReservedIds(equipmentData);
+      
       setEquipment(filterOutReserved(equipmentData));
     } catch (e) {
       setError('Failed to load equipment for category');
@@ -378,9 +366,10 @@ const EmployeeTransaction = () => {
       } else if (Array.isArray(data.data)) {
         equipmentData = data.data;
       }
-
-      await syncReservedFromPending();
+      
+      // Clean up reserved list: remove IDs that are now available
       cleanupReservedIds(equipmentData);
+      
       setEquipment(filterOutReserved(equipmentData));
     } catch (e) {
       setError('Failed to load all equipment');
@@ -653,7 +642,8 @@ const EmployeeTransaction = () => {
             request_type: 'new_assignment',
             request_mode: 'on_site',
             reason: `Request for 1 unit of ${group.name || group.brand}`,
-            expected_start_date: startDate
+            expected_start_date: startDate,
+            expected_end_date: returnDate
           };
 
           console.log('Submitting request:', requestData);
@@ -701,6 +691,7 @@ const EmployeeTransaction = () => {
                 equipment_name: group.name || unit.name || unit.brand || 'Item',
                 created_at: new Date().toISOString(),
                 expected_start_date: startDate,
+                expected_end_date: returnDate,
                 status: 'Pending',
               };
               window.dispatchEvent(new CustomEvent('ireply:request:created', { detail: newReq }));
@@ -817,6 +808,8 @@ const EmployeeTransaction = () => {
           loading={loading}
           startDate={startDate}
           setStartDate={setStartDate}
+          returnDate={returnDate}
+          setReturnDate={setReturnDate}
           isAtLimit={isAtLimitForCategoryId}
         />
       </div>

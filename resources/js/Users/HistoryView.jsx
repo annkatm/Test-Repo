@@ -45,56 +45,7 @@ const HistoryView = ({
   const setPage = setCurrentPage ?? setLocalPage;
   const log = logActivity ?? noop;
 
-  const [bootData, setBootData] = useState(null);
-  useEffect(() => {
-    // Bootstrap from server if storage is empty
-    try {
-      const existing = readHistory();
-      if (Array.isArray(existing) && existing.length > 0) return;
-      // Try local fallback: employee_activities
-      try {
-        const rawEA = localStorage.getItem('employee_activities');
-        const arrEA = JSON.parse(rawEA);
-        if (Array.isArray(arrEA) && arrEA.length > 0) {
-          const normEA = arrEA.map((a, i) => ({
-            id: a.id ?? i + 1,
-            item: a.item || a.message || 'Activity',
-            status: a.status || a.variant || a.type || '-',
-            date: a.date || a.time || new Date().toISOString(),
-            time: a.time || a.date || new Date().toISOString(),
-          }));
-          setBootData(normEA);
-          try { localStorage.setItem('ireply_history', JSON.stringify(normEA)); } catch (_) {}
-          try { localStorage.setItem('ireply_history_count', String(normEA.length)); } catch (_) {}
-          return; // use employee_activities and skip server call
-        }
-      } catch (_) {}
-    } catch (_) {}
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch('/api/transactions/history', { credentials: 'same-origin' });
-        const data = await res.json();
-        const arr = Array.isArray(data?.data) ? data.data : [];
-        // Normalize minimal fields HistoryView uses
-        const norm = arr.map((t, i) => ({
-          id: t.id ?? t.transaction_id ?? t.request_id ?? i + 1,
-          item: t.item || t.equipment_name || t.title || 'Activity',
-          status: t.status || t.variant || '-',
-          date: t.date || t.created_at || t.time || new Date().toISOString(),
-          time: t.time || t.date || t.created_at || new Date().toISOString(),
-        }));
-        if (!cancelled && norm.length > 0) {
-          setBootData(norm);
-          try { localStorage.setItem('ireply_history', JSON.stringify(norm)); } catch (_) {}
-          try { localStorage.setItem('ireply_history_count', String(norm.length)); } catch (_) {}
-        }
-      } catch (_) { /* ignore */ }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  const sourceData = (sortedData && sortedData.length ? sortedData : (bootData && bootData.length ? bootData : readHistory()));
+  const sourceData = (sortedData && sortedData.length ? sortedData : readHistory());
 
   const olderThan24h = (a) => {
     const raw = a?.time ?? a?.date ?? null;
@@ -112,8 +63,7 @@ const HistoryView = ({
       ? arr.filter((it) => (it?.item || it?.message || '').toString().toLowerCase().includes(q))
       : arr;
     const onlyOld = base.filter(olderThan24h);
-    const view = onlyOld.length > 0 ? onlyOld : base; // fallback to all if no older-than-24h yet
-    return view
+    return onlyOld
       .slice()
       .sort((a, b) => new Date(b.date || b.time || 0) - new Date(a.date || a.time || 0));
   }, [sourceData, sTerm]);
@@ -163,18 +113,20 @@ const HistoryView = ({
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         {/* Table Header */}
         <div className="grid grid-cols-12 py-3 px-6 bg-gray-50 border-b border-gray-200 font-semibold text-gray-700 text-sm">
-          <div className="col-span-4">Date</div>
-          <div className="col-span-5">Item</div>
+          <div className="col-span-3">Date</div>
+          <div className="col-span-3">Item</div>
           <div className="col-span-3">Status</div>
+          <div className="col-span-3">Return Date</div>
         </div>
 
         {/* Table Body */}
         <div className="divide-y divide-gray-100">
           {pageData.map((item) => (
             <div key={item.id || item.time} className="grid grid-cols-12 py-3 px-6 text-sm">
-              <div className="col-span-4">{new Date(item.date || item.time).toLocaleDateString()}</div>
-              <div className="col-span-5 truncate">{item.item}</div>
+              <div className="col-span-3">{new Date(item.date || item.time).toLocaleDateString()}</div>
+              <div className="col-span-3 truncate">{item.item}</div>
               <div className="col-span-3">{item.status || item.variant || '-'}</div>
+              <div className="col-span-3">{item.return_date || '-'}</div>
             </div>
           ))}
           {pageData.length === 0 && (

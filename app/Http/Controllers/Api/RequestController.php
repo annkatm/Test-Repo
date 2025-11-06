@@ -56,44 +56,6 @@ class RequestController extends Controller
         // Fallback: use timestamp-based number
         return 'TXN-' . date('YmdHis');
     }
-    
-    /**
-     * Generate a unique request number
-     */
-    private function generateUniqueRequestNumber(): string
-    {
-        $maxAttempts = 10;
-        $attempt = 0;
-
-        do {
-            $attempt++;
-
-            $lastRequest = DB::table('requests')
-                ->where('request_number', 'LIKE', 'REQ-%')
-                ->orderBy('request_number', 'desc')
-                ->first();
-
-            if ($lastRequest) {
-                $lastNumber = (int) substr($lastRequest->request_number, 4);
-                $nextNumber = $lastNumber + 1;
-            } else {
-                $nextNumber = 1;
-            }
-
-            $requestNumber = 'REQ-' . str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
-
-            $exists = DB::table('requests')
-                ->where('request_number', $requestNumber)
-                ->exists();
-
-            if (!$exists) {
-                return $requestNumber;
-            }
-
-        } while ($attempt < $maxAttempts);
-
-        return 'REQ-' . date('YmdHis');
-    }
     /**
      * Display a listing of the resource.
      */
@@ -127,20 +89,9 @@ class RequestController extends Controller
                 )
                 ->orderBy('requests.created_at', 'desc');
 
-        // Filter by status (robust, case-insensitive and supports common aliases)
+        // Filter by status
         if ($request->has('status')) {
-                $status = strtolower(trim((string) $request->status));
-                $variants = [$status, ucfirst($status)];
-                if ($status === 'pending' || $status === 'on process' || $status === 'on_process' || $status === 'processing' || $status === 'in process' || $status === 'in_process') {
-                    $variants = ['pending', 'Pending', 'on process', 'On process', 'on_process', 'processing', 'Processing', 'in process', 'In process', 'in_process'];
-                } elseif ($status === 'approved') {
-                    $variants = ['approved', 'Approved'];
-                } elseif ($status === 'rejected' || $status === 'denied') {
-                    $variants = ['rejected', 'Rejected', 'denied', 'Denied'];
-                } elseif ($status === 'fulfilled' || $status === 'released' || $status === 'borrowed' || $status === 'active') {
-                    $variants = ['fulfilled', 'Fulfilled', 'released', 'Released', 'borrowed', 'Borrowed', 'active', 'Active'];
-                }
-                $query->whereIn('requests.status', $variants);
+                $query->where('requests.status', $request->status);
             }
 
             // Filter by employee
@@ -230,7 +181,7 @@ class RequestController extends Controller
                     ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
                     ->where('requests.employee_id', $validated['employee_id'])
                     ->where('requests.equipment_id', $validated['equipment_id'])
-                    ->where('requests.status', 'pending')
+                    ->where('status', 'pending')
                     ->select(
                         'requests.*',
                         DB::raw("CONCAT(COALESCE(employees.first_name, ''), ' ', COALESCE(employees.last_name, '')) as full_name"),
@@ -263,8 +214,8 @@ class RequestController extends Controller
                 ], 422);
             }
 
-            // Generate unique request number
-            $requestNumber = $this->generateUniqueRequestNumber();
+            // Generate request number
+            $requestNumber = 'REQ-' . str_pad(DB::table('requests')->count() + 1, 6, '0', STR_PAD_LEFT);
 
             $requestData = [
                 'request_number' => $requestNumber,
@@ -465,27 +416,23 @@ class RequestController extends Controller
                 ], 404);
             }
 
-            // Only allow deletion of pending requests
+        // Only allow deletion of pending requests
             if ($request->status !== 'pending') {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Only pending requests can be deleted'
-                ], 422);
+            return response()->json([
+                'success' => false,
+                'message' => 'Only pending requests can be deleted'
+            ], 422);
+        }
+
+            $request = Request::find($id);
+            if ($request) {
+                $request->delete(); // This will now soft delete due to SoftDeletes trait
             }
 
-            // Delete the request using query builder
-            DB::table('requests')->where('id', $id)->delete();
-
-            // Log the activity
-            ActivityLogService::logSystemActivity(
-                'Deleted request',
-                "Deleted request #{$request->request_number}"
-            );
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Request deleted successfully'
-            ]);
+        return response()->json([
+            'success' => true,
+            'message' => 'Request deleted successfully'
+        ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -631,21 +578,11 @@ class RequestController extends Controller
 
             DB::table('requests')->where('id', $id)->update([
                 'status' => 'rejected',
-                'approved_by' => Auth::id(),
+                'approved_by' => Auth::id(), // Use currently authenticated user's ID
                 'approved_at' => now(),
-                'rejection_reason' => $validated['rejection_reason']
+                'rejection_reason' => $validated['rejection_reason'],
+                'updated_at' => now(),
             ]);
-
-            // Reset equipment status to available so it can be requested again
-            if ($equipmentRequest->equipment_id) {
-                try {
-                    DB::table('equipment')->where('id', $equipmentRequest->equipment_id)->update([
-                        'status' => 'available'
-                    ]);
-                } catch (\Exception $e) {
-                    \Log::warning("Could not reset equipment status: " . $e->getMessage());
-                }
-            }
 
             // Fetch updated request with related data
             $updatedRequest = DB::table('requests')
@@ -804,81 +741,6 @@ class RequestController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error fetching request statistics: ' . $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Cancel a pending request
-     */
-    public function cancel(string $id): JsonResponse
-    {
-        try {
-            $request = DB::table('requests')->where('id', $id)->first();
-            
-            if (!$request) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Request not found'
-                ], 404);
-            }
-
-            // Only allow cancellation of pending requests
-            if ($request->status !== 'pending') {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Only pending requests can be cancelled'
-                ], 422);
-            }
-
-            // Use transaction to ensure atomicity
-            DB::beginTransaction();
-            
-            try {
-                // Update request status to cancelled (don't update timestamps, let DB handle it)
-                DB::table('requests')->where('id', $id)->update([
-                    'status' => 'cancelled'
-                ]);
-
-                // Reset equipment status to available so it can be requested again
-                if ($request->equipment_id) {
-                    DB::table('equipment')->where('id', $request->equipment_id)->update([
-                        'status' => 'available'
-                    ]);
-                }
-                
-                DB::commit();
-            } catch (\Exception $e) {
-                DB::rollBack();
-                \Log::error("Error updating request/equipment: " . $e->getMessage());
-                throw $e;
-            }
-
-            // Log the activity (non-critical, don't fail if this errors)
-            try {
-                ActivityLogService::logSystemActivity(
-                    'Cancelled request',
-                    "Cancelled request #{$request->request_number}"
-                );
-            } catch (\Exception $e) {
-                \Log::warning("Could not log activity: " . $e->getMessage());
-            }
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Request cancelled successfully',
-                'data' => [
-                    'request_id' => $id,
-                    'equipment_id' => $request->equipment_id
-                ]
-            ]);
-        } catch (\Exception $e) {
-            \Log::error("Cancel request error for ID {$id}: " . $e->getMessage());
-            \Log::error($e->getTraceAsString());
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Error cancelling request: ' . $e->getMessage()
             ], 500);
         }
     }

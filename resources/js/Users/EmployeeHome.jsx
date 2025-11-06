@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Echo from '../echo';
-import { Laptop, X, RefreshCcw, ClipboardList, Mouse, FilePlus2 } from 'lucide-react';
+import { X, RefreshCcw, ClipboardList, Mouse, FilePlus2 } from 'lucide-react';
 import OnProcessTransactions from './OnProcessTransactions';
 import ApprovedTransactions from './ApprovedTransactions';
 import StatsCards from './StatsCards';
@@ -8,10 +8,7 @@ import RecentActivities from './RecentActivities';
 import HistoryView from './HistoryView';
 
 const EmployeeHome = () => {
-  const [showExchangeConfirmModal, setShowExchangeConfirmModal] = useState(false);
-  const [showBrowseLaptopsModal, setShowBrowseLaptopsModal] = useState(false);
-  const [selectedLaptop, setSelectedLaptop] = useState(null);
-  const [activeCategory, setActiveCategory] = useState('Laptops');
+  const [, setShowExchangeConfirmModal] = useState(false);
   const [transactions, setTransactions] = useState([]);
   const [pendingTransactions, setPendingTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -21,17 +18,12 @@ const EmployeeHome = () => {
     available: 0,
     overdue: 0
   });
-  const [showReturnModal, setShowReturnModal] = useState(false);
+  
   const [showPendings, setShowPendings] = useState(false);
-  const [isDeniedModalOpen, setIsDeniedModalOpen] = useState(false);
-  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
-  const [selectedRequest, setSelectedRequest] = useState(null);
-  const [selectedRow, setSelectedRow] = useState(1);
+  const [, setSelectedRow] = useState(1);
   const [currentView, setCurrentView] = useState('transactions');
   const [showHistory, setShowHistory] = useState(false);
-  const [showExchangeModal, setShowExchangeModal] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState('Laptops');
-  const [showReasonModal, setShowReasonModal] = useState(false);
+  const [, setShowReasonModal] = useState(false);
   const [exchangeReason, setExchangeReason] = useState('');
   const [uploadedFile, setUploadedFile] = useState(null);
   const [sortOption, setSortOption] = useState("date-desc");
@@ -47,7 +39,6 @@ const EmployeeHome = () => {
   const [isBorrowedOpen, setIsBorrowedOpen] = useState(false);
   const [isOverdueOpen, setIsOverdueOpen] = useState(false);
   const [borrowedItems, setBorrowedItems] = useState([]);
-  const [overdueItems, setOverdueItems] = useState([]);
   const [selectedDeniedId, setSelectedDeniedId] = useState(null);
   // Track locally-cancelled requests to immediately hide them from On Process
   const [cancelledReqIds, setCancelledReqIds] = useState(() => {
@@ -479,11 +470,7 @@ const EmployeeHome = () => {
     }
   };
 
-  const fetchOverdueItems = async () => {
-    // Overdue concept disabled for Users: no expected/return dates used for calculations
-    setOverdueItems([]);
-    return [];
-  };
+  
 
   // Global function for other parts of the app to notify this component about new events
   // Usage: window.IReplyNotify('Your request was approved', 'success')
@@ -713,23 +700,13 @@ const EmployeeHome = () => {
 
 
 
-  const handleReasonChange = (e) => {
-    if (selectedRequest) {
-      setDeniedRequests(deniedRequests.map(request =>
-        request.id === selectedRequest.id
-          ? { ...request, reason: e.target.value }
-          : request
-      ));
-      setSelectedRequest({ ...selectedRequest, reason: e.target.value });
-    }
-  };
+  
 
   // Approved transactions will be fetched from API
   const [approvedTransactions, setApprovedTransactions] = useState([]);
 
   // Equipment data will be fetched from API
-  const [laptopBrands, setLaptopBrands] = useState([]);
-  const [exchangeItems, setExchangeItems] = useState([]);
+  
 
   // Database connection functions for transactions
   const fetchTransactionStats = async () => {
@@ -1110,9 +1087,7 @@ const EmployeeHome = () => {
     };
   }, []);
 
-  const handleRowClick = (request) => {
-    setSelectedRequest(request);
-  };
+  
 
   const handleFileUpload = (event) => {
     const file = event.target.files[0];

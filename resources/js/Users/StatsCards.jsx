@@ -19,7 +19,7 @@ const StatsCards = ({ transactionStats, onBorrowedClick, onOverdueClick }) => {
       <div className="rounded-2xl bg-white border border-gray-100 p-6 shadow-[0_6px_15px_rgba(0,0,0,0.15)] transform transition-transform hover:scale-[1.02] cursor-pointer" onClick={onOverdueClick}>
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-medium text-gray-600 mb-1">Denied Items</h3>
+            <h3 className="text-sm font-medium text-gray-600 mb-1">Overdue Items</h3>
             <div className="text-4xl font-bold text-gray-900">{transactionStats.overdue}</div>
           </div>
           <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center shadow-inner"></div>

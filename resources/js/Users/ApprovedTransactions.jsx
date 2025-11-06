@@ -69,18 +69,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
   });
   const [returnTxId, setReturnTxId] = useState(null);
 
-  // Helper: de-duplicate by a stable key
-  const dedupeByKey = (arr = []) => {
-    const seen = new Set();
-    return (arr || []).filter((x) => {
-      const key = String(x?.tx_id ?? x?.id ?? x?.equipment_id ?? `${x?.item || ''}|${x?.date || ''}`);
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  };
-
-  // Keep chosenUnit in sync if changed by another tab/processs
+  // Keep chosenUnit in sync if changed by another tab/process
   useEffect(() => {
     const onStorage = (e) => {
       if (e.key === 'approved_selected_unit') {
@@ -155,9 +144,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
         };
       });
       console.log('Mapped transactions:', mapped);
-      const filtered = (mapped || []).filter((x) => String((x?.status || '')).toLowerCase() !== 'returned');
-      const unique = dedupeByKey(filtered);
-      setDisplayList(unique);
+      setDisplayList(mapped);
     } catch (_) {}
   }, [approvedTransactions]);
 
@@ -208,11 +195,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
             exchangeItems: Array.isArray(t?.exchangeItems) ? t.exchangeItems : [],
           };
         });
-        if (!cancelled) {
-          const filtered = (mapped || []).filter((x) => String((x?.status || '')).toLowerCase() !== 'returned');
-          const unique = dedupeByKey(filtered);
-          setDisplayList(unique);
-        }
+        if (!cancelled) setDisplayList(mapped);
       } catch (_) { }
     };
     // Only fetch if no data provided via props
@@ -262,9 +245,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
             exchangeItems: Array.isArray(t?.exchangeItems) ? t.exchangeItems : [],
           };
         }).filter(r => r.date);
-        const filtered = (mapped || []).filter((x) => String((x?.status || '')).toLowerCase() !== 'returned');
-        const unique = dedupeByKey(filtered);
-        setDisplayList(unique);
+        setDisplayList(mapped);
       } catch (_) { }
     };
     const handler = () => refresh();
@@ -525,17 +506,6 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
       // First, add the item to returned items (dispatch event FIRST before navigation)
       try {
         window.dispatchEvent(new CustomEvent('ireply:returned:add', { detail: returnedItem }));
-      } catch (_) { }
-      
-      // Notify admin ViewApproved page to move item to verify returns
-      try {
-        window.dispatchEvent(new CustomEvent('ireply:equipment:returned', {
-          detail: {
-            transaction_id: txId,
-            equipment_id: (tx || selectedTransactionData)?.equipment_id,
-            request_id: (tx || selectedTransactionData)?.request_id
-          }
-        }));
       } catch (_) { }
       
       // Refresh the approved list to remove the returned item
@@ -912,17 +882,13 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                 <ExchangePanel
                   transaction={selectedTransactionData}
                   onClose={() => setSelectedRow(null)}
-                  onReturnNow={() => { 
-                    // Called after successful return from ExchangePanel
-                    try {
-                      const rid = selectedTransactionData?.tx_id || selectedTransactionData?.id;
-                      if (rid != null) {
-                        setDisplayList((prev) => (prev || []).filter((t) => String(t?.tx_id ?? t?.id) !== String(rid)));
-                      }
-                    } catch (_) {}
-                    try { window.dispatchEvent(new CustomEvent('ireply:approved:changed')); } catch (_) {}
-                    setSelectedRow(null);
-                    logActivity('Approved: Item Returned Successfully', 'success');
+                  onReturnNow={async () => { 
+                    console.log('Return Now clicked - selectedTransactionData:', selectedTransactionData);
+                    const tid = selectedTransactionData?.tx_id || selectedTransactionData?.id || await resolveTxId(selectedTransactionData);
+                    console.log('Resolved transaction ID:', tid);
+                    setReturnTxId(tid || null);
+                    setShowReturnModal(true); 
+                    logActivity('Approved: Clicked Return Now', 'return'); 
                   }}
                   onOpenBrowse={() => { setShowBrowseLaptopsModal(true); logActivity('Approved: Clicked Exchange', 'exchange'); }}
                   className="flex-1"
@@ -1537,7 +1503,10 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                   <div className="text-gray-500">Borrowed Date</div>
                   <div className="text-gray-900 font-semibold">{borrowedDetails?.borrowDate || '-'}</div>
                 </div>
-                {/* Return date removed per policy */}
+                <div>
+                  <div className="text-gray-500">Return Date</div>
+                  <div className="text-gray-900 font-semibold">{borrowedDetails?.returnDate || '-'}</div>
+                </div>
               </div>
               <div className="border-t pt-4">
                 <div className="text-sm text-gray-500 mb-2">Items</div>
