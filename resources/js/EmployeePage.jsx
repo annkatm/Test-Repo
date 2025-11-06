@@ -247,8 +247,20 @@ const EmployeePage = () => {
   const loadAvailableEquipment = async () => {
     try {
       // Get paginated equipment list with category info
-      const res = await fetch('/api/equipment?per_page=100&status=available');
-      const data = await res.json();
+      const res = await fetch('/api/equipment?per_page=100&status=available', {
+        headers: {
+          'Accept': 'application/json',
+        },
+        credentials: 'include',
+      });
+      
+      const contentType = res.headers.get('content-type');
+      let data;
+      if (contentType && contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        throw new Error('Server returned non-JSON response');
+      }
       
       if (data.success) {
         // Extract equipment from paginated response
@@ -299,8 +311,20 @@ const EmployeePage = () => {
 
       const promises = Object.entries(endpoints).map(async ([key, endpoint]) => {
         try {
-          const res = await fetch(endpoint);
-          const data = await res.json();
+          const res = await fetch(endpoint, {
+            headers: {
+              'Accept': 'application/json',
+            },
+            credentials: 'include',
+          });
+          
+          const contentType = res.headers.get('content-type');
+          let data;
+          if (contentType && contentType.includes('application/json')) {
+            data = await res.json();
+          } else {
+            throw new Error('Server returned non-JSON response');
+          }
           return [key, data.success && Array.isArray(data.data) ? data.data.map(item => ({ value: item.name, label: item.name })) : []];
         } catch (e) {
           return [key, []];
@@ -333,8 +357,21 @@ const EmployeePage = () => {
         }
       });
 
-      const response = await fetch(`/api/employees?${params}`);
-      const data = await response.json();
+      const response = await fetch(`/api/employees?${params}`, {
+        headers: {
+          'Accept': 'application/json',
+        },
+        credentials: 'include',
+      });
+
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get('content-type');
+      let data;
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        throw new Error('Server returned non-JSON response');
+      }
 
       if (data.success && Array.isArray(data.data)) {
         const list = data.data.map(e => ({
@@ -611,12 +648,17 @@ const EmployeePage = () => {
       available_count: eq.available_count || 0
     }));
 
+    // Get CSRF token
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
     fetch('/api/employees', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
+        ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken }),
       },
+      credentials: 'include',
       body: JSON.stringify({
         first_name: form.firstName.trim(),
         last_name: form.lastName.trim(),
@@ -632,7 +674,15 @@ const EmployeePage = () => {
         status: 'active',
       })
     })
-      .then(res => res.json())
+      .then(async res => {
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          return res.json();
+        } else {
+          const text = await res.text();
+          throw new Error(`Server returned an error (${res.status}). Please check your connection and try again.`);
+        }
+      })
       .then(data => {
         if (data.success) {
           closeModal();
@@ -715,9 +765,17 @@ const EmployeePage = () => {
       available_count: eq.available_count || 0
     }));
     
+    // Get CSRF token
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
     fetch(`/api/employees/${editing.id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json', 
+        'Accept': 'application/json',
+        ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken }),
+      },
+      credentials: 'include',
       body: JSON.stringify({
         first_name: form.firstName.trim(),
         last_name: form.lastName.trim(),
@@ -734,7 +792,15 @@ const EmployeePage = () => {
         status: 'active'
       })
     })
-      .then(res => res.json())
+      .then(async res => {
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          return res.json();
+        } else {
+          const text = await res.text();
+          throw new Error(`Server returned an error (${res.status}). Please check your connection and try again.`);
+        }
+      })
       .then(data => {
         if (data.success) {
           closeEdit();
@@ -754,8 +820,26 @@ const EmployeePage = () => {
 
   const confirmDelete = () => {
     if (!deleting) return;
-    fetch(`/api/employees/${deleting.id}`, { method: 'DELETE', headers: { 'Accept': 'application/json' } })
-      .then(res => res.json())
+    // Get CSRF token
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+    fetch(`/api/employees/${deleting.id}`, { 
+      method: 'DELETE', 
+      headers: { 
+        'Accept': 'application/json',
+        ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken }),
+      },
+      credentials: 'include',
+    })
+      .then(async res => {
+        const contentType = res.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          return res.json();
+        } else {
+          const text = await res.text();
+          throw new Error(`Server returned an error (${res.status}). Please check your connection and try again.`);
+        }
+      })
       .then(data => {
         if (data.success) {
           closeDelete();
