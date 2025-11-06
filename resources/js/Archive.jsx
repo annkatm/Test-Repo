@@ -270,7 +270,7 @@ const Archive = () => {
                                 </div>
                                 <div>
                                     <h1 className="text-2xl font-bold text-gray-900">Archive</h1>
-                                    <p className="text-gray-600">Manage archived equipment and requests</p>
+                                    <p className="text-gray-600">Manage archived items from across the system</p>
                                 </div>
                             </div>
                         </div>
@@ -362,6 +362,11 @@ const Archive = () => {
                                     <option value="transactions">Transactions</option>
                                     <option value="employees">Employees</option>
                                     <option value="users">Users</option>
+                                    <option value="categories">Equipment Categories</option>
+                                    <option value="positions">Positions</option>
+                                    <option value="departments">Departments</option>
+                                    <option value="clients">Clients</option>
+                                    <option value="employee-types">Employee Types</option>
                                 </select>
                             </div>
                         </div>
@@ -487,9 +492,16 @@ const Archive = () => {
                                                     item.type === 'transaction' ? 'bg-purple-100 text-purple-800' :
                                                     item.type === 'employee' ? 'bg-orange-100 text-orange-800' :
                                                     item.type === 'user' ? 'bg-indigo-100 text-indigo-800' :
+                                                    item.type === 'category' ? 'bg-cyan-100 text-cyan-800' :
+                                                    item.type === 'position' ? 'bg-teal-100 text-teal-800' :
+                                                    item.type === 'department' ? 'bg-yellow-100 text-yellow-800' :
+                                                    item.type === 'client' ? 'bg-pink-100 text-pink-800' :
+                                                    item.type === 'employee-type' ? 'bg-emerald-100 text-emerald-800' :
                                                     'bg-gray-100 text-gray-800'
                                                 }`}>
-                                                    {item.type}
+                                                    {item.type === 'employee-type' ? 'Employee Type' : 
+                                                     item.type === 'request' ? 'Request' :
+                                                     item.type.charAt(0).toUpperCase() + item.type.slice(1)}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
