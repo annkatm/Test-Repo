@@ -100,6 +100,17 @@ const AddStocks = () => {
   useEffect(() => {
     fetchEquipment();
     fetchCategories();
+    
+    // Listen for equipment updates from other pages (e.g., EmployeePage, Equipment)
+    const handleEquipmentUpdate = () => {
+      fetchEquipment(); // Refresh equipment list when changes occur
+    };
+    window.addEventListener('equipment:updated', handleEquipmentUpdate);
+    
+    // Cleanup event listener on component unmount
+    return () => {
+      window.removeEventListener('equipment:updated', handleEquipmentUpdate);
+    };
   }, []);
 
   const fetchCategories = async () => {

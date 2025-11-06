@@ -10,6 +10,8 @@ const HomePage = () => {
     totalEquipment: 0,
     availableStock: 0,
     currentHolder: 0,
+    borrowedCount: 0,
+    issuedCount: 0,
     holderDetails: [],
     categories: [],
     newArrivals: [],
@@ -32,42 +34,166 @@ const HomePage = () => {
           setLoading(true);
         }
         
-        // Fetch categories, equipment data, and current holders (transactions)
-        const [categoriesRes, equipmentRes, holdersRes] = await Promise.all([
+        // Fetch categories, equipment data, current holders (transactions), and employees
+        const [categoriesRes, equipmentRes, holdersRes, employeesRes] = await Promise.all([
           api.get('/categories'),
           api.get('/equipment?per_page=1000'), // Fetch all equipment without pagination
-          transactionService.getAll({ status: 'released' })
+          transactionService.getAll({ status: 'released' }),
+          api.get('/employees') // Fetch employees to get issued equipment data
         ]);
 
         if (categoriesRes?.data?.success && equipmentRes?.data?.success) {
           const categories = categoriesRes.data.data || [];
           const equipment = equipmentRes.data.data?.data || [];
           const currentHoldersData = holdersRes?.success ? holdersRes.data : [];
+          const employeesData = employeesRes?.data?.success ? employeesRes.data.data : [];
 
           // Calculate statistics
           const totalEquipment = equipment.length;
           const availableStock = equipment.filter(eq => eq.status === 'available').length;
+          const borrowedCount = equipment.filter(eq => eq.status === 'borrowed').length;
+          const issuedCount = equipment.filter(eq => eq.status === 'issued').length;
           
-          // Count unique employees who are holding equipment (dynamic) - using transaction data
-          const holdersMap = new Map();
-          currentHoldersData.forEach(holder => {
-            const employeeName = holder.full_name || holder.employee_name || holder.name || 'Unknown';
-            const employeeId = holder.employee_id || employeeName;
-            
-            if (!holdersMap.has(employeeId)) {
-              holdersMap.set(employeeId, {
-                employee_id: employeeId,
-                employee_name: employeeName,
-                position: holder.position || 'N/A',
-                equipment: []
-              });
-            }
-            holdersMap.get(employeeId).equipment.push({
-              id: holder.equipment_id || holder.id,
-              name: holder.equipment_name || 'Unknown Equipment',
-              category: holder.category?.name || 'Uncategorized'
-            });
+          // Debug: Log equipment status breakdown
+          console.log('Equipment Status Breakdown:', {
+            total: totalEquipment,
+            available: availableStock,
+            borrowed: borrowedCount,
+            issued: issuedCount,
+            statusCounts: equipment.reduce((acc, eq) => {
+              acc[eq.status] = (acc[eq.status] || 0) + 1;
+              return acc;
+            }, {})
           });
+          
+          // Count unique employees who are holding equipment (dynamic)
+          // Build a map of employees and their equipment (borrowed + issued)
+          const holdersMap = new Map();
+          
+          // Process borrowed equipment from transactions
+          equipment.forEach(eq => {
+            if (eq.status === 'borrowed') {
+              // Try to find the associated transaction/holder info
+              const transaction = currentHoldersData.find(t => t.equipment_id === eq.id);
+              
+              if (transaction) {
+                const employeeName = transaction.full_name || transaction.employee_name || 
+                                   transaction.name || 'Unknown Holder';
+                const employeeId = transaction.employee_id || employeeName;
+                const position = transaction.position || 'N/A';
+                
+                if (!holdersMap.has(employeeId)) {
+                  holdersMap.set(employeeId, {
+                    employee_id: employeeId,
+                    employee_name: employeeName,
+                    position: position,
+                    equipment: [],
+                    borrowedCount: 0,
+                    issuedCount: 0
+                  });
+                }
+                
+                const holderData = holdersMap.get(employeeId);
+                holderData.equipment.push({
+                  id: eq.id,
+                  name: eq.name || 'Unknown Equipment',
+                  category: eq.category?.name || 'Uncategorized',
+                  status: eq.status
+                });
+                holderData.borrowedCount++;
+              }
+            }
+          });
+          
+          // Process issued equipment from employees
+          employeesData.forEach(employee => {
+            // Check if employee has issued_item field (JSON string)
+            let issuedEquipmentData = [];
+            
+            if (employee.issued_item) {
+              try {
+                const parsedIssued = typeof employee.issued_item === 'string' 
+                  ? JSON.parse(employee.issued_item) 
+                  : employee.issued_item;
+                
+                if (Array.isArray(parsedIssued) && parsedIssued.length > 0) {
+                  console.log('Employee', employee.first_name, 'has issued_item:', parsedIssued);
+                  
+                  // Get equipment IDs from issued_item
+                  const issuedEquipmentIds = parsedIssued.map(item => item.id);
+                  
+                  // Find matching equipment from the main equipment list
+                  // Match by ID regardless of status, since being in issued_item means it's issued
+                  const matchedEquipment = equipment.filter(eq => issuedEquipmentIds.includes(eq.id));
+                  
+                  console.log('Matched equipment for', employee.first_name, ':', matchedEquipment);
+                  
+                  // If equipment found in main list, use it
+                  if (matchedEquipment.length > 0) {
+                    issuedEquipmentData = matchedEquipment;
+                  } else {
+                    // If not found in main equipment list, use data from issued_item JSON
+                    issuedEquipmentData = parsedIssued.map(item => ({
+                      id: item.id,
+                      name: item.name || item.brand || 'Unknown',
+                      brand: item.brand,
+                      specifications: item.specs,
+                      category: { name: 'Uncategorized' },
+                      status: 'issued' // Force status to issued since it's in employee's issued_item
+                    }));
+                  }
+                }
+              } catch (e) {
+                console.error('Error parsing issued_item for employee:', employee.first_name, e);
+              }
+            }
+            
+            // Also check issued_equipment array if it exists (from backend relationship)
+            if (employee.issued_equipment && Array.isArray(employee.issued_equipment) && employee.issued_equipment.length > 0) {
+              console.log('Employee', employee.first_name, 'has issued_equipment array:', employee.issued_equipment);
+              // Add equipment from issued_equipment that's not already in issuedEquipmentData
+              const existingIds = issuedEquipmentData.map(eq => eq.id);
+              const additionalEquipment = employee.issued_equipment.filter(eq => !existingIds.includes(eq.id));
+              issuedEquipmentData = [...issuedEquipmentData, ...additionalEquipment];
+            }
+            
+            // Process if employee has any issued equipment
+            if (issuedEquipmentData.length > 0) {
+              const employeeName = `${employee.first_name} ${employee.last_name}`.trim();
+              const employeeId = employee.id;
+              const position = employee.position || 'N/A';
+              
+              console.log('Processing employee:', employeeName, 'with', issuedEquipmentData.length, 'issued equipment items');
+              
+              if (!holdersMap.has(employeeId)) {
+                holdersMap.set(employeeId, {
+                  employee_id: employeeId,
+                  employee_name: employeeName,
+                  position: position,
+                  equipment: [],
+                  borrowedCount: 0,
+                  issuedCount: 0
+                });
+              }
+              
+              const holderData = holdersMap.get(employeeId);
+              
+              // Add issued equipment to the holder's equipment list
+              issuedEquipmentData.forEach(eq => {
+                console.log('Adding issued equipment:', eq.name || eq.brand, 'to', employeeName);
+                holderData.equipment.push({
+                  id: eq.id,
+                  name: eq.name || eq.brand || 'Unknown Equipment',
+                  category: eq.category?.name || eq.category_name || 'Uncategorized',
+                  status: 'issued'
+                });
+                holderData.issuedCount++;
+              });
+              
+              console.log('Final holder data for', employeeName, ':', holderData);
+            }
+          });
+          
           const currentHolder = holdersMap.size;
           const holderDetails = Array.from(holdersMap.values());
 
@@ -188,6 +314,8 @@ const HomePage = () => {
             totalEquipment,
             availableStock,
             currentHolder,
+            borrowedCount,
+            issuedCount,
             holderDetails,
             categories: categoriesWithStats,
             newArrivals,
@@ -391,17 +519,19 @@ const HomePage = () => {
                         <th className="py-2.5 px-4 font-semibold">Employee Name</th>
                         <th className="py-2.5 px-4 font-semibold">Position</th>
                         <th className="py-2.5 px-4 font-semibold">Equipment Held</th>
-                        <th className="py-2.5 px-4 font-semibold text-center">Count</th>
+                        <th className="py-2.5 px-4 font-semibold text-center">Borrowed</th>
+                        <th className="py-2.5 px-4 font-semibold text-center">Issued</th>
+                        <th className="py-2.5 px-4 font-semibold text-center">Total</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {loading ? (
                         <tr>
-                          <td colSpan="4" className="py-4 px-4 text-center text-gray-500">Loading...</td>
+                          <td colSpan="6" className="py-4 px-4 text-center text-gray-500">Loading...</td>
                         </tr>
                       ) : dashboardData.holderDetails.length === 0 ? (
                         <tr>
-                          <td colSpan="4" className="py-4 px-4 text-center text-gray-500">No current holders</td>
+                          <td colSpan="6" className="py-4 px-4 text-center text-gray-500">No current holders</td>
                         </tr>
                       ) : (
                         dashboardData.holderDetails.map((holder, index) => (
@@ -411,7 +541,14 @@ const HomePage = () => {
                             <td className="py-2.5 px-4">
                               <div className="flex flex-wrap gap-1">
                                 {holder.equipment.slice(0, 3).map((eq, idx) => (
-                                  <span key={eq.id} className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded">
+                                  <span 
+                                    key={eq.id} 
+                                    className={`text-xs px-2 py-0.5 rounded ${
+                                      eq.status === 'borrowed' 
+                                        ? 'bg-blue-100 text-blue-700' 
+                                        : 'bg-orange-100 text-orange-700'
+                                    }`}
+                                  >
                                     {eq.name}
                                   </span>
                                 ))}
@@ -424,6 +561,16 @@ const HomePage = () => {
                             </td>
                             <td className="py-2.5 px-4 text-center">
                               <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                                {holder.borrowedCount}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-4 text-center">
+                              <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700">
+                                {holder.issuedCount}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-4 text-center">
+                              <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
                                 {holder.equipment.length}
                               </span>
                             </td>

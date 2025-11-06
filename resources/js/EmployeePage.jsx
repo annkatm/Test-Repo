@@ -650,13 +650,13 @@ const EmployeePage = () => {
 
     // Get CSRF token
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-
+    
     fetch('/api/employees', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken }),
+        'X-CSRF-TOKEN': csrfToken,
       },
       credentials: 'include',
       body: JSON.stringify({
@@ -765,17 +765,15 @@ const EmployeePage = () => {
       available_count: eq.available_count || 0
     }));
     
-    // Get CSRF token
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-
+    
     fetch(`/api/employees/${editing.id}`, {
       method: 'PUT',
       headers: { 
         'Content-Type': 'application/json', 
         'Accept': 'application/json',
-        ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken }),
+        'X-CSRF-TOKEN': csrfToken
       },
-      credentials: 'include',
       body: JSON.stringify({
         first_name: form.firstName.trim(),
         last_name: form.lastName.trim(),
@@ -820,26 +818,15 @@ const EmployeePage = () => {
 
   const confirmDelete = () => {
     if (!deleting) return;
-    // Get CSRF token
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-
     fetch(`/api/employees/${deleting.id}`, { 
       method: 'DELETE', 
       headers: { 
         'Accept': 'application/json',
-        ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken }),
-      },
-      credentials: 'include',
+        'X-CSRF-TOKEN': csrfToken
+      } 
     })
-      .then(async res => {
-        const contentType = res.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-          return res.json();
-        } else {
-          const text = await res.text();
-          throw new Error(`Server returned an error (${res.status}). Please check your connection and try again.`);
-        }
-      })
+      .then(res => res.json())
       .then(data => {
         if (data.success) {
           closeDelete();
