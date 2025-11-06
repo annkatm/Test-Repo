@@ -3,12 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Category;
-use App\Models\Client;
-use App\Models\Department;
 use App\Models\Employee;
-use App\Models\EmployeeType;
 use App\Models\Equipment;
-use App\Models\Position;
 use App\Models\Request as EquipmentRequest;
 use App\Models\Transaction;
 use App\Models\User;
@@ -160,107 +156,6 @@ class ArchiveController extends Controller
             $archivedItems = $archivedItems->merge($users);
         }
         
-        // Control Panel entities
-        if ($filterType === 'all' || $filterType === 'categories') {
-            $categoriesQuery = Category::onlyTrashed()
-                ->whereNotNull('deleted_at');
-            
-            if ($searchTerm) {
-                $categoriesQuery->where('name', 'like', "%{$searchTerm}%");
-            }
-            
-            $categories = $categoriesQuery->get()
-                ->map(function($item) {
-                    return [
-                        'id' => $item->id,
-                        'type' => 'category',
-                        'name' => $item->name,
-                        'deleted_at' => $item->deleted_at,
-                    ];
-                });
-            $archivedItems = $archivedItems->merge($categories);
-        }
-        
-        if ($filterType === 'all' || $filterType === 'positions') {
-            $positionsQuery = Position::onlyTrashed()
-                ->whereNotNull('deleted_at');
-            
-            if ($searchTerm) {
-                $positionsQuery->where('name', 'like', "%{$searchTerm}%");
-            }
-            
-            $positions = $positionsQuery->get()
-                ->map(function($item) {
-                    return [
-                        'id' => $item->id,
-                        'type' => 'position',
-                        'name' => $item->name,
-                        'deleted_at' => $item->deleted_at,
-                    ];
-                });
-            $archivedItems = $archivedItems->merge($positions);
-        }
-        
-        if ($filterType === 'all' || $filterType === 'departments') {
-            $departmentsQuery = Department::onlyTrashed()
-                ->whereNotNull('deleted_at');
-            
-            if ($searchTerm) {
-                $departmentsQuery->where('name', 'like', "%{$searchTerm}%");
-            }
-            
-            $departments = $departmentsQuery->get()
-                ->map(function($item) {
-                    return [
-                        'id' => $item->id,
-                        'type' => 'department',
-                        'name' => $item->name,
-                        'deleted_at' => $item->deleted_at,
-                    ];
-                });
-            $archivedItems = $archivedItems->merge($departments);
-        }
-        
-        if ($filterType === 'all' || $filterType === 'clients') {
-            $clientsQuery = Client::onlyTrashed()
-                ->whereNotNull('deleted_at');
-            
-            if ($searchTerm) {
-                $clientsQuery->where('name', 'like', "%{$searchTerm}%");
-            }
-            
-            $clients = $clientsQuery->get()
-                ->map(function($item) {
-                    return [
-                        'id' => $item->id,
-                        'type' => 'client',
-                        'name' => $item->name,
-                        'deleted_at' => $item->deleted_at,
-                    ];
-                });
-            $archivedItems = $archivedItems->merge($clients);
-        }
-        
-        if ($filterType === 'all' || $filterType === 'employee-types') {
-            $employeeTypesQuery = EmployeeType::onlyTrashed()
-                ->whereNotNull('deleted_at');
-            
-            if ($searchTerm) {
-                $employeeTypesQuery->where('name', 'like', "%{$searchTerm}%");
-            }
-            
-            $employeeTypes = $employeeTypesQuery->get()
-                ->map(function($item) {
-                    return [
-                        'id' => $item->id,
-                        'type' => 'employee-type',
-                        'name' => $item->name,
-                        'deleted_at' => $item->deleted_at,
-                    ];
-                });
-            $archivedItems = $archivedItems->merge($employeeTypes);
-        }
-        
         // Filter out items with invalid deleted_at timestamps (like 1970-01-01)
         $archivedItems = $archivedItems->filter(function($item) {
             return $item['deleted_at'] && 
@@ -301,39 +196,19 @@ class ArchiveController extends Controller
                 $model = Equipment::withTrashed()->find($id);
                 break;
             case 'category':
-            case 'categories':
                 $model = Category::withTrashed()->find($id);
                 break;
             case 'employee':
                 $model = Employee::withTrashed()->find($id);
                 break;
             case 'request':
-            case 'requests':
                 $model = EquipmentRequest::withTrashed()->find($id);
                 break;
             case 'transaction':
-            case 'transactions':
                 $model = Transaction::withTrashed()->find($id);
                 break;
             case 'user':
-            case 'users':
                 $model = User::withTrashed()->find($id);
-                break;
-            case 'position':
-            case 'positions':
-                $model = Position::withTrashed()->find($id);
-                break;
-            case 'department':
-            case 'departments':
-                $model = Department::withTrashed()->find($id);
-                break;
-            case 'client':
-            case 'clients':
-                $model = Client::withTrashed()->find($id);
-                break;
-            case 'employee-type':
-            case 'employee-types':
-                $model = EmployeeType::withTrashed()->find($id);
                 break;
         }
 
@@ -354,39 +229,19 @@ class ArchiveController extends Controller
                 $model = Equipment::withTrashed()->find($id);
                 break;
             case 'category':
-            case 'categories':
                 $model = Category::withTrashed()->find($id);
                 break;
             case 'employee':
                 $model = Employee::withTrashed()->find($id);
                 break;
             case 'request':
-            case 'requests':
                 $model = EquipmentRequest::withTrashed()->find($id);
                 break;
             case 'transaction':
-            case 'transactions':
                 $model = Transaction::withTrashed()->find($id);
                 break;
             case 'user':
-            case 'users':
                 $model = User::withTrashed()->find($id);
-                break;
-            case 'position':
-            case 'positions':
-                $model = Position::withTrashed()->find($id);
-                break;
-            case 'department':
-            case 'departments':
-                $model = Department::withTrashed()->find($id);
-                break;
-            case 'client':
-            case 'clients':
-                $model = Client::withTrashed()->find($id);
-                break;
-            case 'employee-type':
-            case 'employee-types':
-                $model = EmployeeType::withTrashed()->find($id);
                 break;
         }
 
