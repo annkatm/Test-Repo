@@ -200,20 +200,14 @@ class EquipmentController extends Controller
                 if ($equipment->item_image) {
                     Storage::disk('public')->delete($equipment->item_image);
                 }
-                if (!Storage::disk('public')->exists('equipment/items')) {
-                    Storage::disk('public')->makeDirectory('equipment/items');
-                }
-                $validated['item_image'] = $request->file('item_image')->store('equipment/items', 'public');
+                $validated['item_image'] = $request->file('item_image')->store('equipment/item_images', 'public');
             }
 
             if ($request->hasFile('receipt_image')) {
                 if ($equipment->receipt_image) {
                     Storage::disk('public')->delete($equipment->receipt_image);
                 }
-                if (!Storage::disk('public')->exists('equipment/receipts')) {
-                    Storage::disk('public')->makeDirectory('equipment/receipts');
-                }
-                $validated['receipt_image'] = $request->file('receipt_image')->store('equipment/receipts', 'public');
+                $validated['receipt_image'] = $request->file('receipt_image')->store('equipment/receipt_images', 'public');
             }
 
             // Store old values for logging

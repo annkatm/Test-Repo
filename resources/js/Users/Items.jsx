@@ -9,6 +9,8 @@ const Items = ({
   loading,
   startDate,
   setStartDate,
+  returnDate,
+  setReturnDate,
   isAtLimit
 }) => {
   return (
@@ -80,7 +82,7 @@ const Items = ({
           <div className="px-6 pt-2 pb-2 border-t border-gray-200 flex-shrink-0">
             <div className="flex gap-2">
               <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Request Date</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
                 <div className="relative">
                   <input
                     type="date"
@@ -89,7 +91,18 @@ const Items = ({
                     className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-gray-300"
                   />
                 </div>
-                <p className="mt-2 text-xs text-gray-500">No return date required as per company policy.</p>
+              </div>
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Return Date</label>
+                <div className="relative">
+                  <input
+                    type="date"
+                    value={returnDate}
+                    onChange={(e) => setReturnDate(e.target.value)}
+                    min={startDate}
+                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-gray-300"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -106,9 +119,21 @@ const Items = ({
                 </div>
                 <div className="pt-1 mt-1 border-t border-gray-200 space-y-0.5">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Request Start</span>
+                    <span className="text-gray-600">Start</span>
                     <span className="font-medium text-gray-900">
                       {new Date(startDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Return</span>
+                    <span className="font-medium text-gray-900">
+                      {new Date(returnDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Duration</span>
+                    <span className="font-medium text-gray-900">
+                      {Math.ceil((new Date(returnDate) - new Date(startDate)) / (1000 * 60 * 60 * 24))} days
                     </span>
                   </div>
                 </div>

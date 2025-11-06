@@ -8,6 +8,7 @@ import ViewTransactionModal from './components/ViewTransactionModal';
 import VerifyReturnModal from './components/VerifyReturnModal';
 import { transactionService, apiUtils } from './services/api.js';
 import api from './services/api';
+import { showSuccess, showError } from './utils/toastUtils';
 
 const ViewApproved = () => {
   const [approved, setApproved] = useState([]);
@@ -96,94 +97,6 @@ const ViewApproved = () => {
     }
   }, []);
 
-  // Listen for equipment return/verify events to update lists in real-time
-  useEffect(() => {
-    const handleEquipmentReturned = (event) => {
-      const { transaction_id, equipment_id } = event.detail || {};
-      
-      console.log('[ViewApproved] Equipment returned event:', event.detail);
-      
-      // Remove from current holders and move to verify returns
-      if (transaction_id) {
-        setCurrentHolders(prev => {
-          const returned = prev.find(h => String(h.id) === String(transaction_id));
-          if (returned) {
-            console.log(`[ViewApproved] Moving transaction ${transaction_id} to verify returns`);
-            // Add to verify returns list
-            setVerifyReturns(prevReturns => {
-              const exists = prevReturns.some(r => String(r.id) === String(transaction_id));
-              if (!exists) {
-                return [...prevReturns, { ...returned, status: 'returned' }];
-              }
-              return prevReturns;
-            });
-          }
-          return prev.filter(h => String(h.id) !== String(transaction_id));
-        });
-      } else if (equipment_id) {
-        // Fallback by equipment_id
-        setCurrentHolders(prev => {
-          const returned = prev.find(h => String(h.equipment_id) === String(equipment_id));
-          if (returned) {
-            setVerifyReturns(prevReturns => {
-              const exists = prevReturns.some(r => String(r.equipment_id) === String(equipment_id));
-              if (!exists) {
-                return [...prevReturns, { ...returned, status: 'returned' }];
-              }
-              return prevReturns;
-            });
-          }
-          return prev.filter(h => String(h.equipment_id) !== String(equipment_id));
-        });
-      }
-    };
-
-    const handleReturnVerified = (event) => {
-      const { transaction_id, equipment_id, request_id } = event.detail || {};
-      
-      console.log('[ViewApproved] Return verified event:', event.detail);
-      
-      // Remove from verify returns (transaction is now completed)
-      if (transaction_id) {
-        setVerifyReturns(prev => {
-          const filtered = prev.filter(r => String(r.id) !== String(transaction_id));
-          console.log(`[ViewApproved] Removed verified return ${transaction_id}, remaining: ${filtered.length}`);
-          return filtered;
-        });
-      } else if (equipment_id) {
-        setVerifyReturns(prev => {
-          const filtered = prev.filter(r => String(r.equipment_id) !== String(equipment_id));
-          console.log(`[ViewApproved] Removed verified return by equipment ${equipment_id}, remaining: ${filtered.length}`);
-          return filtered;
-        });
-      }
-      
-      // Also remove from approved list (request status is now completed)
-      if (request_id) {
-        setApproved(prev => {
-          const filtered = prev.filter(req => String(req.id) !== String(request_id));
-          console.log(`[ViewApproved] Removed completed request ${request_id} from approved list, remaining: ${filtered.length}`);
-          return filtered;
-        });
-      } else if (equipment_id) {
-        // Fallback by equipment_id
-        setApproved(prev => {
-          const filtered = prev.filter(req => String(req.equipment_id) !== String(equipment_id));
-          console.log(`[ViewApproved] Removed completed request by equipment ${equipment_id} from approved list, remaining: ${filtered.length}`);
-          return filtered;
-        });
-      }
-    };
-
-    window.addEventListener('ireply:equipment:returned', handleEquipmentReturned);
-    window.addEventListener('ireply:return:verified', handleReturnVerified);
-    
-    return () => {
-      window.removeEventListener('ireply:equipment:returned', handleEquipmentReturned);
-      window.removeEventListener('ireply:return:verified', handleReturnVerified);
-    };
-  }, []);
-
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -198,11 +111,7 @@ const ViewApproved = () => {
       // Fetch approved requests (status = 'approved' - ready for release)
       const approvedResponse = await api.get('/requests', { params: { status: 'approved' } });
       if (approvedResponse.data.success) {
-        // Filter out any completed requests just to be safe
-        const filteredApproved = (approvedResponse.data.data || []).filter(req => 
-          String(req.status || '').toLowerCase() !== 'completed'
-        );
-        setApproved(filteredApproved);
+        setApproved(approvedResponse.data.data);
       } else {
         console.error('Failed to fetch approved requests:', approvedResponse.data.message);
       }
@@ -628,11 +537,10 @@ const ViewApproved = () => {
     try {
       // Get the transaction ID
       const transactionId = returnData.id || returnData.transaction_id;
-      const equipmentId = returnData.equipment_id;
       
       if (!transactionId) {
         console.error('Transaction ID not found');
-        alert('Transaction ID not found');
+        showError('Transaction ID not found', 'Verification Failed');
         return;
       }
 
@@ -654,15 +562,6 @@ const ViewApproved = () => {
           throw new Error('Failed to return transaction');
         }
         console.log('Transaction returned successfully');
-        
-        // Dispatch equipment returned event
-        try {
-          window.dispatchEvent(new CustomEvent('ireply:equipment:returned', {
-            detail: { transaction_id: transactionId, equipment_id: equipmentId }
-          }));
-        } catch (e) {
-          console.error('Error dispatching returned event:', e);
-        }
       }
       
       // Now verify the return to complete the transaction
@@ -671,37 +570,26 @@ const ViewApproved = () => {
       });
       
       if (verifyResponse.data.success) {
-        // Get the request_id from the transaction data
-        const requestId = returnData.request_id;
-        
-        // Dispatch return verified event
-        try {
-          window.dispatchEvent(new CustomEvent('ireply:return:verified', {
-            detail: { 
-              transaction_id: transactionId, 
-              equipment_id: equipmentId,
-              request_id: requestId
-            }
-          }));
-        } catch (e) {
-          console.error('Error dispatching verified event:', e);
-        }
+        // Show detailed success message
+        const employeeName = returnData.full_name || returnData.employee_name || 'Unknown';
+        const itemName = returnData.equipment_name || 'N/A';
+        showSuccess(
+          `Return confirmed! ${employeeName} has returned ${itemName}.\nTransaction #${transactionId} completed.\nEquipment is now available for new requests.`,
+          'Return Verified'
+        );
         
         // Close the modal
         handleCloseViewReturnModal();
         
-        // Refresh the data to update the lists
+        // Immediately refresh data to remove from verify returns list
         await fetchData();
-        
-        // Show success message
-        alert('Return verified successfully! Transaction completed.');
       } else {
         throw new Error(verifyResponse.data.message || 'Failed to verify return');
       }
     } catch (error) {
       console.error('Error verifying return:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Failed to verify return';
-      alert(`Error: ${errorMessage}`);
+      showError(errorMessage, 'Verification Error');
     }
   };
 

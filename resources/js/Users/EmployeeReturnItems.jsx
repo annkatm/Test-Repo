@@ -15,7 +15,7 @@ const ReturnItems = () => {
 
   // Helper to normalize records
   const normalize = (r, idx = 0) => {
-    const dateRaw = r?.updated_at || r?.created_at || r?.date || null;
+    const dateRaw = r?.return_date || r?.updated_at || r?.created_at || r?.date || null;
     let dateStr = "";
     try {
       dateStr = dateRaw ? new Date(dateRaw).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }) : "";
@@ -26,7 +26,7 @@ const ReturnItems = () => {
       id: r?.id ?? r?.transaction_id ?? r?.request_id ?? r?.trx_id ?? r?.uuid ?? (idx + 1),
       date: dateStr,
       item: r?.equipment_name || r?.item || r?.title || r?.name || "Item",
-      status: r?.status || "Returned",
+      status: r?.status || (r?.return_date ? "Returned" : "Returned"),
     };
   };
 
@@ -59,7 +59,7 @@ const ReturnItems = () => {
       if (!Array.isArray(items) || items.length === 0) {
         // Fallback: transactions then filter returned
         const all = await fetchAllPages('/api/transactions');
-        items = (all || []).filter(r => String(r?.status || '').toLowerCase() === 'returned');
+        items = (all || []).filter(r => String(r?.status || '').toLowerCase() === 'returned' || !!r?.return_date);
       }
       const mapped = (items || []).map((r, idx) => normalize(r, idx));
       setData(mapped);

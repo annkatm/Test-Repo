@@ -3,7 +3,6 @@ import { Package, CheckCircle, User } from 'lucide-react';
 import HomeSidebar from "./HomeSidebar";
 import GlobalHeader from "./components/GlobalHeader";
 import api, { transactionService } from './services/api';
-import useDashboardStats from './hooks/useDashboardStats';
 
 const HomePage = () => {
   const [activeView, setActiveView] = useState("Dashboard");
@@ -25,9 +24,6 @@ const HomePage = () => {
   const [loading, setLoading] = useState(true);
   const [scrollY, setScrollY] = useState(0);
   const scrollContainerRef = useRef(null);
-  
-  // Use the dashboard stats hook for real-time data
-  const { stats: dynamicStats, loading: statsLoading } = useDashboardStats();
 
   useEffect(() => {
     const fetchDashboardData = async (showLoading = true) => {
@@ -36,23 +32,21 @@ const HomePage = () => {
           setLoading(true);
         }
         
-        // Fetch categories, equipment data, current holders, and dynamic stats
-        const [categoriesRes, equipmentRes, holdersRes, dynamicStatsRes] = await Promise.all([
+        // Fetch categories, equipment data, and current holders (transactions)
+        const [categoriesRes, equipmentRes, holdersRes] = await Promise.all([
           api.get('/categories'),
           api.get('/equipment?per_page=1000'), // Fetch all equipment without pagination
-          transactionService.getAll({ status: 'released' }),
-          fetch('/api/employees/dashboard-stats').then(res => res.json()).catch(() => ({ success: false }))
+          transactionService.getAll({ status: 'released' })
         ]);
 
         if (categoriesRes?.data?.success && equipmentRes?.data?.success) {
           const categories = categoriesRes.data.data || [];
           const equipment = equipmentRes.data.data?.data || [];
           const currentHoldersData = holdersRes?.success ? holdersRes.data : [];
-          const dynamicStats = dynamicStatsRes?.success ? dynamicStatsRes.data : null;
 
-          // Calculate statistics - use dynamic stats when available
-          const totalEquipment = dynamicStats?.total_equipment || equipment.length;
-          const availableStock = dynamicStats?.available_equipment || equipment.filter(eq => eq.status === 'available').length;
+          // Calculate statistics
+          const totalEquipment = equipment.length;
+          const availableStock = equipment.filter(eq => eq.status === 'available').length;
           
           // Count unique employees who are holding equipment (dynamic) - using transaction data
           const holdersMap = new Map();
@@ -74,9 +68,7 @@ const HomePage = () => {
               category: holder.category?.name || 'Uncategorized'
             });
           });
-          
-          // Use dynamic stats for current holder count if available
-          const currentHolder = dynamicStats?.employees_with_items || holdersMap.size;
+          const currentHolder = holdersMap.size;
           const holderDetails = Array.from(holdersMap.values());
 
           // Calculate equipment type stats with prices
@@ -282,39 +274,23 @@ const HomePage = () => {
                 <div className="bg-gradient-to-b from-[#0064FF] to-[#003C99] text-white rounded-2xl p-3 shadow flex flex-col h-26">
                   <h4 className="text-xs uppercase tracking-wider opacity-80">Total Number of Equipment</h4>
                   <div className="mt-2 flex items-center justify-between">
-                    <p className="text-2xl font-bold">
-                      {loading || statsLoading ? '...' : (dynamicStats.total_equipment || dashboardData.totalEquipment)}
-                    </p>
+                    <p className="text-2xl font-bold">{loading ? '...' : dashboardData.totalEquipment}</p>
                     <Package className="w-8 h-8 text-white/70" />
                   </div>
-                  {dynamicStats.last_updated && (
-                    <div className="text-xs opacity-75 mt-1">
-                      Live: {new Date(dynamicStats.last_updated).toLocaleTimeString()}
-                    </div>
-                  )}
                 </div>
                 <div className="bg-gray-100 rounded-2xl p-3 shadow flex flex-col h-26">
                   <h4 className="text-xs font-semibold text-gray-600">Available stock</h4>
                   <div className="mt-2 flex items-center justify-between">
-                    <p className="text-2xl font-bold text-gray-900">
-                      {loading || statsLoading ? '...' : (dynamicStats.available_equipment || dashboardData.availableStock)}
-                    </p>
+                    <p className="text-2xl font-bold text-gray-900">{loading ? '...' : dashboardData.availableStock}</p>
                     <CheckCircle className="w-8 h-8 text-gray-500" />
                   </div>
                 </div>
                 <div className="bg-gray-100 rounded-2xl p-3 shadow flex flex-col h-26">
-                  <h4 className="text-xs font-semibold text-gray-600">Items Currently Borrowed</h4>
+                  <h4 className="text-xs font-semibold text-gray-600">Current holder</h4>
                   <div className="mt-2 flex items-center justify-between">
-                    <p className="text-2xl font-bold text-gray-900">
-                      {loading || statsLoading ? '...' : (dynamicStats.items_currently_borrowed || dashboardData.currentHolder)}
-                    </p>
+                    <p className="text-2xl font-bold text-gray-900">{loading ? '...' : dashboardData.currentHolder}</p>
                     <User className="w-8 h-8 text-gray-500" />
                   </div>
-                  {dynamicStats.employees_with_items > 0 && (
-                    <div className="text-xs text-gray-600 mt-1">
-                      {dynamicStats.employees_with_items} employees
-                    </div>
-                  )}
                 </div>
               </div>
             </div>

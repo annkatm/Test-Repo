@@ -17,17 +17,21 @@ use App\Http\Controllers\Api\ClientController;
 use App\Http\Controllers\Api\EmployeeTypeController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\Api\DashboardController;
 
 // Password reset API routes (public - no auth required)
 Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/auth/reset-password', [AuthController::class, 'resetPassword']);
 
- 
 // Protected API routes (require authentication)
 Route::middleware(['web', 'auth'])->group(function () {
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
+
+    // Dashboard statistics
+    Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);
+    Route::get('/dashboard/counts', [DashboardController::class, 'getCounts']);
 
     // Employee routes
     Route::get('/employees', [EmployeeController::class, 'index']);
@@ -35,6 +39,9 @@ Route::middleware(['web', 'auth'])->group(function () {
     Route::get('/employees/pending-requests', [EmployeeController::class, 'pendingRequests']);
     Route::get('/employees/verify-returns', [EmployeeController::class, 'verifyReturns']);
     Route::get('/employees/available-users', [EmployeeController::class, 'getAvailableUsers']);
+    Route::get('/employees/dashboard-stats', [EmployeeController::class, 'getDashboardStats']);
+    Route::get('/employees/{id}/history', [EmployeeController::class, 'getEmployeeHistory']);
+    Route::post('/employees/{id}/return-item', [EmployeeController::class, 'returnItem']);
     Route::post('/employees', [EmployeeController::class, 'store']);
     Route::get('/employees/{id}', [EmployeeController::class, 'show']);
     Route::put('/employees/{id}', [EmployeeController::class, 'update']);
@@ -42,45 +49,17 @@ Route::middleware(['web', 'auth'])->group(function () {
     Route::post('/employees/{id}/connect-user', [EmployeeController::class, 'connectUser']);
     Route::post('/employees/{id}/disconnect-user', [EmployeeController::class, 'disconnectUser']);
 
-// Employee routes
-Route::get('/employees', [EmployeeController::class, 'index']);
-Route::get('/employees/current-holders', [EmployeeController::class, 'currentHolders']);
-Route::get('/employees/pending-requests', [EmployeeController::class, 'pendingRequests']);
-Route::get('/employees/verify-returns', [EmployeeController::class, 'verifyReturns']);
-Route::get('/employees/available-users', [EmployeeController::class, 'getAvailableUsers']);
-Route::get('/employees/dashboard-stats', [EmployeeController::class, 'getDashboardStats']);
-Route::get('/employees/{id}/history', [EmployeeController::class, 'getEmployeeHistory']);
-Route::post('/employees/{id}/return-item', [EmployeeController::class, 'returnItem']);
-Route::post('/employees', [EmployeeController::class, 'store']);
-Route::get('/employees/{id}', [EmployeeController::class, 'show']);
-Route::put('/employees/{id}', [EmployeeController::class, 'update']);
-Route::delete('/employees/{id}', [EmployeeController::class, 'destroy']);
-Route::post('/employees/{id}/connect-user', [EmployeeController::class, 'connectUser']);
-Route::post('/employees/{id}/disconnect-user', [EmployeeController::class, 'disconnectUser']);
-
-// Request routes
-Route::get('/requests', [RequestController::class, 'index']);
-Route::post('/requests', [RequestController::class, 'store']);
-Route::get('/requests/{id}', [RequestController::class, 'show']);
-Route::put('/requests/{id}', [RequestController::class, 'update']);
-Route::delete('/requests/{id}', [RequestController::class, 'destroy']);
-Route::post('/requests/{id}/approve', [RequestController::class, 'approve']);
-Route::post('/requests/{id}/reject', [RequestController::class, 'reject']);
-Route::post('/requests/{id}/cancel', [RequestController::class, 'cancel']);
-Route::post('/requests/{id}/fulfill', [RequestController::class, 'fulfill']);
-Route::get('/requests/statistics', [RequestController::class, 'statistics']);
-
-
     // Request routes
     Route::get('/requests', [RequestController::class, 'index']);
+    Route::get('/requests/statistics', [RequestController::class, 'statistics']);
     Route::post('/requests', [RequestController::class, 'store']);
     Route::get('/requests/{id}', [RequestController::class, 'show']);
     Route::put('/requests/{id}', [RequestController::class, 'update']);
     Route::delete('/requests/{id}', [RequestController::class, 'destroy']);
     Route::post('/requests/{id}/approve', [RequestController::class, 'approve']);
     Route::post('/requests/{id}/reject', [RequestController::class, 'reject']);
+    Route::post('/requests/{id}/cancel', [RequestController::class, 'cancel']);
     Route::post('/requests/{id}/fulfill', [RequestController::class, 'fulfill']);
-    Route::get('/requests/statistics', [RequestController::class, 'statistics']);
 
     // Transaction routes
     Route::get('/transactions/dashboard', [TransactionController::class, 'dashboard']);
@@ -139,19 +118,3 @@ Route::get('/requests/statistics', [RequestController::class, 'statistics']);
     Route::get('/reports/overview', [ReportController::class, 'overview']);
     Route::get('/reports/export', [ReportController::class, 'exportCsv']);
 });
- 
-
-// Activity Logs API routes moved to web.php to use session authentication
-
-// Role management API routes
-// Role management routes moved to web.php to use session auth
-
-// Reports
-Route::get('/reports/overview', [ReportController::class, 'overview']);
-Route::get('/reports/export', [ReportController::class, 'exportCsv']);
-
-// Dashboard statistics
-use App\Http\Controllers\Api\DashboardController;
-Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);
-Route::get('/dashboard/counts', [DashboardController::class, 'getCounts']);
-

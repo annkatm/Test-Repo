@@ -3,12 +3,6 @@ import HomeSidebar from './HomeSidebar';
 import GlobalHeader from './components/GlobalHeader';
 import api from './services/api';
 
-// helper: format numbers with thousand separators and 2 decimals (₱ locale-style)
-const formatCurrency = (value) => {
-  const num = Number(value) || 0;
-  return num.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-};
-
 const Card = ({ selected, name, qty, image, onClick }) => {
   return (
     <button 
@@ -53,8 +47,6 @@ const Equipment = () => {
   const [successMessage, setSuccessMessage] = useState('Equipment has been processed successfully.');
   const [expandedItems, setExpandedItems] = useState(new Set());
   const [individualEquipment, setIndividualEquipment] = useState({});
-  const [groupPage, setGroupPage] = useState({}); // pagination per expanded group
-  const itemsPerPage = 10;
   const [deletingItem, setDeletingItem] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
@@ -71,8 +63,6 @@ const Equipment = () => {
       newExpanded.delete(itemName);
     } else {
       newExpanded.add(itemName);
-      // reset to page 1 when opening
-      setGroupPage((prev) => ({ ...prev, [itemName]: 1 }));
     }
     setExpandedItems(newExpanded);
   };
@@ -368,7 +358,7 @@ const Equipment = () => {
                       <div className="grid grid-cols-3 gap-4 mb-4 text-gray-700 font-semibold text-sm">
                         <div className="text-left">Items</div>
                         <div className="text-center">Available/Total</div>
-                        <div className="text-right">Unit Price(₱)</div>
+                        <div className="text-right">Total Price(₱)</div>
                       </div>
                       
                       <div className="space-y-3">
@@ -417,7 +407,7 @@ const Equipment = () => {
                                   <div className="text-left font-medium text-gray-800">{group.name}</div>
                                   <div className="text-center text-gray-700">{group.available}/{group.total}</div>
                                   <div className="text-right text-gray-800 flex items-center justify-end">
-                                    <span>₱{formatCurrency(group.price)}</span>
+                                    <span>₱{Number(group.price).toFixed(2)}</span>
                                     <svg 
                                       className={`ml-2 h-4 w-4 text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
                                       fill="none" 
@@ -434,24 +424,19 @@ const Equipment = () => {
                                     <div className="p-4">
                                       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
                                         <div className="bg-gray-100 px-4 py-3 border-b border-gray-200">
-                                          <div className="grid grid-cols-4 gap-4 text-sm font-semibold text-gray-700">
+                                          <div className="grid grid-cols-5 gap-4 text-sm font-semibold text-gray-700">
                                             <div>Serial Number</div>
                                             <div>Status</div>
                                             <div>Date Added</div>
                                             <div>Last Updated</div>
+                                            <div className="text-center">Actions</div>
                                           </div>
                                         </div>
                                         
                                         <div className="divide-y divide-gray-200">
-                                          {(() => {
-                                            const totalItems = individualItems.length;
-                                            const page = groupPage[group.name] || 1;
-                                            const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
-                                            const start = (page - 1) * itemsPerPage;
-                                            const pagedItems = individualItems.slice(start, start + itemsPerPage);
-                                            return pagedItems.map((item, itemIndex) => (
-                                            <div key={`${item.id}-${start + itemIndex}`} className={`px-4 py-3 ${(start + itemIndex) % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
-                                              <div className="grid grid-cols-4 gap-4 items-center text-sm">
+                                          {individualItems.map((item, itemIndex) => (
+                                            <div key={`${item.id}-${itemIndex}`} className={`px-4 py-3 ${itemIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                                              <div className="grid grid-cols-5 gap-4 items-center text-sm">
                                                 <div className="font-medium text-gray-900">{item.serial_number || 'N/A'}</div>
                                                 <div>
                                                   <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -469,41 +454,29 @@ const Equipment = () => {
                                                 <div className="text-gray-600">
                                                   {item.updated_at ? new Date(item.updated_at).toLocaleDateString() : 'N/A'}
                                                 </div>
+                                                <div className="flex justify-center space-x-2">
+                                                  <button 
+                                                    onClick={(e) => handleEditClick(e, item)}
+                                                    className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors duration-200"
+                                                    title="Edit"
+                                                  >
+                                                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                    </svg>
+                                                  </button>
+                                                  <button 
+                                                    onClick={(e) => handleDeleteClick(e, item)}
+                                                    className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors duration-200"
+                                                    title="Delete"
+                                                  >
+                                                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                    </svg>
+                                                  </button>
+                                                </div>
                                               </div>
                                             </div>
-                                          ))
-                                          })()}
-                                          {/* Pagination Controls */}
-                                          {(() => {
-                                            const total = individualItems.length;
-                                            const page = groupPage[group.name] || 1;
-                                            const totalPages = Math.max(1, Math.ceil(total / itemsPerPage));
-                                            if (totalPages <= 1) return null;
-                                            return (
-                                              <div className="px-4 py-3 bg-white flex items-center justify-between border-t border-gray-200">
-                                                <div className="text-xs text-gray-600">
-                                                  Showing {(page - 1) * itemsPerPage + 1}–{Math.min(page * itemsPerPage, total)} of {total}
-                                                </div>
-                                                <div className="space-x-2">
-                                                  <button
-                                                    onClick={(e) => { e.stopPropagation(); setGroupPage((prev) => ({ ...prev, [group.name]: Math.max(1, page - 1) })); }}
-                                                    disabled={page === 1}
-                                                    className={`px-3 py-1 text-sm rounded border ${page === 1 ? 'text-gray-400 border-gray-200' : 'text-blue-600 border-blue-200 hover:bg-blue-50'}`}
-                                                  >
-                                                    Prev
-                                                  </button>
-                                                  <span className="text-sm text-gray-700">{page} / {totalPages}</span>
-                                                  <button
-                                                    onClick={(e) => { e.stopPropagation(); setGroupPage((prev) => ({ ...prev, [group.name]: Math.min(totalPages, page + 1) })); }}
-                                                    disabled={page === totalPages}
-                                                    className={`px-3 py-1 text-sm rounded border ${page === totalPages ? 'text-gray-400 border-gray-200' : 'text-blue-600 border-blue-200 hover:bg-blue-50'}`}
-                                                  >
-                                                    Next
-                                                  </button>
-                                                </div>
-                                              </div>
-                                            );
-                                          })()}
+                                          ))}
                                         </div>
                                       </div>
                                     </div>
@@ -680,7 +653,7 @@ const Equipment = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Price</label>
                     <input
                       type="text"
-                      value={`₱ ${formatCurrency(selectedItemDetails.purchase_price || selectedItemDetails.price)}`}
+                      value={`₱ ${Number(selectedItemDetails.purchase_price || selectedItemDetails.price || 0).toFixed(2)}`}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
                       disabled
                     />
@@ -799,7 +772,7 @@ const Equipment = () => {
                   <div className="bg-white p-3 sm:p-4 rounded-lg shadow-sm">
                     <p className="text-xs text-gray-600 mb-1">Total Value</p>
                     <p className="text-lg sm:text-xl font-bold text-gray-900">
-                      ₱{formatCurrency((Number(selectedItemDetails.purchase_price || selectedItemDetails.price || 0) * selectedItemDetails.total))}
+                      ₱{(Number(selectedItemDetails.purchase_price || selectedItemDetails.price || 0) * selectedItemDetails.total).toFixed(2)}
                     </p>
                   </div>
                 </div>
