@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
 
-export const readHistory = () => {
+export const readHistory = (employeeId) => {
   try {
-    const raw = localStorage.getItem('ireply_history');
+    const key = employeeId ? `ireply_history_emp_${employeeId}` : 'ireply_history';
+    const raw = localStorage.getItem(key);
     const arr = JSON.parse(raw);
     return Array.isArray(arr) ? arr : [];
   } catch (_) {
@@ -10,11 +11,12 @@ export const readHistory = () => {
   }
 };
 
-export const getHistoryCount = () => {
+export const getHistoryCount = (employeeId) => {
   try {
-    const c = localStorage.getItem('ireply_history_count');
+    const countKey = employeeId ? `ireply_history_count_emp_${employeeId}` : 'ireply_history_count';
+    const c = localStorage.getItem(countKey);
     if (c != null) return Number(c) || 0;
-    return readHistory().length;
+    return readHistory(employeeId).length;
   } catch (_) {
     return 0;
   }
@@ -31,6 +33,7 @@ const HistoryView = ({
   totalPages,
   sortedData,
   logActivity,
+  employeeId,
 }) => {
   const noop = () => {};
   const [localSearch, setLocalSearch] = useState('');
@@ -45,14 +48,25 @@ const HistoryView = ({
   const setPage = setCurrentPage ?? setLocalPage;
   const log = logActivity ?? noop;
 
-  const sourceData = (sortedData && sortedData.length ? sortedData : readHistory());
+  const sourceData = (sortedData && sortedData.length ? sortedData : readHistory(employeeId));
+
+  const olderThan24h = (a) => {
+    const raw = a?.time ?? a?.date ?? null;
+    if (!raw) return false;
+    const ts = new Date(raw).getTime();
+    if (Number.isNaN(ts)) return false;
+    const now = Date.now();
+    return now - ts > 24 * 60 * 60 * 1000;
+  };
+
   const filtered = useMemo(() => {
     const q = (sTerm || '').toString().toLowerCase().trim();
     const arr = Array.isArray(sourceData) ? sourceData : [];
     const base = q
       ? arr.filter((it) => (it?.item || it?.message || '').toString().toLowerCase().includes(q))
       : arr;
-    return base
+    const onlyOld = base.filter(olderThan24h);
+    return onlyOld
       .slice()
       .sort((a, b) => new Date(b.date || b.time || 0) - new Date(a.date || a.time || 0));
   }, [sourceData, sTerm]);
@@ -100,20 +114,18 @@ const HistoryView = ({
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         {/* Table Header */}
         <div className="grid grid-cols-12 py-3 px-6 bg-gray-50 border-b border-gray-200 font-semibold text-gray-700 text-sm">
-          <div className="col-span-3">Date</div>
-          <div className="col-span-3">Item</div>
+          <div className="col-span-4">Date</div>
+          <div className="col-span-5">Item</div>
           <div className="col-span-3">Status</div>
-          <div className="col-span-3">Return Date</div>
         </div>
 
         {/* Table Body */}
         <div className="divide-y divide-gray-100">
           {pageData.map((item) => (
             <div key={item.id || item.time} className="grid grid-cols-12 py-3 px-6 text-sm">
-              <div className="col-span-3">{new Date(item.date || item.time).toLocaleDateString()}</div>
-              <div className="col-span-3 truncate">{item.item}</div>
+              <div className="col-span-4">{new Date(item.date || item.time).toLocaleDateString()}</div>
+              <div className="col-span-5 truncate">{item.item}</div>
               <div className="col-span-3">{item.status || item.variant || '-'}</div>
-              <div className="col-span-3">{item.return_date || '-'}</div>
             </div>
           ))}
           {pageData.length === 0 && (

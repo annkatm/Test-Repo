@@ -69,7 +69,18 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
   });
   const [returnTxId, setReturnTxId] = useState(null);
 
-  // Keep chosenUnit in sync if changed by another tab/process
+  // Helper: de-duplicate by a stable key
+  const dedupeByKey = (arr = []) => {
+    const seen = new Set();
+    return (arr || []).filter((x) => {
+      const key = String(x?.tx_id ?? x?.id ?? x?.equipment_id ?? `${x?.item || ''}|${x?.date || ''}`);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
+
+  // Keep chosenUnit in sync if changed by another tab/processs
   useEffect(() => {
     const onStorage = (e) => {
       if (e.key === 'approved_selected_unit') {
@@ -144,7 +155,9 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
         };
       });
       console.log('Mapped transactions:', mapped);
-      setDisplayList(mapped);
+      const filtered = (mapped || []).filter((x) => String((x?.status || '')).toLowerCase() !== 'returned');
+      const unique = dedupeByKey(filtered);
+      setDisplayList(unique);
     } catch (_) {}
   }, [approvedTransactions]);
 
@@ -195,7 +208,11 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
             exchangeItems: Array.isArray(t?.exchangeItems) ? t.exchangeItems : [],
           };
         });
-        if (!cancelled) setDisplayList(mapped);
+        if (!cancelled) {
+          const filtered = (mapped || []).filter((x) => String((x?.status || '')).toLowerCase() !== 'returned');
+          const unique = dedupeByKey(filtered);
+          setDisplayList(unique);
+        }
       } catch (_) { }
     };
     // Only fetch if no data provided via props
@@ -245,7 +262,9 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
             exchangeItems: Array.isArray(t?.exchangeItems) ? t.exchangeItems : [],
           };
         }).filter(r => r.date);
-        setDisplayList(mapped);
+        const filtered = (mapped || []).filter((x) => String((x?.status || '')).toLowerCase() !== 'returned');
+        const unique = dedupeByKey(filtered);
+        setDisplayList(unique);
       } catch (_) { }
     };
     const handler = () => refresh();
@@ -335,6 +354,9 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
   const resolveTxId = async (tx) => {
     if (!tx) return null;
     const direct = tx?.id || tx?.transaction_id || tx?.request_id || tx?.transactionID || tx?.trans_id || tx?.trx_id || tx?.uuid || tx?.pivot?.transaction_id;
+    
+    // For employee-issued items, the ID might be the equipment ID, not transaction ID
+    // We'll return it anyway and let the calling function handle the 404
     if (direct) return direct;
     // Fallback: query approved list and match
     try {
@@ -408,118 +430,121 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
     return null;
   };
 
-  // Perform the return request, update UI, and navigate to Returned Items
+  // Perform the return request using employee-specific endpoint
   const performReturn = async (tx) => {
     if (actionLoading) return;
     setActionLoading(true);
     try {
       const candidate = tx || selectedTransactionData;
-      const txId = await resolveTxId(candidate);
-      if (!txId) {
-        try { console.warn('[performReturn] Missing txId. Candidate tx:', candidate); } catch (_) {}
-        const label = candidate?.equipment_name || candidate?.item || candidate?.match_name || 'Item';
-        alert(`Missing transaction information for "${label}". Please select the transaction row and try again.`);
-        setShowReturnModal(false);
-        setActionLoading(false);
-        return;
-      }
-
-      // First, check the transaction status
-      const statusCheckRes = await fetch(`/api/transactions/${txId}`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
-        credentials: 'same-origin',
-      });
-
-      if (!statusCheckRes.ok) {
-        let errorMsg = 'Failed to verify transaction status';
-        try {
-          const errorData = await statusCheckRes.json();
-          errorMsg = errorData.message || errorMsg;
-        } catch (_) {}
-        alert(`Error: ${errorMsg}`);
-        setActionLoading(false);
-        return;
-      }
-
-      const transactionData = await statusCheckRes.json();
-      if (transactionData.status !== 'released') {
-        alert('This item cannot be returned because it is not currently marked as released.');
-        setActionLoading(false);
-        return;
-      }
-
-      // If we get here, the transaction exists and is in 'released' status
-      const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-      const res = await fetch(`/api/transactions/${txId}/return`, {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': csrf,
-        },
-        credentials: 'same-origin',
-        body: JSON.stringify({
-          return_condition: 'good_condition',
-          return_notes: ''
-        }),
-      });
-
-      if (!res.ok) {
-        let errorMsg = 'Failed to process return';
-        try {
-          const errorData = await res.json();
-          errorMsg = errorData.message || errorMsg;
-        } catch (_) {}
-        alert(`Return failed: ${errorMsg}`);
-        setActionLoading(false);
-        return;
-      }
       
-      // Success - log activity
-      logActivity('Approved: Item Returned Successfully', 'success');
+      console.log('performReturn called with candidate:', candidate);
       
-      // Dispatch event to restore equipment to available status
+      // For directly issued items, use employee return endpoint directly
+      const equipmentId = candidate?.equipment_id || candidate?.id;
+      const equipmentName = candidate?.equipment_name || candidate?.item || candidate?.match_name || 'Item';
+      
+      console.log('Equipment ID for return:', equipmentId);
+      console.log('Equipment Name:', equipmentName);
+      
+      if (!equipmentId) {
+        alert('Missing equipment information. Please try again.');
+        setActionLoading(false);
+        return;
+      }
+
+      // Try to get current employee ID and use employee return endpoint
       try {
-        const equipId = (tx || selectedTransactionData)?.equipment_id;
-        if (equipId) {
-          window.dispatchEvent(new CustomEvent('ireply:equipment:restore', { detail: { equipment_id: equipId } }));
+        const userRes = await fetch('/check-auth', { credentials: 'same-origin' });
+        const userData = await userRes.json();
+        
+        console.log('User authentication data:', userData);
+        
+        if (userData?.authenticated && userData?.user) {
+          // Try to find employee ID
+          let employeeId = userData.user.employee_id || userData.user.linked_employee_id;
+          
+          if (!employeeId && userData.user.email) {
+            console.log('Looking up employee by email:', userData.user.email);
+            const empRes = await fetch('/api/employees', { credentials: 'same-origin' });
+            const empData = await empRes.json();
+            const employees = Array.isArray(empData?.data) ? empData.data : [];
+            const emp = employees.find(e => e.email?.toLowerCase() === userData.user.email.toLowerCase());
+            if (emp) {
+              employeeId = emp.id;
+              console.log('Found employee ID:', employeeId);
+            }
+          }
+          
+          if (employeeId) {
+            console.log(`Attempting return via /api/employees/${employeeId}/return-item`);
+            
+            const returnRes = await fetch(`/api/employees/${employeeId}/return-item`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+              },
+              credentials: 'same-origin',
+              body: JSON.stringify({
+                equipment_id: equipmentId,
+                return_condition: 'good',
+                notes: 'Returned via approved transactions'
+              })
+            });
+            
+            const returnData = await returnRes.json();
+            console.log('Employee return response:', returnData);
+            
+            if (returnData.success) {
+              // Success - remove from display and close modal
+              const itemId = candidate?.id || candidate?.tx_id;
+              if (itemId) {
+                setDisplayList((prev) => (prev || []).filter((t) => 
+                  String(t?.id ?? t?.tx_id) !== String(itemId)
+                ));
+              }
+              
+              setShowReturnModal(false);
+              setSelectedRow(null);
+              setActionLoading(false);
+              
+              logActivity('Approved: Item Returned Successfully', 'success');
+              
+              try {
+                window.dispatchEvent(new CustomEvent('ireply:approved:changed'));
+                window.dispatchEvent(new CustomEvent('ireply:equipment:restore', { 
+                  detail: { equipment_id: equipmentId } 
+                }));
+              } catch (_) {}
+              
+              alert('Item returned successfully!');
+              return;
+            } else {
+              console.error('Employee return failed:', returnData);
+              alert(returnData.message || 'Failed to return item');
+              setActionLoading(false);
+              return;
+            }
+          } else {
+            console.error('Could not determine employee ID');
+            alert('Unable to identify current employee. Please contact support.');
+            setActionLoading(false);
+            return;
+          }
         } else {
-          // Fallback: ask Transaction page to refresh available equipment
-          window.dispatchEvent(new CustomEvent('ireply:equipment:restore'));
+          console.error('User not authenticated or missing user data');
+          alert('Authentication required. Please log in again.');
+          setActionLoading(false);
+          return;
         }
-      } catch (_) { }
-      
-      // Prepare return item payload with properly formatted date
-      const now = new Date();
-      const returnedItem = {
-        id: (tx || selectedTransactionData)?.id || (tx || selectedTransactionData)?.tx_id || Date.now(),
-        item: (tx || selectedTransactionData)?.item || (tx || selectedTransactionData)?.equipment_name || (tx || selectedTransactionData)?.match_name || 'Item',
-        equipment_name: (tx || selectedTransactionData)?.equipment_name || (tx || selectedTransactionData)?.item || (tx || selectedTransactionData)?.match_name || 'Item',
-        date: now.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }),
-        status: 'Returned'
-      };
-      
-      // First, add the item to returned items (dispatch event FIRST before navigation)
-      try {
-        window.dispatchEvent(new CustomEvent('ireply:returned:add', { detail: returnedItem }));
-      } catch (_) { }
-      
-      // Refresh the approved list to remove the returned item
-      try {
-        window.dispatchEvent(new CustomEvent('ireply:approved:changed'));
-      } catch (_) { }
-      
-      // Close modal and reset state
-      setShowReturnModal(false);
-      setSelectedRow(null);
-      setActionLoading(false);
-      
-      // Success notification only; no auto-navigation
-      alert('Item returned successfully! The unit is now available in Item Categories.');
+      } catch (e) {
+        console.error('Employee return failed:', e);
+        alert('Failed to return item. Please try again or contact support.');
+        setActionLoading(false);
+        return;
+      }
+
     } catch (err) {
       console.error('[performReturn] error', err);
       alert('An error occurred while returning the item. Please try again.');
@@ -882,13 +907,17 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                 <ExchangePanel
                   transaction={selectedTransactionData}
                   onClose={() => setSelectedRow(null)}
-                  onReturnNow={async () => { 
-                    console.log('Return Now clicked - selectedTransactionData:', selectedTransactionData);
-                    const tid = selectedTransactionData?.tx_id || selectedTransactionData?.id || await resolveTxId(selectedTransactionData);
-                    console.log('Resolved transaction ID:', tid);
-                    setReturnTxId(tid || null);
-                    setShowReturnModal(true); 
-                    logActivity('Approved: Clicked Return Now', 'return'); 
+                  onReturnNow={() => { 
+                    // Called after successful return from ExchangePanel
+                    try {
+                      const rid = selectedTransactionData?.tx_id || selectedTransactionData?.id;
+                      if (rid != null) {
+                        setDisplayList((prev) => (prev || []).filter((t) => String(t?.tx_id ?? t?.id) !== String(rid)));
+                      }
+                    } catch (_) {}
+                    try { window.dispatchEvent(new CustomEvent('ireply:approved:changed')); } catch (_) {}
+                    setSelectedRow(null);
+                    logActivity('Approved: Item Returned Successfully', 'success');
                   }}
                   onOpenBrowse={() => { setShowBrowseLaptopsModal(true); logActivity('Approved: Clicked Exchange', 'exchange'); }}
                   className="flex-1"
@@ -1503,10 +1532,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                   <div className="text-gray-500">Borrowed Date</div>
                   <div className="text-gray-900 font-semibold">{borrowedDetails?.borrowDate || '-'}</div>
                 </div>
-                <div>
-                  <div className="text-gray-500">Return Date</div>
-                  <div className="text-gray-900 font-semibold">{borrowedDetails?.returnDate || '-'}</div>
-                </div>
+                {/* Return date removed per policy */}
               </div>
               <div className="border-t pt-4">
                 <div className="text-sm text-gray-500 mb-2">Items</div>

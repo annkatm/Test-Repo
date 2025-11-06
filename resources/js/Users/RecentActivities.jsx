@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 
-const RecentActivities = ({ activities = [], iconFor, timeAgo }) => {
+const RecentActivities = ({ activities = [], iconFor, timeAgo, employeeId }) => {
   const allowed = new Set(['approved', 'cancel', 'denied', 'request', 'return', 'exchange']);
 
   const pickType = (a) => {
@@ -10,10 +10,20 @@ const RecentActivities = ({ activities = [], iconFor, timeAgo }) => {
     if (/(approved|approve|success|released|borrowed|active)/.test(hay)) return 'approved';
     if (/(cancel|cancelled|canceled)/.test(hay)) return 'cancel';
     if (/(denied|deny|declined|rejected)/.test(hay)) return 'denied';
-    if (/(request|requested|pending|processing|in\s*process|on\s*process|open|awaiting|waiting|review)/.test(hay)) return 'request';
+    // Treat true workflow states as request; avoid mapping generic UI actions like open/view
+    if (/(request|requested|pending|processing|in\s*process|on\s*process|awaiting|waiting)/.test(hay)) return 'request';
     if (/(return|returned)/.test(hay)) return 'return';
     if (/(exchange|exchanged)/.test(hay)) return 'exchange';
     return '';
+  };
+
+  const isNoise = (a) => {
+    const text = ((a?.message || a?.item || a?.action || a?.status || '') + '').toLowerCase();
+    // Exclude generic UI/navigation events
+    if (/(^|\b)(open|opened|opening|view|viewed|page|navigat|clicked|click|closed|search|filter|sorted)(\b|$)/.test(text)) {
+      return true;
+    }
+    return false;
   };
 
   const within24h = (a) => {
@@ -27,29 +37,39 @@ const RecentActivities = ({ activities = [], iconFor, timeAgo }) => {
 
   const items = activities
     .map((a) => ({ ...a, __type: pickType(a) }))
+    .filter((a) => !isNoise(a))
     .filter((a) => allowed.has(a.__type))
-    .filter(within24h);
+    // Only show entries from the last 24 hours for ALL types
+    .filter((a) => within24h(a));
 
-  // Persist qualifying activities into a durable History store
+  // Persist ALL valid activities (not time-limited) into a durable History store
   useEffect(() => {
     try {
-      const key = 'ireply_history';
+      // Use employee-specific localStorage key to separate history per employee
+      const key = employeeId ? `ireply_history_emp_${employeeId}` : 'ireply_history';
+      const countKey = employeeId ? `ireply_history_count_emp_${employeeId}` : 'ireply_history_count';
+      
       const raw = localStorage.getItem(key);
       const existing = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
+      // Build a persist list from full activities (ignore UI noise), but do not 24h-filter
+      const persistList = (activities || [])
+        .map((a) => ({ ...a, __type: pickType(a) }))
+        .filter((a) => !isNoise(a))
+        .filter((a) => allowed.has(a.__type));
       const byKey = new Map(
         existing.map((x) => [String(x.id || (x.message || x.item || '') + String(x.time || x.date || '')), x])
       );
-      for (const a of items) {
+      for (const a of persistList) {
         const k = String(a.id || (a.message || a.item || '') + String(a.time || a.date || ''));
         if (!byKey.has(k)) byKey.set(k, a);
       }
       const merged = Array.from(byKey.values());
       localStorage.setItem(key, JSON.stringify(merged));
-      localStorage.setItem('ireply_history_count', String(merged.length));
+      localStorage.setItem(countKey, String(merged.length));
     } catch (_) {
       // ignore storage errors
     }
-  }, [items]);
+  }, [activities, employeeId]);
 
   const safeIconFor = (variant) => {
     try {
@@ -85,7 +105,7 @@ const RecentActivities = ({ activities = [], iconFor, timeAgo }) => {
                   const detected = a.__type || pickType(a);
                   const normalized = detected === 'success' ? 'approved' : detected === 'borrowed' ? 'approved' : detected === 'pending' ? 'request' : detected === 'processing' ? 'request' : detected === 'declined' ? 'denied' : detected === 'rejected' ? 'denied' : detected;
                   const { Icon, bg, text } = safeIconFor(normalized || a?.variant);
-                  const message = a?.message || a?.item || 'Activity';
+                  const message = normalized === 'denied' ? 'Your request has been denied' : (a?.message || a?.item || 'Activity');
                   const when = formatTime(a?.time || a?.date);
                   return (
                     <li key={a.id || message + String(a?.time || a?.date)} className="py-3">
