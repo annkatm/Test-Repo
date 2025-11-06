@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 export const readHistory = () => {
   try {
@@ -46,13 +46,24 @@ const HistoryView = ({
   const log = logActivity ?? noop;
 
   const sourceData = (sortedData && sortedData.length ? sortedData : readHistory());
+
+  const olderThan24h = (a) => {
+    const raw = a?.time ?? a?.date ?? null;
+    if (!raw) return false;
+    const ts = new Date(raw).getTime();
+    if (Number.isNaN(ts)) return false;
+    const now = Date.now();
+    return now - ts > 24 * 60 * 60 * 1000;
+  };
+
   const filtered = useMemo(() => {
     const q = (sTerm || '').toString().toLowerCase().trim();
     const arr = Array.isArray(sourceData) ? sourceData : [];
     const base = q
       ? arr.filter((it) => (it?.item || it?.message || '').toString().toLowerCase().includes(q))
       : arr;
-    return base
+    const onlyOld = base.filter(olderThan24h);
+    return onlyOld
       .slice()
       .sort((a, b) => new Date(b.date || b.time || 0) - new Date(a.date || a.time || 0));
   }, [sourceData, sTerm]);
@@ -85,6 +96,8 @@ const HistoryView = ({
       {/* Search bar */}
       <div className="flex justify-between items-center">
         <input
+          id="history-search"
+          name="historySearch"
           type="text"
           placeholder="Search by item name..."
           value={sTerm}
