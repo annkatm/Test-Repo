@@ -70,7 +70,9 @@ class RequestController extends Controller
             // Simple query first to test
             $query = DB::table('requests')
                 ->leftJoin('employees', 'requests.employee_id', '=', 'employees.id')
-                // Join the requesting user from requests.user_id (employees table doesn't have user_id)
+                // Join the user associated with the employee (employees.user_id -> users.id)
+                ->leftJoin('users as employee_user', 'employees.user_id', '=', 'employee_user.id')
+                // Also join the requesting user from requests.user_id for fallback
                 ->leftJoin('users', 'requests.user_id', '=', 'users.id')
                 ->leftJoin('equipment', 'requests.equipment_id', '=', 'equipment.id')
                 ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
@@ -81,8 +83,10 @@ class RequestController extends Controller
                     DB::raw("COALESCE(employees.last_name, '') as last_name"),
                     DB::raw("CONCAT(COALESCE(employees.first_name, ''), ' ', COALESCE(employees.last_name, '')) as full_name"),
                     DB::raw("COALESCE(employees.position, '') as position"),
-                    // Users table doesn't have an avatar column; use employee_image only
-                    DB::raw("COALESCE(employees.employee_image, '') as avatar_url"),
+                    // Include both raw employee_image and processed avatar_url
+                    // Priority: employee_image from employees table, then avatar from users table
+                    'employees.employee_image',
+                    DB::raw("NULLIF(COALESCE(employees.employee_image, employee_user.avatar, users.avatar, ''), '') as avatar_url"),
                     DB::raw("COALESCE(equipment.name, '') as equipment_name"),
                     DB::raw("COALESCE(equipment.brand, '') as brand"),
                     DB::raw("COALESCE(equipment.model, '') as model"),

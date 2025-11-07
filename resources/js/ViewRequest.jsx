@@ -101,7 +101,21 @@ const ViewRequest = () => {
   // Helper function to get avatar URL from employee/user data
   const getAvatarUrl = (data) => {
     const avatar = data.avatar_url || data.profile_photo_url || data.photo_url || data.employee_image || data.avatar || null;
-    if (!avatar) return null;
+    
+    // Debug logging
+    if (data.full_name === 'Janna Gwapa') {
+      console.log('Avatar data for Janna Gwapa:', {
+        avatar_url: data.avatar_url,
+        employee_image: data.employee_image,
+        profile_photo_url: data.profile_photo_url,
+        photo_url: data.photo_url,
+        avatar: data.avatar,
+        finalAvatar: avatar
+      });
+    }
+    
+    // Check if avatar is null, undefined, empty string, or just whitespace
+    if (!avatar || (typeof avatar === 'string' && avatar.trim() === '')) return null;
     // If it's already a full URL, return it
     if (avatar.includes('http') || avatar.startsWith('/storage/')) return avatar;
     // Otherwise prepend storage path

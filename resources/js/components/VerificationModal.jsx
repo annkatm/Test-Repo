@@ -44,7 +44,8 @@ const VerificationModal = ({
   // Helper function to get avatar URL
   const getAvatarUrl = (data) => {
     const avatar = data?.avatar_url || data?.profile_photo_url || data?.photo_url || data?.employee_image || data?.avatar || null;
-    if (!avatar) return null;
+    // Check if avatar is null, undefined, empty string, or just whitespace
+    if (!avatar || (typeof avatar === 'string' && avatar.trim() === '')) return null;
     if (avatar.includes('http') || avatar.startsWith('/storage/')) return avatar;
     return `/storage/${avatar}`;
   };

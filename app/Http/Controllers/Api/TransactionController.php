@@ -795,6 +795,7 @@ class TransactionController extends Controller
             // Use left joins and coalesce to avoid hard failures if related tables/columns differ
             $query = DB::table('transactions')
                 ->leftJoin('employees', 'transactions.employee_id', '=', 'employees.id')
+                // Join the user associated with the employee (employees.user_id -> users.id)
                 ->leftJoin('users', 'employees.user_id', '=', 'users.id')
                 // Join the correct equipment table used by the current database
                 ->leftJoin('equipment', 'transactions.equipment_id', '=', 'equipment.id')
@@ -805,7 +806,10 @@ class TransactionController extends Controller
                     DB::raw("COALESCE(employees.last_name, '') as last_name"),
                     DB::raw("CONCAT(COALESCE(employees.first_name, ''), ' ', COALESCE(employees.last_name, '')) as full_name"),
                     DB::raw("COALESCE(employees.position, '') as position"),
-                    DB::raw("COALESCE(employees.employee_image, users.avatar, '') as avatar_url"),
+                    // Include both raw employee_image and processed avatar_url
+                    // Priority: employee_image from employees table, then avatar from users table
+                    'employees.employee_image',
+                    DB::raw("NULLIF(COALESCE(employees.employee_image, users.avatar, ''), '') as avatar_url"),
                     DB::raw("COALESCE(equipment.name, '') as equipment_name"),
                     DB::raw("COALESCE(equipment.brand, '') as brand"),
                     DB::raw("COALESCE(equipment.model, '') as model"),
