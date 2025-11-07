@@ -126,19 +126,21 @@ class ReportController extends Controller
                 ->limit(10)
                 ->get();
 
-            // Most expensive equipment
+            // Most expensive equipment - group by brand+item name and get max price for each
             $expensiveEquipment = DB::table('equipment')
                 ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
                 ->select([
                     'equipment.name as item',
                     'equipment.brand',
-                    'equipment.purchase_price as value',
+                    DB::raw('MAX(equipment.purchase_price) as value'),
+                    DB::raw('COUNT(equipment.id) as count'),
                     DB::raw('COALESCE(categories.name, "Uncategorized") as category')
                 ])
                 ->whereNotNull('equipment.purchase_price')
                 ->where('equipment.purchase_price', '>', 0)
-                ->orderByDesc('equipment.purchase_price')
-                ->limit(10)
+                ->groupBy('equipment.brand', 'equipment.name', 'categories.name')
+                ->orderByDesc('value')
+                ->limit(50)
                 ->get();
 
             // Return compliance (employees with their borrow/return stats)

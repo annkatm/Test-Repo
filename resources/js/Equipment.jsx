@@ -57,6 +57,14 @@ const Equipment = () => {
   const [selectedItemDetails, setSelectedItemDetails] = useState(null);
   const [imagePreview, setImagePreview] = useState(null); // { src, alt }
 
+  // Helper function to format price with commas
+  const formatPrice = (price) => {
+    return Number(price || 0).toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  };
+
   const toggleExpanded = (itemName) => {
     const newExpanded = new Set(expandedItems);
     if (newExpanded.has(itemName)) {
@@ -409,7 +417,7 @@ const Equipment = () => {
                                   <div className="text-left font-medium text-gray-800">{group.name}</div>
                                   <div className="text-center text-gray-700">{group.available}/{group.total}</div>
                                   <div className="text-right text-gray-800 flex items-center justify-end">
-                                    <span>₱{Number(group.price).toFixed(2)}</span>
+                                    <span>₱{formatPrice(group.price)}</span>
                                     <svg 
                                       className={`ml-2 h-4 w-4 text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
                                       fill="none" 
@@ -655,7 +663,7 @@ const Equipment = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">Price</label>
                     <input
                       type="text"
-                      value={`₱ ${Number(selectedItemDetails.purchase_price || selectedItemDetails.price || 0).toFixed(2)}`}
+                      value={`₱ ${formatPrice(selectedItemDetails.purchase_price || selectedItemDetails.price || 0)}`}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
                       disabled
                     />
@@ -774,7 +782,7 @@ const Equipment = () => {
                   <div className="bg-white p-3 sm:p-4 rounded-lg shadow-sm">
                     <p className="text-xs text-gray-600 mb-1">Total Value</p>
                     <p className="text-lg sm:text-xl font-bold text-gray-900">
-                      ₱{(Number(selectedItemDetails.purchase_price || selectedItemDetails.price || 0) * selectedItemDetails.total).toFixed(2)}
+                      ₱{formatPrice((Number(selectedItemDetails.purchase_price || selectedItemDetails.price || 0) * selectedItemDetails.total))}
                     </p>
                   </div>
                 </div>
