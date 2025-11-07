@@ -975,7 +975,7 @@ const ViewRequest = () => {
                 </div>
               </div>
               <div className="bg-gray-100 rounded-2xl p-3 shadow flex flex-col h-26">
-                <h4 className="text-xs font-semibold text-gray-600">Current Holder</h4>
+                <h4 className="text-xs font-semibold text-gray-600">Approved Requests</h4>
                 <div className="mt-2 flex items-center justify-between">
                   <p className="text-2xl font-bold text-gray-900">{groupedCurrentHolders.length}</p>
                   <User className="w-8 h-8 text-gray-500" />
