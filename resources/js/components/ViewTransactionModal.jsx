@@ -101,25 +101,14 @@ const ViewTransactionModal = ({ isOpen, onClose, transactionData }) => {
 
         {/* Content */}
         <div className="p-6 space-y-4">
-          {/* Date Fields - Side by Side */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* Date Fields */}
+          <div>
             {/* Request Date */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Request Date</label>
               <div className="relative">
                 <div className="w-full px-3 py-2 rounded-md bg-gray-100 text-gray-900 flex items-center justify-between">
                   <span>{formatDate(transactionData.request_date || transactionData.created_at)}</span>
-                  <Calendar className="h-4 w-4 text-gray-500" />
-                </div>
-              </div>
-            </div>
-
-            {/* Return Date */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Return Date</label>
-              <div className="relative">
-                <div className="w-full px-3 py-2 rounded-md bg-gray-100 text-gray-900 flex items-center justify-between">
-                  <span>{formatDate(transactionData.return_date || transactionData.expected_return_date) || 'N/A'}</span>
                   <Calendar className="h-4 w-4 text-gray-500" />
                 </div>
               </div>

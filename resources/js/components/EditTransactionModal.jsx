@@ -4,7 +4,6 @@ import api from '../services/api';
 
 const EditTransactionModal = ({ isOpen, onClose, transactionData, onUpdate }) => {
   const [formData, setFormData] = useState({
-    expected_return_date: '',
     release_condition: 'good_condition',
     return_condition: 'good_condition',
     release_notes: '',
@@ -20,7 +19,6 @@ const EditTransactionModal = ({ isOpen, onClose, transactionData, onUpdate }) =>
   useEffect(() => {
     if (isOpen && transactionData) {
       setFormData({
-        expected_return_date: transactionData.expectedReturnDate || '',
         release_condition: transactionData.releaseCondition || 'good_condition',
         return_condition: transactionData.returnCondition || 'good_condition',
         release_notes: transactionData.releaseNotes || '',
@@ -147,22 +145,6 @@ const EditTransactionModal = ({ isOpen, onClose, transactionData, onUpdate }) =>
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Expected Return Date */}
-            <div>
-              <label htmlFor="expected_return_date" className="block text-sm font-medium text-gray-700 mb-2">
-                Expected Return Date
-              </label>
-              <input
-                type="date"
-                id="expected_return_date"
-                name="expected_return_date"
-                value={formatDate(formData.expected_return_date)}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                required
-              />
-            </div>
-
             {/* Status */}
             <div>
               <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-2">
