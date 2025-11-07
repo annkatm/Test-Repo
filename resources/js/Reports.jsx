@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import HomeSidebar from "./HomeSidebar";
 import GlobalHeader from "./components/GlobalHeader";
-import { Search, Filter, Download, Calendar, BarChart3, PieChart, TrendingUp, Users, Package, Clock, Shield } from "lucide-react";
+import { Search, Filter, Download, Calendar, PieChart, TrendingUp, Users, Package, Clock, Shield } from "lucide-react";
 import { reportService } from "./services/api";
 
 const Reports = () => {
@@ -20,12 +20,7 @@ const Reports = () => {
   const [summary, setSummary] = useState({ 
     total_items: 0, 
     available_stock: 0, 
-    low_stock: 0, 
-    out_of_stock: 0,
-    total_requests: 0,
-    approved_requests: 0,
-    pending_requests: 0,
-    total_users: 0
+    currently_using: 0
   });
 
   const [equipmentData, setEquipmentData] = useState([]);
@@ -76,12 +71,7 @@ const Reports = () => {
           setSummary({
             total_items: data.summary?.total_items || 0,
             available_stock: data.summary?.available_stock || 0,
-            low_stock: data.summary?.low_stock || 0,
-            out_of_stock: data.summary?.out_of_stock || 0,
-            total_requests: 0,
-            approved_requests: 0,
-            pending_requests: 0,
-            total_users: 0
+            currently_using: data.summary?.currently_using || 0
           });
 
           // Update monthly trend
@@ -380,7 +370,7 @@ const Reports = () => {
           {/* Summary Cards */}
           {!loading && !error && (
             <>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-100 rounded-lg">
@@ -405,45 +395,12 @@ const Reports = () => {
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-yellow-100 rounded-lg">
-                  <Package className="h-5 w-5 text-yellow-600" />
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wide">Low Stock</div>
-                  <div className="text-2xl font-bold text-gray-900">{summary.low_stock}</div>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-red-100 rounded-lg">
-                  <Package className="h-5 w-5 text-red-600" />
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wide">Out of Stock</div>
-                  <div className="text-2xl font-bold text-gray-900">{summary.out_of_stock}</div>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <BarChart3 className="h-5 w-5 text-purple-600" />
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wide">Total Requests</div>
-                  <div className="text-2xl font-bold text-gray-900">{summary.total_requests}</div>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-              <div className="flex items-center gap-3">
                 <div className="p-2 bg-indigo-100 rounded-lg">
                   <Users className="h-5 w-5 text-indigo-600" />
                 </div>
                 <div>
                   <div className="text-xs text-gray-500 uppercase tracking-wide">Total Users</div>
-                  <div className="text-2xl font-bold text-gray-900">{summary.total_users}</div>
+                  <div className="text-2xl font-bold text-gray-900">{summary.currently_using}</div>
                 </div>
               </div>
             </div>
@@ -595,14 +552,14 @@ const Reports = () => {
                         : `${item.item}: ₱${displayValue.toLocaleString()}`;
                       
                       return (
-                  <div key={index} className="flex flex-col items-center min-w-[60px] max-w-[80px]">
+                  <div key={index} className="flex flex-col items-center w-[80px] flex-shrink-0">
                     <div
                             className={`${getColorClass(displayValue)} rounded-t w-full mb-2 transition-all duration-500 hover:opacity-80 cursor-pointer`}
                             style={{ height: `${height}px`, minHeight: '4px' }}
                             title={tooltipText}
                     ></div>
-                          <span className="text-xs text-gray-600 text-center leading-tight break-words">{item.item}</span>
-                          <span className="text-xs font-semibold text-[#2262C6]">{displayText}</span>
+                          <span className="text-xs text-gray-600 text-center leading-tight break-words w-full px-1">{item.item}</span>
+                          <span className="text-xs font-semibold text-[#2262C6] text-center w-full">{displayText}</span>
                         </div>
                       );
                     })
