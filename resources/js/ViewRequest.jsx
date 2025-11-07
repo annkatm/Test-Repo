@@ -93,11 +93,6 @@ const ViewRequest = () => {
     returnData: null
   });
 
-  const [viewRequestModal, setViewRequestModal] = useState({
-    isOpen: false,
-    requestData: null
-  });
-
   const handleSelect = (next) => {
     setView(next);
     setIsMenuOpen(false);
@@ -159,7 +154,6 @@ const ViewRequest = () => {
         requestId: req.id,
         equipment_name: req.equipment_name || 'Unknown Item',
         name: req.equipment_name || 'Unknown Item',
-        category_name: req.category_name || 'Equipment Item',
         specifications: [req.brand, req.model].filter(Boolean).join(' ') || req.category_name || '',
         specs: [req.brand, req.model].filter(Boolean).join(' ') || req.category_name || ''
       });
@@ -189,10 +183,7 @@ const ViewRequest = () => {
       grouped[employeeName].holders.push(holder);
       grouped[employeeName].items.push({
         id: holder.equipment_id || holder.id,
-        equipment_name: holder.equipment_name || 'Unknown Item',
-        category_name: holder.category_name || 'Equipment Item',
-        brand: holder.brand,
-        model: holder.model
+        equipment_name: holder.equipment_name || 'Unknown Item'
       });
     });
     return Object.values(grouped);
@@ -275,30 +266,12 @@ const ViewRequest = () => {
     });
   };
 
-  // Row click opens the view request modal
+  // Row click opens the detailed approval modal
   const handleRowClick = (groupId) => {
     const group = groupedRequests.find(g => g.id === groupId);
     if (!group) return;
     
-    // Construct request data with all items from the group
-    const requestData = {
-      ...group.requests[0], // Use first request's data for main info
-      items: group.items, // Include all items from the group
-      full_name: group.full_name,
-      position: group.position
-    };
-    
-    setViewRequestModal({
-      isOpen: true,
-      requestData: requestData
-    });
-  };
-
-  const handleCloseViewRequestModal = () => {
-    setViewRequestModal({
-      isOpen: false,
-      requestData: null
-    });
+    handleApprove(group);
   };
 
   const handleReject = (groupId) => {
@@ -450,20 +423,12 @@ const ViewRequest = () => {
     }
   };
 
-  const handleViewHolder = (group) => {
-    if (group) {
-      // Construct holder data with all items from the group
-      const holderData = {
-        ...group.holders[0], // Use first holder's data for main info
-        items: group.items, // Include all items from the group
-        full_name: group.full_name,
-        position: group.position,
-        request_mode: group.request_mode,
-        expected_return_date: group.expected_return_date
-      };
+  const handleViewHolder = (holderId) => {
+    const holder = currentHolders.find(h => h.id === holderId);
+    if (holder) {
       setViewHolderModal({
         isOpen: true,
-        holderData: holderData
+        holderData: holder
       });
     }
   };
@@ -1247,7 +1212,7 @@ const ViewRequest = () => {
                 groupedCurrentHolders.map((group) => (
                   <tr 
                     key={group.id} 
-                    onClick={() => handleViewHolder(group)}
+                    onClick={() => handleViewHolder(group.holders[0]?.id || group.id)}
                     className="border-b border-gray-100 last:border-0 hover:bg-blue-50 cursor-pointer transition-colors duration-200"
                   >
                     <td className="py-4 px-6 text-sm font-medium text-gray-900">
@@ -1568,13 +1533,6 @@ const ViewRequest = () => {
         onClose={handleCloseViewReturnModal}
         returnData={viewReturnModal.returnData}
         onConfirmReturn={handleConfirmReturn}
-      />
-
-      {/* View Request Modal */}
-      <ViewTransactionModal
-        isOpen={viewRequestModal.isOpen}
-        onClose={handleCloseViewRequestModal}
-        transactionData={viewRequestModal.requestData}
       />
     </div>
   );

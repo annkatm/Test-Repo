@@ -121,24 +121,20 @@ const ViewTransactionModal = ({ isOpen, onClose, transactionData }) => {
             <div className="space-y-2">
               {transactionData.items && transactionData.items.length > 0 ? (
                 transactionData.items.map((item, index) => (
-                  <div key={index} className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg bg-white hover:bg-gray-50 transition-colors">
-                    <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-                      <Package className="h-5 w-5 text-blue-600" />
-                    </div>
+                  <div key={index} className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg bg-gray-50">
+                    <Package className="h-5 w-5 text-blue-600" />
                     <div className="flex-1">
-                      <p className="font-semibold text-gray-900">{item.equipment_name || item.name}</p>
-                      <p className="text-sm text-gray-500">{item.category_name || item.specifications || item.specs || 'Equipment Item'}</p>
+                      <p className="font-medium text-gray-900">{item.equipment_name || item.name}</p>
+                      <p className="text-sm text-gray-600">{item.specifications || item.specs || 'Equipment'}</p>
                     </div>
                   </div>
                 ))
               ) : (
-                <div className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg bg-white hover:bg-gray-50 transition-colors">
-                  <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-                    <Package className="h-5 w-5 text-blue-600" />
-                  </div>
+                <div className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg bg-gray-50">
+                  <Package className="h-5 w-5 text-blue-600" />
                   <div className="flex-1">
-                    <p className="font-semibold text-gray-900">{transactionData.equipment_name || transactionData.item || 'Equipment'}</p>
-                    <p className="text-sm text-gray-500">{transactionData.category_name || 'Equipment Item'}</p>
+                    <p className="font-medium text-gray-900">{transactionData.equipment_name || transactionData.item || 'Equipment'}</p>
+                    <p className="text-sm text-gray-600">Equipment Item</p>
                   </div>
                 </div>
               )}
