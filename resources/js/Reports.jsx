@@ -10,7 +10,9 @@ const Reports = () => {
   const [endDate, setEndDate] = useState("");
   const [category, setCategory] = useState("All");
   const [equipmentCategory, setEquipmentCategory] = useState("All");
+  const [equipmentFilterType, setEquipmentFilterType] = useState("by_item");
   const [borrowedCategory, setBorrowedCategory] = useState("All");
+  const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -112,12 +114,42 @@ const Reports = () => {
           console.log('Top Borrowed Items:', borrowedItems);
           setTopBorrowed(borrowedItems);
 
-          // Update expensive equipment from API
-          setExpensiveEquipment((data.expensiveEquipment || []).map(item => ({
-            item: `${item.brand || ''} ${item.item || ''}`.trim() || 'Unknown',
-            value: parseFloat(item.value) || 0,
-            category: item.category || 'Uncategorized'
-          })));
+          // Update expensive equipment from API - group by item name and keep max value
+          console.log('Raw expensive equipment data:', data.expensiveEquipment);
+          
+          const equipmentMap = new Map();
+          (data.expensiveEquipment || []).forEach(item => {
+            // Create a unique key from brand and item name
+            const brand = (item.brand || '').trim();
+            const itemName = (item.item || '').trim();
+            const combinedName = brand && itemName 
+              ? `${brand} ${itemName}`.trim()
+              : brand || itemName || 'Unknown';
+            const itemValue = parseFloat(item.value) || 0;
+            const itemCount = parseInt(item.count) || 1;
+            const existing = equipmentMap.get(combinedName);
+            
+            // Keep the entry with the maximum value for each unique item name, and sum up counts
+            if (!existing || itemValue > existing.value) {
+              equipmentMap.set(combinedName, {
+                item: combinedName,
+                value: itemValue,
+                count: itemCount,
+                category: item.category || 'Uncategorized'
+              });
+            } else if (existing && itemValue === existing.value) {
+              // If same price, add to count
+              existing.count += itemCount;
+            }
+          });
+          
+          // Convert to array, sort by value (descending - most expensive first), and limit to top 15 for better visualization
+          const sortedEquipment = Array.from(equipmentMap.values())
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 15); // Show top 15 most expensive items
+          
+          console.log('Processed expensive equipment:', sortedEquipment);
+          setExpensiveEquipment(sortedEquipment);
 
           // Keep sample data for other sections (can be updated when endpoints are available)
           setEquipmentData([
@@ -163,6 +195,20 @@ const Reports = () => {
     fetchReportsData();
   }, [startDate, endDate, searchTerm]);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (isFilterDropdownOpen && !event.target.closest('.filter-dropdown-container')) {
+        setIsFilterDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isFilterDropdownOpen]);
+
   // Helper functions
   const getStatusColor = (status) => {
     switch (status) {
@@ -179,7 +225,31 @@ const Reports = () => {
 
   // Filter data based on search and category
   const filteredData = useMemo(() => {
-    console.log('Filtering - Borrowed Category:', borrowedCategory, 'Equipment Category:', equipmentCategory);
+    console.log('Filtering - Borrowed Category:', borrowedCategory, 'Equipment Category:', equipmentCategory, 'Filter Type:', equipmentFilterType);
+    
+    let expensiveEquipmentFiltered = expensiveEquipment;
+    
+    // First, filter by category if not "All"
+    if (equipmentCategory !== "All") {
+      expensiveEquipmentFiltered = expensiveEquipmentFiltered.filter(item => item.category === equipmentCategory);
+    }
+    
+    // Then, handle "by_total" vs "by_item" filter
+    if (equipmentFilterType === "by_total") {
+      // When "by total" is selected, calculate total = price × count for each item
+      expensiveEquipmentFiltered = expensiveEquipmentFiltered.map(item => ({
+        ...item,
+        displayValue: item.value * (item.count || 1), // Total = price × quantity
+        isTotal: true
+      }))
+      .sort((a, b) => b.displayValue - a.displayValue)
+      .slice(0, 15);
+    } else {
+      // When "by_item" is selected, just sort by value
+      expensiveEquipmentFiltered = expensiveEquipmentFiltered
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 15);
+    }
     
     let filtered = {
       equipment: equipmentData,
@@ -187,9 +257,7 @@ const Reports = () => {
       topBorrowed: borrowedCategory === "All" 
         ? topBorrowed 
         : topBorrowed.filter(item => item.category === borrowedCategory),
-      expensiveEquipment: equipmentCategory === "All" 
-        ? expensiveEquipment 
-        : expensiveEquipment.filter(item => item.category === equipmentCategory),
+      expensiveEquipment: expensiveEquipmentFiltered,
       userActivity: userActivity,
       returnCompliance: returnCompliance,
       adminActivity: adminActivity,
@@ -209,7 +277,7 @@ const Reports = () => {
     }
 
     return filtered;
-  }, [searchTerm, equipmentData, monthlyRequests, topBorrowed, expensiveEquipment, userActivity, returnCompliance, adminActivity, transactions, borrowedCategory, equipmentCategory]);
+  }, [searchTerm, equipmentData, monthlyRequests, topBorrowed, expensiveEquipment, userActivity, returnCompliance, adminActivity, transactions, borrowedCategory, equipmentCategory, equipmentFilterType]);
 
   // Export functionality using API endpoint
   const handleExport = () => {
@@ -394,31 +462,121 @@ const Reports = () => {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                     <h3 className="text-lg font-semibold text-gray-800">Most Expensive Equipment</h3>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-600">Category:</span>
-                      <select
-                        value={equipmentCategory}
-                        onChange={(e) => setEquipmentCategory(e.target.value)}
-                        className="px-3 py-1 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-[#2262C6] focus:border-transparent bg-white min-w-[120px]"
+                    <div className="relative filter-dropdown-container">
+                      <button
+                        onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg border-2 border-[#2262C6] bg-white text-sm font-medium text-gray-700 hover:bg-blue-50 transition-all duration-200 shadow-sm"
                       >
-                        <option value="All">All</option>
-                        {categories.map((cat) => (
-                          <option key={cat.id} value={cat.name}>
-                            {cat.name}
-                          </option>
-                        ))}
-                      </select>
+                        <Filter className="h-4 w-4 text-[#2262C6]" />
+                        <span>Filter</span>
+                        <svg
+                          className={`h-4 w-4 text-gray-600 transition-transform duration-200 ${isFilterDropdownOpen ? 'rotate-180' : ''}`}
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                      
+                      {isFilterDropdownOpen && (
+                        <>
+                          <div
+                            className="fixed inset-0 z-10"
+                            onClick={() => setIsFilterDropdownOpen(false)}
+                          ></div>
+                          <div className="absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-xl border border-gray-200 z-20 overflow-hidden transform transition-all duration-200 ease-out"
+                            style={{
+                              animation: 'fadeInDown 0.2s ease-out forwards'
+                            }}
+                          >
+                            <div className="p-4 border-b border-gray-200 bg-gray-50">
+                              <h4 className="text-sm font-semibold text-gray-800">Filter</h4>
+                            </div>
+                            
+                            <div className="p-4 space-y-4">
+                              {/* Type Section */}
+                              <div>
+                                <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
+                                  Type
+                                </label>
+                                <div className="flex flex-wrap gap-2">
+                                  <button
+                                    onClick={() => setEquipmentFilterType("by_item")}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
+                                      equipmentFilterType === "by_item"
+                                        ? "bg-[#2262C6] text-white shadow-sm"
+                                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                                    }`}
+                                  >
+                                    By Item
+                                  </button>
+                                  <button
+                                    onClick={() => setEquipmentFilterType("by_total")}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
+                                      equipmentFilterType === "by_total"
+                                        ? "bg-[#2262C6] text-white shadow-sm"
+                                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                                    }`}
+                                  >
+                                    By Total
+                                  </button>
+                                </div>
+                              </div>
+                              
+                              {/* Category Section */}
+                              <div>
+                                <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
+                                  Category
+                                </label>
+                                <div className="flex flex-wrap gap-2">
+                                  <button
+                                    onClick={() => setEquipmentCategory("All")}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
+                                      equipmentCategory === "All"
+                                        ? "bg-[#2262C6] text-white shadow-sm"
+                                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                                    }`}
+                                  >
+                                    All
+                                  </button>
+                                  {categories.map((cat) => (
+                                    <button
+                                      key={cat.id}
+                                      onClick={() => setEquipmentCategory(cat.name)}
+                                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
+                                        equipmentCategory === cat.name
+                                          ? "bg-[#2262C6] text-white shadow-sm"
+                                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                                      }`}
+                                    >
+                                      {cat.name}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
-              <div className="h-64 flex items-end justify-between gap-2">
+              <div className="h-64 overflow-x-auto">
+                <div className="h-full flex items-end justify-start gap-2 min-w-max px-2">
                     {filteredData.expensiveEquipment.length === 0 ? (
                       <div className="w-full h-full flex items-center justify-center text-gray-400">
                         <p>No equipment data available</p>
                       </div>
                     ) : (
                       filteredData.expensiveEquipment.map((item, index) => {
-                      const maxValue = Math.max(...filteredData.expensiveEquipment.map(e => e.value), 1);
-                      const height = (item.value / maxValue) * 200;
+                      // Use displayValue when "by_total" is selected, otherwise use value
+                      const displayValue = equipmentFilterType === "by_total" && item.displayValue 
+                        ? item.displayValue 
+                        : item.value;
+                      const maxValue = Math.max(...filteredData.expensiveEquipment.map(e => 
+                        equipmentFilterType === "by_total" && e.displayValue ? e.displayValue : e.value
+                      ), 1);
+                      const height = (displayValue / maxValue) * 200;
                       const getColorClass = (value) => {
                         if (value >= 20000) return "bg-red-500";
                         if (value >= 10000) return "bg-orange-500";
@@ -426,20 +584,31 @@ const Reports = () => {
                         return "bg-[#2262C6]";
                       };
                       
+                      // Format display text
+                      const displayText = equipmentFilterType === "by_total"
+                        ? `₱${(displayValue / 1000).toFixed(0)}k`
+                        : `₱${(displayValue / 1000).toFixed(0)}k`;
+                      
+                      // Tooltip text
+                      const tooltipText = equipmentFilterType === "by_total"
+                        ? `${item.item}: ₱${displayValue.toLocaleString()} (${item.count || 1} pcs × ₱${item.value.toLocaleString()})`
+                        : `${item.item}: ₱${displayValue.toLocaleString()}`;
+                      
                       return (
-                  <div key={index} className="flex flex-col items-center flex-1">
+                  <div key={index} className="flex flex-col items-center min-w-[60px] max-w-[80px]">
                     <div
-                            className={`${getColorClass(item.value)} rounded-t w-full mb-2 transition-all duration-500 hover:opacity-80`}
-                            style={{ height: `${height}px` }}
-                            title={`₱${item.value.toLocaleString()}`}
+                            className={`${getColorClass(displayValue)} rounded-t w-full mb-2 transition-all duration-500 hover:opacity-80 cursor-pointer`}
+                            style={{ height: `${height}px`, minHeight: '4px' }}
+                            title={tooltipText}
                     ></div>
-                          <span className="text-xs text-gray-600 text-center leading-tight">{item.item}</span>
-                          <span className="text-xs font-semibold text-[#2262C6]">₱{(item.value / 1000).toFixed(0)}k</span>
+                          <span className="text-xs text-gray-600 text-center leading-tight break-words">{item.item}</span>
+                          <span className="text-xs font-semibold text-[#2262C6]">{displayText}</span>
                         </div>
                       );
                     })
                     )}
                   </div>
+                </div>
                   <div className="mt-4 flex justify-center">
                     <div className="flex items-center gap-4 text-xs">
                       <div className="flex items-center gap-1">

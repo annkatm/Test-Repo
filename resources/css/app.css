@@ -156,3 +156,15 @@ html, body {
 *::-webkit-scrollbar {
     display: none;
 }
+
+/* Fade in down animation for dropdown */
+@keyframes fadeInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
