@@ -282,6 +282,7 @@ const Equipment = () => {
     const handler = () => fetchData();
     window.addEventListener('categories:updated', handler);
     window.addEventListener('equipment:updated', handler);
+    window.addEventListener('ireply:equipment:restore', handler); // Listen for equipment returns
     
     // Prevent default context menu on the entire page
     const preventDefaultContextMenu = (e) => {
@@ -297,6 +298,7 @@ const Equipment = () => {
     return () => {
       window.removeEventListener('categories:updated', handler);
       window.removeEventListener('equipment:updated', handler);
+      window.removeEventListener('ireply:equipment:restore', handler);
       document.removeEventListener('contextmenu', preventDefaultContextMenu);
     };
   }, []);

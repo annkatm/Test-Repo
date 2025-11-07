@@ -105,11 +105,19 @@ const AddStocks = () => {
     const handleEquipmentUpdate = () => {
       fetchEquipment(); // Refresh equipment list when changes occur
     };
-    window.addEventListener('equipment:updated', handleEquipmentUpdate);
     
-    // Cleanup event listener on component unmount
+    // Listen for equipment restore from ViewRequest (when equipment is returned)
+    const handleEquipmentRestore = () => {
+      fetchEquipment(); // Refresh equipment list when equipment is returned
+    };
+    
+    window.addEventListener('equipment:updated', handleEquipmentUpdate);
+    window.addEventListener('ireply:equipment:restore', handleEquipmentRestore);
+    
+    // Cleanup event listeners on component unmount
     return () => {
       window.removeEventListener('equipment:updated', handleEquipmentUpdate);
+      window.removeEventListener('ireply:equipment:restore', handleEquipmentRestore);
     };
   }, []);
 
