@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Search, Eye, EyeOff, Edit, Trash2, Plus, Bell, Settings, ArrowRight, X, AlertCircle, ChevronDown } from "lucide-react";
+import { Search, Eye, EyeOff, Edit, Trash2, Plus, Bell, Settings, ArrowRight, X, AlertCircle, ChevronDown, RefreshCw } from "lucide-react";
 import HomeSidebar from "./HomeSidebar";
 import GlobalHeader from "./components/GlobalHeader";
 
@@ -46,6 +46,47 @@ const UsersPage = () => {
 
   const validatePassword = (password) => {
     return password.length >= 8;
+  };
+
+  // Password generation function
+  const generatePassword = () => {
+    const length = 12;
+    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+    let password = "";
+    
+    // Ensure at least one of each type
+    password += "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[Math.floor(Math.random() * 26)];
+    password += "abcdefghijklmnopqrstuvwxyz"[Math.floor(Math.random() * 26)];
+    password += "0123456789"[Math.floor(Math.random() * 10)];
+    password += "!@#$%^&*"[Math.floor(Math.random() * 8)];
+    
+    // Fill the rest randomly
+    for (let i = password.length; i < length; i++) {
+      password += charset[Math.floor(Math.random() * charset.length)];
+    }
+    
+    // Shuffle the password
+    password = password.split('').sort(() => Math.random() - 0.5).join('');
+    
+    return password;
+  };
+
+  // Handle generate password button click
+  const handleGeneratePassword = () => {
+    const newPassword = generatePassword();
+    setNewUser(prev => ({
+      ...prev,
+      password: newPassword,
+      confirmPassword: newPassword
+    }));
+    setShowPassword(true);
+    setShowConfirmPassword(true);
+    // Clear any password errors
+    setErrors(prev => ({
+      ...prev,
+      password: '',
+      confirmPassword: ''
+    }));
   };
 
   // Helper function to remove undefined values from object
@@ -690,9 +731,20 @@ const UsersPage = () => {
                   
                   {/* Password Field */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Password<span className="text-red-500">*</span>
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Password<span className="text-red-500">*</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleGeneratePassword}
+                        className="inline-flex items-center px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 rounded hover:bg-blue-100 transition-colors duration-200"
+                        title="Generate secure password"
+                      >
+                        <RefreshCw className="h-3 w-3 mr-1" />
+                        Generate
+                      </button>
+                    </div>
                     <div className="relative">
                       <input
                         type={showPassword ? "text" : "password"}
@@ -891,9 +943,20 @@ const UsersPage = () => {
                     )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Password
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Password
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleGeneratePassword}
+                        className="inline-flex items-center px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 rounded hover:bg-blue-100 transition-colors duration-200"
+                        title="Generate secure password"
+                      >
+                        <RefreshCw className="h-3 w-3 mr-1" />
+                        Generate
+                      </button>
+                    </div>
                     <div className="relative">
                       <input
                         type={showPassword ? "text" : "password"}
