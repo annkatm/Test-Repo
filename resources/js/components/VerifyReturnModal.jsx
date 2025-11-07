@@ -63,7 +63,6 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
 
         <div className="space-y-3 text-sm">
           <div className="flex justify-between"><span className="text-gray-500">Item</span><span className="font-medium text-gray-900">{data.equipment_name || 'N/A'}</span></div>
-          <div className="flex justify-between"><span className="text-gray-500">Return Date</span><span className="font-medium text-gray-900">{data.return_date || data.expected_return_date || 'N/A'}</span></div>
           <div className="flex justify-between"><span className="text-gray-500">Condition on Return</span><span className="font-medium text-gray-900">{data.condition_on_return || data.condition || 'N/A'}</span></div>
         </div>
 

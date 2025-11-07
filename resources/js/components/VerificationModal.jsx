@@ -140,8 +140,8 @@ const VerificationModal = ({
 
         {/* Content */}
         <div className="px-4 py-3">
-          {/* Date Fields - Side by Side */}
-          <div className="grid grid-cols-2 gap-3 mb-4">
+          {/* Date Fields */}
+          <div className="mb-4">
             {/* Request Date */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Request Date</label>
@@ -149,20 +149,6 @@ const VerificationModal = ({
                 <input
                   type="text"
                   value={formatDate(requestData?.created_at || requestData?.request_date)}
-                  readOnly
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 text-sm"
-                />
-                <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              </div>
-            </div>
-
-            {/* Return Date */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Return Date</label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={formatDate(requestData?.expected_return_date || requestData?.return_date) || 'N/A'}
                   readOnly
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 text-sm"
                 />
