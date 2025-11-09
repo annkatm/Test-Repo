@@ -321,6 +321,7 @@ class UserController extends Controller
                 $user
             );
             
+            // Soft delete - allows restoration from Archive
             $user->delete();
 
             return response()->json([

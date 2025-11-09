@@ -32,7 +32,7 @@ class CategoryController extends Controller
     {
         try {
             $request->validate([
-                'name' => 'required|string|max:255|unique:categories,name,NULL,id,deleted_at,NULL',
+                'name' => ['required', 'string', 'max:255', \Illuminate\Validation\Rule::unique('categories')->whereNull('deleted_at')],
                 'description' => 'nullable|string',
                 'image' => 'nullable|image|max:2048', // 2MB max
             ]);
@@ -154,8 +154,8 @@ class CategoryController extends Controller
             "Deleted category: {$category->name}"
         );
         
-        // Force delete (permanent deletion) instead of soft delete
-        $category->forceDelete();
+        // Soft delete - allows restoration from Archive
+        $category->delete();
 
         return response()->json([
             'success' => true,

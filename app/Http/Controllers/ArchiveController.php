@@ -156,6 +156,27 @@ class ArchiveController extends Controller
             $archivedItems = $archivedItems->merge($users);
         }
         
+        if ($filterType === 'all' || $filterType === 'categories') {
+            $categoriesQuery = Category::onlyTrashed()
+                ->whereNotNull('deleted_at'); // Ensure only properly soft-deleted items
+            
+            if ($searchTerm) {
+                $categoriesQuery->where('name', 'like', "%{$searchTerm}%");
+            }
+            
+            $categories = $categoriesQuery->get()
+                ->map(function($item) {
+                    return [
+                        'id' => $item->id,
+                        'type' => 'category',
+                        'name' => $item->name,
+                        'description' => $item->description,
+                        'deleted_at' => $item->deleted_at,
+                    ];
+                });
+            $archivedItems = $archivedItems->merge($categories);
+        }
+        
         // Filter out items with invalid deleted_at timestamps (like 1970-01-01)
         $archivedItems = $archivedItems->filter(function($item) {
             return $item['deleted_at'] && 
