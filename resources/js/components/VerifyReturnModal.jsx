@@ -63,8 +63,35 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
         </div>
 
         <div className="space-y-3 text-sm">
-          <div className="flex justify-between"><span className="text-gray-500">Item</span><span className="font-medium text-gray-900">{data.equipment_name || 'N/A'}</span></div>
-          <div className="flex justify-between"><span className="text-gray-500">Condition on Return</span><span className="font-medium text-gray-900">{data.condition_on_return || data.condition || 'N/A'}</span></div>
+          {/* Items Section */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Items to Return</label>
+            <div className="space-y-2">
+              {data.items && data.items.length > 0 ? (
+                data.items.map((item, index) => (
+                  <div key={index} className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg bg-gray-50">
+                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900">{item.equipment_name || item.name}</p>
+                      <p className="text-xs text-gray-600">Equipment Item</p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg bg-gray-50">
+                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                  </svg>
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-900">{data.equipment_name || 'N/A'}</p>
+                    <p className="text-xs text-gray-600">Equipment Item</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="flex justify-end gap-3 mt-5">

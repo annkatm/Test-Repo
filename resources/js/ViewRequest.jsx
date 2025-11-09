@@ -423,12 +423,12 @@ const ViewRequest = () => {
     }
   };
 
-  const handleViewHolder = (holderId) => {
-    const holder = currentHolders.find(h => h.id === holderId);
-    if (holder) {
+  const handleViewHolder = (groupId) => {
+    const group = groupedCurrentHolders.find(g => g.id === groupId);
+    if (group) {
       setViewHolderModal({
         isOpen: true,
-        holderData: holder
+        holderData: group
       });
     }
   };
@@ -454,12 +454,12 @@ const ViewRequest = () => {
     });
   };
 
-  const handleViewReturn = (returnId) => {
-    const returnItem = verifyReturns.find(r => r.id === returnId);
-    if (returnItem) {
+  const handleViewReturn = (groupId) => {
+    const group = groupedVerifyReturns.find(g => g.id === groupId);
+    if (group) {
       setViewReturnModal({
         isOpen: true,
-        returnData: returnItem
+        returnData: group
       });
     }
   };
@@ -473,98 +473,101 @@ const ViewRequest = () => {
 
   const handleConfirmReturn = async (returnData) => {
     try {
-      // Get the transaction ID
-      const transactionId = returnData.id || returnData.transaction_id;
+      // Get all returns in the group
+      const returns = returnData.returns || [returnData];
       
-      if (!transactionId) {
+      if (!returns || returns.length === 0) {
         if (window.showToast) {
           window.showToast({
             type: 'error',
             title: 'Return Failed',
-            message: 'Transaction ID not found',
+            message: 'No returns found to process',
             duration: 4000
           });
-        } else {
-          alert('Transaction ID not found');
         }
         return;
       }
 
-      // First, check the transaction status and release if needed
-      try {
-        const statusCheck = await api.get(`/transactions/${transactionId}`);
-        const currentStatus = statusCheck.data?.data?.status || statusCheck.data?.status;
+      // Process all returns in the group
+      for (const returnItem of returns) {
+        const transactionId = returnItem.id || returnItem.transaction_id;
         
-        console.log('Current transaction status:', currentStatus);
-        
-        // If transaction is not released, release it first
-        if (currentStatus !== 'released') {
-          console.log('Transaction not released, releasing first...');
-          await api.post(`/transactions/${transactionId}/release`, {
-            release_condition: 'good_condition',
-            release_notes: 'Auto-released for return'
-          });
-          console.log('Transaction released successfully');
+        if (!transactionId) {
+          console.warn('Transaction ID not found for item:', returnItem);
+          continue;
         }
-      } catch (releaseError) {
-        console.warn('Could not release transaction:', releaseError);
-        // Continue anyway, the return endpoint will handle the error if needed
+
+        // First, check the transaction status and release if needed
+        try {
+          const statusCheck = await api.get(`/transactions/${transactionId}`);
+          const currentStatus = statusCheck.data?.data?.status || statusCheck.data?.status;
+          
+          console.log('Current transaction status:', currentStatus);
+          
+          // If transaction is not released, release it first
+          if (currentStatus !== 'released') {
+            console.log('Transaction not released, releasing first...');
+            await api.post(`/transactions/${transactionId}/release`, {
+              release_condition: 'good_condition',
+              release_notes: 'Auto-released for return'
+            });
+            console.log('Transaction released successfully');
+          }
+        } catch (releaseError) {
+          console.warn('Could not release transaction:', releaseError);
+          // Continue anyway, the return endpoint will handle the error if needed
+        }
+        
+        // Call the return API endpoint
+        const response = await api.post(`/transactions/${transactionId}/return`, {
+          return_condition: 'good_condition',
+          return_notes: ''
+        });
+        
+        if (response.data.success) {
+          // Log the return activity
+          await activityLogService.logEquipmentReturn(transactionId, returnItem);
+          
+          // Dispatch custom events for UI updates
+          try {
+            const equipId = returnItem?.equipment_id;
+            if (equipId) {
+              window.dispatchEvent(new CustomEvent('ireply:equipment:restore', { 
+                detail: { equipment_id: equipId } 
+              }));
+            }
+          } catch (e) {
+            console.error('Error dispatching equipment restore event:', e);
+          }
+          
+          try {
+            const payload = {
+              id: returnItem?.id,
+              item: returnItem?.equipment_name,
+              date: new Date().toISOString(),
+            };
+            window.dispatchEvent(new CustomEvent('ireply:returned:add', { 
+              detail: payload 
+            }));
+          } catch (e) {
+            console.error('Error dispatching returned add event:', e);
+          }
+        } else {
+          throw new Error(response.data.message || 'Failed to process return');
+        }
       }
       
-      // Call the return API endpoint
-      const response = await api.post(`/transactions/${transactionId}/return`, {
-        return_condition: 'good_condition',
-        return_notes: ''
-      });
+      // After processing all returns, refresh data and show success
+      await refreshData();
+      handleCloseViewReturnModal();
       
-      if (response.data.success) {
-        // Log the return activity
-        await activityLogService.logEquipmentReturn(transactionId, returnData);
-        
-        // Refresh the data to update the lists
-        await refreshData();
-        
-        // Close the modal
-        handleCloseViewReturnModal();
-        
-        // Show success message
-        if (window.showToast) {
-          window.showToast({
-            type: 'success',
-            title: 'Return Confirmed',
-            message: `Equipment has been successfully returned`,
-            duration: 4000
-          });
-        } else {
-          alert('Equipment has been successfully returned');
-        }
-        
-        // Dispatch custom events for UI updates
-        try {
-          const equipId = returnData?.equipment_id;
-          if (equipId) {
-            window.dispatchEvent(new CustomEvent('ireply:equipment:restore', { 
-              detail: { equipment_id: equipId } 
-            }));
-          }
-        } catch (e) {
-          console.error('Error dispatching equipment restore event:', e);
-        }
-        
-        try {
-          const payload = {
-            id: returnData?.id,
-            item: returnData?.equipment_name,
-            date: new Date().toISOString(),
-          };
-          window.dispatchEvent(new CustomEvent('ireply:returned:add', { 
-            detail: payload 
-          }));
-        } catch (e) {
-          console.error('Error dispatching returned add event:', e);
-        }
-      } else {
-        throw new Error(response.data.message || 'Failed to process return');
+      if (window.showToast) {
+        window.showToast({
+          type: 'success',
+          title: 'Returns Confirmed',
+          message: `All equipment items have been successfully returned`,
+          duration: 4000
+        });
       }
     } catch (error) {
       console.error('Error processing return:', error);
@@ -1212,7 +1215,7 @@ const ViewRequest = () => {
                 groupedCurrentHolders.map((group) => (
                   <tr 
                     key={group.id} 
-                    onClick={() => handleViewHolder(group.holders[0]?.id || group.id)}
+                    onClick={() => handleViewHolder(group.id)}
                     className="border-b border-gray-100 last:border-0 hover:bg-blue-50 cursor-pointer transition-colors duration-200"
                   >
                     <td className="py-4 px-6 text-sm font-medium text-gray-900">
@@ -1336,7 +1339,7 @@ const ViewRequest = () => {
                 groupedVerifyReturns.map((group) => (
                   <tr 
                     key={group.id} 
-                    onClick={() => handleViewReturn(group.returns[0]?.id || group.id)}
+                    onClick={() => handleViewReturn(group.id)}
                     className="border-b border-gray-100 last:border-0 hover:bg-blue-50 cursor-pointer transition-colors duration-200"
                   >
                     <td className="py-4 px-6 text-sm font-medium text-gray-900">

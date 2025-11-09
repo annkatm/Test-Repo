@@ -499,12 +499,12 @@ const ViewApproved = () => {
     setPrintModal({ isOpen: false, transactionData: null });
   };
 
-  const handleViewHolder = (holderId) => {
-    const holder = currentHolders.find(h => h.id === holderId);
-    if (holder) {
+  const handleViewHolder = (groupId) => {
+    const group = groupedCurrentHolders.find(g => g.id === groupId);
+    if (group) {
       setViewHolderModal({
         isOpen: true,
-        holderData: holder
+        holderData: group
       });
     }
   };
@@ -516,12 +516,12 @@ const ViewApproved = () => {
     });
   };
 
-  const handleViewReturn = (returnId) => {
-    const returnItem = verifyReturns.find(r => r.id === returnId);
-    if (returnItem) {
+  const handleViewReturn = (groupId) => {
+    const group = groupedVerifyReturns.find(g => g.id === groupId);
+    if (group) {
       setViewReturnModal({
         isOpen: true,
-        returnData: returnItem
+        returnData: group
       });
     }
   };
@@ -535,57 +535,66 @@ const ViewApproved = () => {
 
   const handleConfirmReturn = async (returnData) => {
     try {
-      // Get the transaction ID
-      const transactionId = returnData.id || returnData.transaction_id;
+      // Get all returns in the group
+      const returns = returnData.returns || [returnData];
       
-      if (!transactionId) {
-        console.error('Transaction ID not found');
-        showError('Transaction ID not found', 'Verification Failed');
+      if (!returns || returns.length === 0) {
+        showError('No returns found to process', 'Verification Failed');
         return;
       }
 
-      // First, check the transaction status
-      const statusCheck = await api.get(`/transactions/${transactionId}`);
-      const currentStatus = statusCheck.data?.data?.status || statusCheck.data?.status;
-      
-      console.log('Current transaction status:', currentStatus);
-      
-      // If transaction is still released, return it first
-      if (currentStatus === 'released') {
-        console.log('Transaction still released, returning first...');
-        const returnResponse = await api.post(`/transactions/${transactionId}/return`, {
-          return_condition: 'good_condition',
-          return_notes: 'Returned and verified'
+      // Process all returns in the group
+      for (const returnItem of returns) {
+        const transactionId = returnItem.id || returnItem.transaction_id;
+        
+        if (!transactionId) {
+          console.warn('Transaction ID not found for item:', returnItem);
+          continue;
+        }
+
+        // First, check the transaction status
+        const statusCheck = await api.get(`/transactions/${transactionId}`);
+        const currentStatus = statusCheck.data?.data?.status || statusCheck.data?.status;
+        
+        console.log('Current transaction status:', currentStatus);
+        
+        // If transaction is still released, return it first
+        if (currentStatus === 'released') {
+          console.log('Transaction still released, returning first...');
+          const returnResponse = await api.post(`/transactions/${transactionId}/return`, {
+            return_condition: 'good_condition',
+            return_notes: 'Returned and verified'
+          });
+          
+          if (!returnResponse.data.success) {
+            throw new Error('Failed to return transaction');
+          }
+          console.log('Transaction returned successfully');
+        }
+        
+        // Now verify the return to complete the transaction
+        const verifyResponse = await api.post(`/transactions/${transactionId}/verify-return`, {
+          verification_notes: 'Return verified and completed'
         });
         
-        if (!returnResponse.data.success) {
-          throw new Error('Failed to return transaction');
+        if (!verifyResponse.data.success) {
+          throw new Error(verifyResponse.data.message || 'Failed to verify return');
         }
-        console.log('Transaction returned successfully');
       }
       
-      // Now verify the return to complete the transaction
-      const verifyResponse = await api.post(`/transactions/${transactionId}/verify-return`, {
-        verification_notes: 'Return verified and completed'
-      });
+      // After processing all returns, show success message
+      const employeeName = returnData.full_name || returnData.employee_name || 'Unknown';
+      const itemCount = returns.length;
+      showSuccess(
+        `Return confirmed! ${employeeName} has returned ${itemCount} item${itemCount > 1 ? 's' : ''}.\nAll transactions completed.\nEquipment is now available for new requests.`,
+        'Returns Verified'
+      );
       
-      if (verifyResponse.data.success) {
-        // Show detailed success message
-        const employeeName = returnData.full_name || returnData.employee_name || 'Unknown';
-        const itemName = returnData.equipment_name || 'N/A';
-        showSuccess(
-          `Return confirmed! ${employeeName} has returned ${itemName}.\nTransaction #${transactionId} completed.\nEquipment is now available for new requests.`,
-          'Return Verified'
-        );
-        
-        // Close the modal
-        handleCloseViewReturnModal();
-        
-        // Immediately refresh data to remove from verify returns list
-        await fetchData();
-      } else {
-        throw new Error(verifyResponse.data.message || 'Failed to verify return');
-      }
+      // Close the modal
+      handleCloseViewReturnModal();
+      
+      // Immediately refresh data to remove from verify returns list
+      await fetchData();
     } catch (error) {
       console.error('Error verifying return:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Failed to verify return';
@@ -821,7 +830,7 @@ const ViewApproved = () => {
                       groupedCurrentHolders.map((group) => (
                         <tr 
                           key={group.id}
-                          onClick={() => handleViewHolder(group.holders[0]?.id || group.id)}
+                          onClick={() => handleViewHolder(group.id)}
                           className="border-b last:border-0 cursor-pointer transition-colors duration-200 hover:bg-blue-50"
                         >
                           <td className="py-3 px-3">{group.full_name}</td>
@@ -911,7 +920,7 @@ const ViewApproved = () => {
                       groupedVerifyReturns.map((group) => (
                         <tr 
                           key={group.id}
-                          onClick={() => handleViewReturn(group.returns[0]?.id || group.id)}
+                          onClick={() => handleViewReturn(group.id)}
                           className="border-b last:border-0 cursor-pointer transition-colors duration-200 hover:bg-blue-50"
                         >
                           <td className="py-3 px-3">{group.full_name}</td>
