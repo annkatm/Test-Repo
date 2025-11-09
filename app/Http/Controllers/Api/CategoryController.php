@@ -32,7 +32,7 @@ class CategoryController extends Controller
     {
         try {
             $request->validate([
-                'name' => 'required|string|max:255|unique:categories,name',
+                'name' => 'required|string|max:255|unique:categories,name,NULL,id,deleted_at,NULL',
                 'description' => 'nullable|string',
                 'image' => 'nullable|image|max:2048', // 2MB max
             ]);
@@ -154,7 +154,8 @@ class CategoryController extends Controller
             "Deleted category: {$category->name}"
         );
         
-        $category->delete(); // This will now soft delete due to SoftDeletes trait
+        // Force delete (permanent deletion) instead of soft delete
+        $category->forceDelete();
 
         return response()->json([
             'success' => true,

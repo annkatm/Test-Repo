@@ -148,12 +148,21 @@ const ControlPanel = () => {
     const item = categoryItems[idx];
     if (!item) return;
     try {
-      await api.delete(`/categories/${item.id}`);
-      setCategoryItems(prev => prev.filter((_, i) => i !== idx));
-      // notify other screens (e.g., Equipment) to refresh
-      window.dispatchEvent(new CustomEvent('categories:updated'));
+      const response = await api.delete(`/categories/${item.id}`);
+      if (response.data.success) {
+        // Reload categories from server to ensure UI matches database
+        const res = await api.get('/categories');
+        if (res?.data?.success && Array.isArray(res.data.data)) {
+          setCategoryItems(res.data.data.map(c => ({ id: c.id, name: c.name })));
+        }
+        // notify other screens (e.g., Equipment) to refresh
+        window.dispatchEvent(new CustomEvent('categories:updated'));
+      } else {
+        setCatError(response.data.message || 'Failed to delete category');
+      }
     } catch (e) {
-      setCatError('Failed to delete category');
+      const errorMsg = e.response?.data?.message || 'Failed to delete category';
+      setCatError(errorMsg);
     }
   };
 
