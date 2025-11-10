@@ -157,22 +157,25 @@ In the event that I am unable to return any of the company-issued equipment upon
               }
               .signature-line { 
                 border-bottom: 1px solid #000; 
-                margin-bottom: 5px; 
+                margin-bottom: 2px; 
                 height: 40px; 
+                position: relative;
               }
               .signature-label { 
-                font-size: 12px; 
-                margin-top: 5px; 
+                font-size: 11px; 
+                margin-top: 2px; 
+                line-height: 1.3; 
               }
               .signature-image { 
-                height: 40px; 
+                height: 35px; 
                 width: auto; 
-                margin-bottom: -5px; 
                 display: block; 
                 margin-left: auto; 
                 margin-right: auto; 
-                position: relative; 
-                z-index: 1; 
+                position: absolute;
+                bottom: 0;
+                left: 50%;
+                transform: translateX(-50%);
               }
               .others-row { 
                 font-style: italic; 
@@ -240,8 +243,9 @@ In the event that I am unable to return any of the company-issued equipment upon
             </div>
             <div class="signature-box">
               <div class="signature-label" style="margin-bottom: 10px; font-weight: bold;">Released by:</div>
-              <img src="${signatureUrl}" alt="IT Admin Signature" class="signature-image" onerror="this.style.display='none'" />
-              <div class="signature-line" style="margin-top: 0;"></div>
+              <div class="signature-line">
+                <img src="${signatureUrl}" alt="IT Admin Signature" class="signature-image" onerror="this.style.display='none'" />
+              </div>
               <div class="signature-label">${editableData.it_admin}</div>
               <div class="signature-label">${editableData.it_admin_title}</div>
             </div>
@@ -331,22 +335,25 @@ In the event that I am unable to return any of the company-issued equipment upon
               }
               .signature-line { 
                 border-bottom: 1px solid #000; 
-                margin-bottom: 5px; 
+                margin-bottom: 2px; 
                 height: 40px; 
+                position: relative;
               }
               .signature-label { 
-                font-size: 12px; 
-                margin-top: 5px; 
+                font-size: 11px; 
+                margin-top: 2px; 
+                line-height: 1.3; 
               }
               .signature-image { 
-                height: 40px; 
+                height: 35px; 
                 width: auto; 
-                margin-bottom: -5px; 
                 display: block; 
                 margin-left: auto; 
                 margin-right: auto; 
-                position: relative; 
-                z-index: 1; 
+                position: absolute;
+                bottom: 0;
+                left: 50%;
+                transform: translateX(-50%);
               }
               .others-row { 
                 font-style: italic; 
@@ -410,7 +417,9 @@ In the event that I am unable to return any of the company-issued equipment upon
               </div>
               <div class="signature-box">
                 <div class="signature-label" style="margin-bottom: 10px; font-weight: bold;">Released by:</div>
-                <img src="${signatureUrl}" alt="IT Admin Signature" class="signature-image" onerror="this.style.display='none'" />
+                <div class="signature-line">
+                  <img src="${signatureUrl}" alt="IT Admin Signature" class="signature-image" onerror="this.style.display='none'" />
+                </div>
                 <div class="signature-label">${editableData.it_admin}</div>
                 <div class="signature-label">${editableData.it_admin_title}</div>
               </div>
