@@ -441,27 +441,33 @@ const EmployeePage = () => {
   // Transform issued equipment when both issuedEquipment and availableEquipment are loaded
   useEffect(() => {
     if (editing && issuedEquipment.length > 0 && availableEquipment.length > 0) {
-      const transformedEquipment = issuedEquipment.map(eq => {
-        // Find the matching equipment in availableEquipment to get full details
-        const matchingEquipment = availableEquipment.find(availEq => 
-          availEq.id === eq.id || 
-          (availEq.name === eq.name && availEq.brand === eq.brand)
-        );
-        
-        return {
-          id: eq.id,
-          name: eq.name,
-          brand: eq.brand || eq.name,
-          specifications: eq.specs || 'No specifications',
-          item_image: matchingEquipment?.item_image || eq.item_image || null,
-          category: matchingEquipment?.category || eq.category || null,
-          status: eq.status || 'available',
-          specKey: `${eq.brand || eq.name || 'Unknown'}-${eq.specs || 'No specs'}`,
-          serial_numbers: eq.serial_numbers || [],
-          available_count: eq.available_count || 0
-        };
-      });
-      setIssuedEquipment(transformedEquipment);
+      // Only transform if the equipment doesn't already have the required fields
+      const needsTransformation = issuedEquipment.some(eq => !eq.item_image || !eq.unitKey);
+      
+      if (needsTransformation) {
+        const transformedEquipment = issuedEquipment.map((eq, index) => {
+          // Find the matching equipment in availableEquipment to get full details
+          const matchingEquipment = availableEquipment.find(availEq => availEq.id === eq.id);
+          
+          // Create a unique key for this specific unit
+          const unitKey = eq.unitKey || `${eq.brand || eq.name}-${eq.specifications || 'no-spec'}-${eq.serial_number || index}`;
+          
+          return {
+            id: eq.id,
+            name: eq.name,
+            brand: eq.brand || eq.name,
+            specifications: eq.specifications || eq.specs || '',
+            item_image: eq.item_image || matchingEquipment?.item_image || null,
+            category: eq.category || matchingEquipment?.category || null,
+            status: eq.status || 'available',
+            unitKey: unitKey,
+            serial_number: eq.serial_number || 'N/A',
+            serial_numbers: [eq.serial_number] || [],
+            available_count: 1
+          };
+        });
+        setIssuedEquipment(transformedEquipment);
+      }
     }
   }, [editing, availableEquipment]);
 
@@ -511,8 +517,57 @@ const EmployeePage = () => {
     }
   };
 
-  const openEquipmentModal = () => {
-    loadAvailableEquipment();
+  const openEquipmentModal = async () => {
+    // Load available equipment
+    await loadAvailableEquipment();
+    
+    // If editing, also fetch the equipment currently issued to this employee
+    // so it appears in the modal and can be managed
+    if (editing && issuedEquipment.length > 0) {
+      try {
+        const issuedIds = issuedEquipment.map(eq => eq.id).filter(id => id);
+        if (issuedIds.length > 0) {
+          const res = await fetch(`/api/equipment?ids=${issuedIds.join(',')}&per_page=100`, {
+            headers: { 'Accept': 'application/json' },
+            credentials: 'include',
+          });
+          
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success && data.data.data) {
+              // Merge issued equipment with available equipment
+              const issuedEquipmentList = data.data.data.map(item => ({
+                id: item.id,
+                name: item.name || item.brand,
+                brand: item.brand,
+                specifications: item.specifications || '',
+                serial_number: item.serial_number,
+                status: item.status,
+                category: {
+                  id: item.category?.id || null,
+                  name: item.category?.name || 'Uncategorized'
+                },
+                item_image: item.item_image,
+              }));
+              
+              // Add issued equipment to available list (avoiding duplicates)
+              setAvailableEquipment(prev => {
+                const combined = [...prev];
+                issuedEquipmentList.forEach(issued => {
+                  if (!combined.find(eq => eq.id === issued.id && eq.serial_number === issued.serial_number)) {
+                    combined.push(issued);
+                  }
+                });
+                return combined;
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error loading issued equipment:', error);
+      }
+    }
+    
     setIsEquipmentModalOpen(true);
   };
 
@@ -682,17 +737,14 @@ const EmployeePage = () => {
       return;
     }
 
-    // Prepare issued equipment data
+    // Prepare issued equipment data - simplified for individual units
     const equipmentData = issuedEquipment.map(eq => ({
       id: eq.id,
-      name: eq.name,
+      name: eq.name || eq.brand,
       brand: eq.brand,
-      specs: eq.specifications || eq.description || 'N/A',
-      item_image: eq.item_image,
-      category: eq.category,
-      status: eq.status,
-      serial_numbers: eq.serial_numbers || [],
-      available_count: eq.available_count || 0
+      serial_number: eq.serial_number || (eq.serial_numbers && eq.serial_numbers[0]) || 'N/A',
+      category: eq.category?.name || 'N/A',
+      item_image: eq.item_image || null
     }));
 
     // Get CSRF token
@@ -717,7 +769,7 @@ const EmployeePage = () => {
         position: form.position.trim(),
         department: form.department.trim(),
         issued_item: JSON.stringify(equipmentData),
-        issued_equipment_ids: issuedEquipment.map(eq => eq.id),
+        issued_equipment_ids: [...new Set(issuedEquipment.map(eq => eq.id))], // Remove duplicates
         status: 'active',
       })
     })
@@ -735,14 +787,20 @@ const EmployeePage = () => {
           closeModal();
           resetAll();
           refreshEmployees();
+          // Reload available equipment to reflect issued items
+          loadAvailableEquipment();
           // Dispatch event to refresh equipment page
           window.dispatchEvent(new Event('equipment:updated'));
           showToast('Employee added successfully');
         } else {
+          console.error('Employee save failed:', data);
           alert(data.message || 'Failed to save employee');
         }
       })
-      .catch(() => alert('Failed to save employee'));
+      .catch(error => {
+        console.error('Employee save error:', error);
+        alert('Failed to save employee: ' + error.message);
+      });
   };
 
   const openView = (emp) => setViewing(emp);
@@ -799,17 +857,14 @@ const EmployeePage = () => {
 
     if (!editing) return;
     
-    // Prepare issued equipment data
+    // Prepare issued equipment data - simplified for individual units
     const equipmentData = issuedEquipment.map(eq => ({
       id: eq.id,
-      name: eq.name,
+      name: eq.name || eq.brand,
       brand: eq.brand,
-      specs: eq.specifications || eq.description || 'N/A',
-      item_image: eq.item_image,
-      category: eq.category,
-      status: eq.status,
-      serial_numbers: eq.serial_numbers || [],
-      available_count: eq.available_count || 0
+      serial_number: eq.serial_number || (eq.serial_numbers && eq.serial_numbers[0]) || 'N/A',
+      category: eq.category?.name || 'N/A',
+      item_image: eq.item_image || null
     }));
     
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
@@ -833,7 +888,7 @@ const EmployeePage = () => {
         position: form.position.trim(),
         department: form.department.trim(),
         issued_item: JSON.stringify(equipmentData),
-        issued_equipment_ids: issuedEquipment.map(eq => eq.id),
+        issued_equipment_ids: [...new Set(issuedEquipment.map(eq => eq.id))], // Remove duplicates
         status: 'active'
       })
     })
@@ -850,6 +905,8 @@ const EmployeePage = () => {
         if (data.success) {
           closeEdit();
           refreshEmployees();
+          // Reload available equipment to reflect issued items
+          loadAvailableEquipment();
           // Dispatch event to refresh equipment page
           window.dispatchEvent(new Event('equipment:updated'));
           showToast('Employee updated successfully');
@@ -1123,7 +1180,7 @@ const EmployeePage = () => {
                     <div className="bg-gray-100 px-4 py-3 border-b border-gray-300">
                       <div className="grid grid-cols-2 gap-4 text-sm font-bold text-gray-800">
                         <div>Equipment</div>
-                        <div>Specifications</div>
+                        <div>Serial Number</div>
                       </div>
                     </div>
                     <div className="max-h-60 overflow-y-auto">
@@ -1276,7 +1333,7 @@ const EmployeePage = () => {
                     <div className="bg-gray-100 px-4 py-3 border-b border-gray-300">
                       <div className="grid grid-cols-2 gap-4 text-sm font-bold text-gray-800">
                         <div>Equipment</div>
-                        <div>Specifications</div>
+                        <div>Serial Number</div>
                       </div>
                     </div>
                     <div className="max-h-60 overflow-y-auto">
@@ -1306,9 +1363,14 @@ const EmployeePage = () => {
                                       <h5 className="text-blue-600 font-medium text-sm truncate">
                                         {equipment.name || equipment.brand}
                                       </h5>
-                                    <p className="text-gray-700 text-sm leading-tight mt-1">
-                                      {equipment.specifications || 'No specifications'}
+                                    <p className="text-gray-600 text-xs mt-1">
+                                      <span className="font-mono font-medium">{equipment.serial_number || 'N/A'}</span>
                                     </p>
+                                    {equipment.specifications && (
+                                      <p className="text-gray-500 text-xs leading-tight mt-0.5">
+                                        {equipment.specifications}
+                                      </p>
+                                    )}
                                   </div>
                                     </div>
                                     <button
@@ -1325,7 +1387,7 @@ const EmployeePage = () => {
                       </div>
                     </div>
                     <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
-                      {(form.employeeType === 'New hire' || form.employeeType === 'Provisionary') && (
+                      {(form.employeeType === 'New hire' || form.employeeType === 'Probationary') && (
                         <button
                           type="button"
                           onClick={openEquipmentModal}
@@ -1335,7 +1397,7 @@ const EmployeePage = () => {
                           Add New
                         </button>
                       )}
-                      {(form.employeeType === 'New hire' || form.employeeType === 'Provisionary') && (
+                      {(form.employeeType === 'New hire' || form.employeeType === 'Probationary') && (
                         <button
                           type="button"
                           onClick={openPrintModal}
@@ -1482,7 +1544,7 @@ const EmployeePage = () => {
                     <div className="bg-gray-100 px-4 py-3 border-b border-gray-300">
                       <div className="grid grid-cols-2 gap-4 text-sm font-bold text-gray-800">
                         <div>Equipment</div>
-                        <div>Specifications</div>
+                        <div>Serial Number</div>
                       </div>
                     </div>
                     <div className="max-h-60 overflow-y-auto">
@@ -1512,9 +1574,14 @@ const EmployeePage = () => {
                                       <h5 className="text-blue-600 font-medium text-sm truncate">
                                         {equipment.name || equipment.brand}
                                       </h5>
-                                    <p className="text-gray-700 text-sm leading-tight mt-1">
-                                      {equipment.specifications || 'No specifications'}
+                                    <p className="text-gray-600 text-xs mt-1">
+                                      <span className="font-mono font-medium">{equipment.serial_number || 'N/A'}</span>
                                     </p>
+                                    {equipment.specifications && (
+                                      <p className="text-gray-500 text-xs leading-tight mt-0.5">
+                                        {equipment.specifications}
+                                      </p>
+                                    )}
                                   </div>
                                     </div>
                                     <button
@@ -1531,7 +1598,7 @@ const EmployeePage = () => {
                       </div>
                     </div>
                     <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
-                      {(form.employeeType === 'New hire' || form.employeeType === 'Provisionary') && (
+                      {(form.employeeType === 'New hire' || form.employeeType === 'Probationary') && (
                         <button
                           type="button"
                           onClick={openEquipmentModal}
@@ -1541,7 +1608,7 @@ const EmployeePage = () => {
                           Add New
                         </button>
                       )}
-                      {(form.employeeType === 'New hire' || form.employeeType === 'Provisionary') && (
+                      {(form.employeeType === 'New hire' || form.employeeType === 'Probationary') && (
                         <button
                           type="button"
                           onClick={openPrintModal}
@@ -1751,28 +1818,58 @@ const EmployeePage = () => {
                             
                             {/* Serial Numbers List */}
                             {isExpanded && (
-                              <div className="mt-3 space-y-2 max-h-48 overflow-y-auto border-t pt-3">
-                                {serialNumbers.map((serial, idx) => {
-                                  const isSelected = isSerialSelected(equipment, serial);
-                                  return (
-                                    <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                                      <span className="text-xs font-mono">{serial}</span>
-                                      <button
-                                        onClick={() => isSelected 
-                                          ? removeEquipmentFromIssued({ unitKey: `${equipment.brand || equipment.name}-${equipment.specifications}-${serial}` })
-                                          : addEquipmentToIssued(equipment, serial)
+                              <div className="mt-3 border-t pt-3">
+                                {/* Select All / Deselect All Buttons */}
+                                <div className="flex gap-2 mb-2">
+                                  <button
+                                    onClick={() => {
+                                      serialNumbers.forEach(serial => {
+                                        if (!isSerialSelected(equipment, serial)) {
+                                          addEquipmentToIssued(equipment, serial);
                                         }
-                                        className={`px-3 py-1 rounded text-xs font-medium ${
-                                          isSelected
-                                            ? 'bg-red-500 text-white hover:bg-red-600'
-                                            : 'bg-green-500 text-white hover:bg-green-600'
-                                        }`}
-                                      >
-                                        {isSelected ? 'Remove' : 'Add'}
-                                      </button>
-                                    </div>
-                                  );
-                                })}
+                                      });
+                                    }}
+                                    className="flex-1 px-2 py-1 bg-blue-500 text-white rounded text-xs font-medium hover:bg-blue-600"
+                                  >
+                                    Select All
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      serialNumbers.forEach(serial => {
+                                        const unitKey = `${equipment.brand || equipment.name}-${equipment.specifications}-${serial}`;
+                                        removeEquipmentFromIssued({ unitKey });
+                                      });
+                                    }}
+                                    className="flex-1 px-2 py-1 bg-gray-500 text-white rounded text-xs font-medium hover:bg-gray-600"
+                                  >
+                                    Deselect All
+                                  </button>
+                                </div>
+                                
+                                {/* Individual Serial Numbers */}
+                                <div className="space-y-2 max-h-48 overflow-y-auto">
+                                  {serialNumbers.map((serial, idx) => {
+                                    const isSelected = isSerialSelected(equipment, serial);
+                                    return (
+                                      <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                                        <span className="text-xs font-mono">{serial}</span>
+                                        <button
+                                          onClick={() => isSelected 
+                                            ? removeEquipmentFromIssued({ unitKey: `${equipment.brand || equipment.name}-${equipment.specifications}-${serial}` })
+                                            : addEquipmentToIssued(equipment, serial)
+                                          }
+                                          className={`px-3 py-1 rounded text-xs font-medium ${
+                                            isSelected
+                                              ? 'bg-red-500 text-white hover:bg-red-600'
+                                              : 'bg-green-500 text-white hover:bg-green-600'
+                                          }`}
+                                        >
+                                          {isSelected ? 'Remove' : 'Add'}
+                                        </button>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
                               </div>
                             )}
                           </div>
@@ -1840,9 +1937,14 @@ const EmployeePage = () => {
                                   <p className="text-sm text-gray-600 mb-1">{equipment.brand}</p>
                                 )}
                                 
-                                <p className="text-sm text-gray-600 mb-1">
-                                  {equipment.specifications || 'No specifications'}
+                                <p className="text-xs text-gray-600 mb-1">
+                                  Serial: <span className="font-mono font-medium">{equipment.serial_number || 'N/A'}</span>
                                 </p>
+                                {equipment.specifications && (
+                                  <p className="text-xs text-gray-500 mb-1">
+                                    {equipment.specifications}
+                                  </p>
+                                )}
                                 
                                 <div className="flex items-center space-x-4 text-xs text-gray-500 mt-2">
                                   <span>

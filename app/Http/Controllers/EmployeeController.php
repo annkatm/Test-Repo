@@ -29,17 +29,31 @@ class EmployeeController extends Controller
                 'issued_item' => 'nullable|string',
                 'status' => 'nullable|in:active,inactive,terminated',
                 'hire_date' => 'nullable|date',
+                'issued_equipment_ids' => 'nullable|array',
+                'issued_equipment_ids.*' => 'integer|exists:equipment,id',
             ]);
+            
+            // Remove issued_equipment_ids from validated data as it's not a column
+            $equipmentIds = $validated['issued_equipment_ids'] ?? [];
+            unset($validated['issued_equipment_ids']);
 
-            // Generate a unique employee_id (e.g., EMP + timestamp)
-            $validated['employee_id'] = 'EMP' . time();
+            // Generate a unique employee_id with timestamp + random number
+            // Loop until we get a unique ID to prevent duplicate key errors
+            do {
+                $validated['employee_id'] = 'EMP' . time() . rand(100, 999);
+            } while (Employee::where('employee_id', $validated['employee_id'])->exists());
+            
             $validated['status'] = $validated['status'] ?? 'active';
+
+            // Log the data being inserted for debugging
+            \Log::info('Creating employee with data:', $validated);
+            \Log::info('Issued item length: ' . strlen($validated['issued_item'] ?? ''));
 
             $employee = Employee::create($validated);
 
             // Update equipment status to 'issued' if equipment IDs are provided
-            if ($request->has('issued_equipment_ids') && is_array($request->issued_equipment_ids)) {
-                foreach ($request->issued_equipment_ids as $equipmentId) {
+            if (!empty($equipmentIds)) {
+                foreach ($equipmentIds as $equipmentId) {
                     DB::table('equipment')
                         ->where('id', $equipmentId)
                         ->update([
@@ -61,9 +75,12 @@ class EmployeeController extends Controller
                 'errors' => $e->errors()
             ], 422);
         } catch (\Exception $e) {
+            \Log::error('Employee creation error: ' . $e->getMessage());
+            \Log::error('Stack trace: ' . $e->getTraceAsString());
             return response()->json([
                 'success' => false,
-                'message' => 'Error creating employee: ' . $e->getMessage()
+                'message' => 'Error creating employee: ' . $e->getMessage(),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null
             ], 500);
         }
     }
