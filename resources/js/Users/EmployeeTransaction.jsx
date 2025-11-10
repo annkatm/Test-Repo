@@ -13,7 +13,6 @@ const EmployeeTransaction = () => {
   const [categories, setCategories] = useState([]);
   const [cartItems, setCartItems] = useState([]);
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [returnDate, setReturnDate] = useState(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
 
   // Per-user localStorage helpers
   const getUserTag = () => {
@@ -642,8 +641,7 @@ const EmployeeTransaction = () => {
             request_type: 'new_assignment',
             request_mode: 'on_site',
             reason: `Request for 1 unit of ${group.name || group.brand}`,
-            expected_start_date: startDate,
-            expected_end_date: returnDate
+            expected_start_date: startDate
           };
 
           console.log('Submitting request:', requestData);
@@ -691,7 +689,6 @@ const EmployeeTransaction = () => {
                 equipment_name: group.name || unit.name || unit.brand || 'Item',
                 created_at: new Date().toISOString(),
                 expected_start_date: startDate,
-                expected_end_date: returnDate,
                 status: 'Pending',
               };
               window.dispatchEvent(new CustomEvent('ireply:request:created', { detail: newReq }));
@@ -808,8 +805,6 @@ const EmployeeTransaction = () => {
           loading={loading}
           startDate={startDate}
           setStartDate={setStartDate}
-          returnDate={returnDate}
-          setReturnDate={setReturnDate}
           isAtLimit={isAtLimitForCategoryId}
         />
       </div>
