@@ -95,7 +95,6 @@ const FileUploadWidget = ({ label = "Upload Image", onFileSelect, error, require
           ref={inputRef}
           style={{ display: 'none' }}
           onChange={handleFileChange}
-          required={required}
         />
       </div>
       {showError && (

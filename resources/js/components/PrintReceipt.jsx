@@ -83,6 +83,7 @@ In the event that I am unable to return any of the company-issued equipment upon
   const handlePrint = () => {
     // Get the logo as absolute URL - use full path to ensure it loads
     const logoUrl = window.location.origin + '/images/Frame_89-removebg-preview.png';
+    const signatureUrl = window.location.origin + '/images/signature.jpg';
     
     // Preload the image to ensure it's available for printing
     const img = new Image();
@@ -163,6 +164,16 @@ In the event that I am unable to return any of the company-issued equipment upon
                 font-size: 12px; 
                 margin-top: 5px; 
               }
+              .signature-image { 
+                height: 40px; 
+                width: auto; 
+                margin-bottom: -5px; 
+                display: block; 
+                margin-left: auto; 
+                margin-right: auto; 
+                position: relative; 
+                z-index: 1; 
+              }
               .others-row { 
                 font-style: italic; 
               }
@@ -229,7 +240,8 @@ In the event that I am unable to return any of the company-issued equipment upon
             </div>
             <div class="signature-box">
               <div class="signature-label" style="margin-bottom: 10px; font-weight: bold;">Released by:</div>
-              <div class="signature-line"></div>
+              <img src="${signatureUrl}" alt="IT Admin Signature" class="signature-image" onerror="this.style.display='none'" />
+              <div class="signature-line" style="margin-top: 0;"></div>
               <div class="signature-label">${editableData.it_admin}</div>
               <div class="signature-label">${editableData.it_admin_title}</div>
             </div>
@@ -326,6 +338,16 @@ In the event that I am unable to return any of the company-issued equipment upon
                 font-size: 12px; 
                 margin-top: 5px; 
               }
+              .signature-image { 
+                height: 40px; 
+                width: auto; 
+                margin-bottom: -5px; 
+                display: block; 
+                margin-left: auto; 
+                margin-right: auto; 
+                position: relative; 
+                z-index: 1; 
+              }
               .others-row { 
                 font-style: italic; 
               }
@@ -388,7 +410,7 @@ In the event that I am unable to return any of the company-issued equipment upon
               </div>
               <div class="signature-box">
                 <div class="signature-label" style="margin-bottom: 10px; font-weight: bold;">Released by:</div>
-                <div class="signature-line"></div>
+                <img src="${signatureUrl}" alt="IT Admin Signature" class="signature-image" onerror="this.style.display='none'" />
                 <div class="signature-label">${editableData.it_admin}</div>
                 <div class="signature-label">${editableData.it_admin_title}</div>
               </div>
