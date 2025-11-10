@@ -73,17 +73,12 @@ In the event that I am unable to return any of the company-issued equipment upon
     setIsEditing(false);
   };
 
-  // Handle both single item and multiple items (grouped)
+  // Handle both single item and multiple items
   const items = editableItems.length > 0 ? editableItems : (transactionData.items || [{
         equipment_name: transactionData.equipment_name,
         serial_number: transactionData.serial_number,
-        serial_numbers: transactionData.serial_numbers || [transactionData.serial_number],
         notes: transactionData.notes
   }]);
-
-
-  // Debug: Log items to verify serial numbers are present
-  console.log('PrintReceipt - Items to print:', items);
 
   const handlePrint = () => {
     // Get the logo as absolute URL - use full path to ensure it loads

@@ -136,6 +136,7 @@ const EmployeePage = () => {
   const [equipmentSearchTerm, setEquipmentSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
+  const [expandedEquipment, setExpandedEquipment] = useState(new Set()); // Track expanded equipment groups
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [printData, setPrintData] = useState(null);
   // Toast state for success notifications
@@ -464,35 +465,50 @@ const EmployeePage = () => {
     }
   }, [editing, availableEquipment]);
 
-  const addEquipmentToIssued = (equipment) => {
-    // Check if already added (check by the grouped equipment's unique key)
-    const specKey = `${equipment.brand || equipment.name || 'Unknown'}-${equipment.specifications || equipment.description || 'No specs'}`;
-    if (issuedEquipment.find(eq => eq.specKey === specKey)) {
-      return;
+  const addEquipmentToIssued = (equipment, serialNumber = null) => {
+    // If a specific serial number is provided, add only that unit
+    if (serialNumber) {
+      const unitKey = `${equipment.brand || equipment.name}-${equipment.specifications}-${serialNumber}`;
+      
+      // Check if this specific unit is already added
+      if (issuedEquipment.find(eq => eq.unitKey === unitKey)) {
+        return;
+      }
+      
+      // Add single unit with one serial number
+      const equipmentToAdd = {
+        id: equipment.id,
+        name: equipment.name,
+        brand: equipment.brand,
+        specifications: equipment.specifications,
+        item_image: equipment.item_image,
+        category: equipment.category,
+        status: equipment.status,
+        unitKey: unitKey,
+        serial_number: serialNumber,
+        serial_numbers: [serialNumber],
+        available_count: 1
+      };
+      
+      setIssuedEquipment(prev => [...prev, equipmentToAdd]);
+    } else {
+      // Legacy: Add first available unit if no serial specified
+      const availableSerials = equipment.serial_numbers || [];
+      if (availableSerials.length > 0) {
+        addEquipmentToIssued(equipment, availableSerials[0]);
+      }
     }
-    
-    // Add the grouped equipment with all its details
-    const equipmentToAdd = {
-      id: equipment.id,
-      name: equipment.name,
-      brand: equipment.brand,
-      specifications: equipment.specifications,
-      item_image: equipment.item_image,
-      category: equipment.category,
-      status: equipment.status,
-      specKey: specKey,
-      serial_numbers: equipment.serial_numbers || [],
-      available_count: equipment.available_count || 0
-    };
-    
-    setIssuedEquipment(prev => [...prev, equipmentToAdd]);
   };
 
   const removeEquipmentFromIssued = (equipment) => {
-    // Use the specKey if it exists, otherwise generate it
-    const specKey = equipment.specKey || `${equipment.brand || equipment.name || 'Unknown'}-${equipment.specifications || equipment.description || 'No specs'}`;
-    
-    setIssuedEquipment(prev => prev.filter(eq => eq.specKey !== specKey));
+    // Remove by unitKey if it exists (for individual units)
+    if (equipment.unitKey) {
+      setIssuedEquipment(prev => prev.filter(eq => eq.unitKey !== equipment.unitKey));
+    } else {
+      // Legacy: remove by specKey for grouped equipment
+      const specKey = equipment.specKey || `${equipment.brand || equipment.name || 'Unknown'}-${equipment.specifications || equipment.description || 'No specs'}`;
+      setIssuedEquipment(prev => prev.filter(eq => eq.specKey !== specKey));
+    }
   };
 
   const openEquipmentModal = () => {
@@ -514,21 +530,29 @@ const EmployeePage = () => {
     }
 
     // Prepare print data from current form and issued equipment
+    // Use flatMap to create separate items for each serial number
     const printData = {
       full_name: `${form.firstName} ${form.lastName}`.trim(),
       position: form.position || 'N/A',
       department: form.department || 'N/A',
-      items: issuedEquipment.map(eq => ({
-        equipment_name: eq.name || eq.brand || 'N/A',
-        brand: eq.brand || 'N/A',
-        model: eq.name || 'N/A',
-        category_name: eq.category?.name || 'N/A',
-        serial_number: Array.isArray(eq.serial_numbers) ? eq.serial_numbers.join(', ') : (eq.serial_number || 'N/A'),
-        serial_numbers: Array.isArray(eq.serial_numbers) ? eq.serial_numbers : [eq.serial_number || 'N/A'],
-        specifications: eq.specifications || 'No specifications',
-        date_released: new Date().toISOString(),
-        date_returned: null
-      })),
+      items: issuedEquipment.flatMap(eq => {
+        // Get all serial numbers for this equipment
+        const serialNumbers = Array.isArray(eq.serial_numbers) && eq.serial_numbers.length > 0
+          ? eq.serial_numbers
+          : [eq.serial_number || 'N/A'];
+        
+        // Create a separate item for each serial number
+        return serialNumbers.map(serial => ({
+          equipment_name: eq.name || eq.brand || 'N/A',
+          brand: eq.brand || 'N/A',
+          model: eq.name || 'N/A',
+          category_name: eq.category?.name || 'N/A',
+          serial_number: serial,
+          specifications: eq.specifications || 'No specifications',
+          date_released: new Date().toISOString(),
+          date_returned: null
+        }));
+      }),
     };
 
     setPrintData(printData);
@@ -592,10 +616,33 @@ const EmployeePage = () => {
   const getEquipmentAvailability = (equipment) => {
     const baseAvailability = equipment.available_count || 0;
     const specKey = `${equipment.brand || equipment.name || 'Unknown'}-${equipment.specifications || equipment.description || 'No specs'}`;
-    const isAlreadySelected = issuedEquipment.find(eq => eq.specKey === specKey);
     
-    // If this equipment is already selected, reduce availability by 1
-    return isAlreadySelected ? Math.max(0, baseAvailability - 1) : baseAvailability;
+    // Count how many units of this equipment type are already selected
+    const selectedCount = issuedEquipment.filter(eq => {
+      const eqSpecKey = `${eq.brand || eq.name || 'Unknown'}-${eq.specifications || 'No specs'}`;
+      return eqSpecKey === specKey;
+    }).length;
+    
+    return Math.max(0, baseAvailability - selectedCount);
+  };
+
+  // Check if a specific serial number is already selected
+  const isSerialSelected = (equipment, serialNumber) => {
+    const unitKey = `${equipment.brand || equipment.name}-${equipment.specifications}-${serialNumber}`;
+    return issuedEquipment.some(eq => eq.unitKey === unitKey);
+  };
+
+  // Toggle equipment expansion
+  const toggleEquipmentExpansion = (specKey) => {
+    setExpandedEquipment(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(specKey)) {
+        newSet.delete(specKey);
+      } else {
+        newSet.add(specKey);
+      }
+      return newSet;
+    });
   };
 
   const resetAll = () => {
@@ -1660,14 +1707,14 @@ const EmployeePage = () => {
                       })
                       .map((equipment) => {
                         const specKey = `${equipment.brand || equipment.name || 'Unknown'}-${equipment.specifications || equipment.description || 'No specs'}`;
-                        const isAdded = issuedEquipment.find(eq => eq.specKey === specKey);
                         const availability = getEquipmentAvailability(equipment);
+                        const isExpanded = expandedEquipment.has(specKey);
+                        const serialNumbers = equipment.serial_numbers || [];
+                        
                         return (
                           <div 
                             key={specKey} 
-                            className={`bg-white border-2 rounded-xl p-4 transition-all hover:shadow-lg ${
-                              isAdded ? 'border-blue-500 shadow-lg' : 'border-gray-200 hover:border-blue-300'
-                            }`}
+                            className="bg-white border-2 rounded-xl p-4 transition-all hover:shadow-lg border-gray-200 hover:border-blue-300"
                           >
                             {/* Equipment Image */}
                             <div className="mb-4">
@@ -1690,24 +1737,44 @@ const EmployeePage = () => {
                                 {equipment.brand || equipment.name}
                               </h4>
                               <p className="text-xs text-gray-600">
-                                Available Unit: {availability}
+                                Available: {availability} / {equipment.available_count}
                               </p>
                             </div>
                             
-                            {/* Select Button */}
+                            {/* Expand/Collapse Button */}
                             <button
-                              onClick={() => isAdded ? removeEquipmentFromIssued(equipment) : addEquipmentToIssued(equipment)}
-                              disabled={availability === 0 && !isAdded}
-                              className={`w-full mt-4 py-2 rounded-lg font-medium text-sm transition-colors ${
-                                isAdded 
-                                  ? 'bg-red-500 text-white hover:bg-red-600' 
-                                  : availability === 0
-                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                    : 'bg-blue-500 text-white hover:bg-blue-600'
-                              }`}
+                              onClick={() => toggleEquipmentExpansion(specKey)}
+                              className="w-full mt-4 py-2 rounded-lg font-medium text-sm transition-colors bg-blue-500 text-white hover:bg-blue-600 flex items-center justify-center gap-2"
                             >
-                              {isAdded ? 'Remove' : availability === 0 ? 'Out of Stock' : 'Select'}
+                              {isExpanded ? '▼ Hide Units' : '▶ Show Units'}
                             </button>
+                            
+                            {/* Serial Numbers List */}
+                            {isExpanded && (
+                              <div className="mt-3 space-y-2 max-h-48 overflow-y-auto border-t pt-3">
+                                {serialNumbers.map((serial, idx) => {
+                                  const isSelected = isSerialSelected(equipment, serial);
+                                  return (
+                                    <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                                      <span className="text-xs font-mono">{serial}</span>
+                                      <button
+                                        onClick={() => isSelected 
+                                          ? removeEquipmentFromIssued({ unitKey: `${equipment.brand || equipment.name}-${equipment.specifications}-${serial}` })
+                                          : addEquipmentToIssued(equipment, serial)
+                                        }
+                                        className={`px-3 py-1 rounded text-xs font-medium ${
+                                          isSelected
+                                            ? 'bg-red-500 text-white hover:bg-red-600'
+                                            : 'bg-green-500 text-white hover:bg-green-600'
+                                        }`}
+                                      >
+                                        {isSelected ? 'Remove' : 'Add'}
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
