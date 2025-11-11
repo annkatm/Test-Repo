@@ -24,7 +24,8 @@ const ViewRequest = () => {
     refreshData,
     setPendingRequests,
     setApprovedRequests,
-    setCurrentHolders
+    setCurrentHolders,
+    setVerifyReturns
   } = useRequestData();
 
   // Handle scroll events for fade-out effect
@@ -214,7 +215,13 @@ const ViewRequest = () => {
       grouped[employeeName].returns.push(returnItem);
       grouped[employeeName].items.push({
         id: returnItem.equipment_id || returnItem.id,
-        equipment_name: returnItem.equipment_name || 'Unknown Item'
+        equipment_name: returnItem.equipment_name || 'Unknown Item',
+        name: returnItem.equipment_name || 'Unknown Item',
+        brand: returnItem.brand || '',
+        model: returnItem.model || '',
+        serial_number: returnItem.serial_number || returnItem.equipment_serial_number || returnItem.asset_tag || 'N/A',
+        specifications: returnItem.specifications || returnItem.specs || [returnItem.brand, returnItem.model].filter(Boolean).join(' ') || returnItem.category_name || '',
+        specs: returnItem.specifications || returnItem.specs || [returnItem.brand, returnItem.model].filter(Boolean).join(' ') || returnItem.category_name || ''
       });
     });
     return Object.values(grouped);
@@ -491,6 +498,9 @@ const ViewRequest = () => {
         return;
       }
 
+      const processedTransactionIds = [];
+      const processedEquipmentIds = [];
+
       // Process all returns in the group
       for (const returnItem of returns) {
         const transactionId = returnItem.id || returnItem.transaction_id;
@@ -500,34 +510,53 @@ const ViewRequest = () => {
           continue;
         }
 
-        // First, check the transaction status and release if needed
+        // Check the transaction status
+        let currentStatus;
         try {
           const statusCheck = await api.get(`/transactions/${transactionId}`);
-          const currentStatus = statusCheck.data?.data?.status || statusCheck.data?.status;
-          
+          currentStatus = statusCheck.data?.data?.status || statusCheck.data?.status;
           console.log('Current transaction status:', currentStatus);
+        } catch (statusError) {
+          console.warn('Could not check transaction status:', statusError);
+          continue;
+        }
+
+        let response;
+        
+        // If transaction is still released, return it first
+        if (currentStatus === 'released') {
+          console.log('Transaction still released, returning first...');
+          const returnResponse = await api.post(`/transactions/${transactionId}/return`, {
+            return_condition: 'good_condition',
+            return_notes: 'Returned and verified'
+          });
           
-          // If transaction is not released, release it first
-          if (currentStatus !== 'released') {
-            console.log('Transaction not released, releasing first...');
-            await api.post(`/transactions/${transactionId}/release`, {
-              release_condition: 'good_condition',
-              release_notes: 'Auto-released for return'
-            });
-            console.log('Transaction released successfully');
+          if (!returnResponse.data.success) {
+            throw new Error(returnResponse.data.message || 'Failed to return transaction');
           }
-        } catch (releaseError) {
-          console.warn('Could not release transaction:', releaseError);
-          // Continue anyway, the return endpoint will handle the error if needed
+          console.log('Transaction returned successfully');
+          
+          // Now verify the return
+          response = await api.post(`/transactions/${transactionId}/verify-return`, {
+            verification_notes: 'Return verified and completed'
+          });
+        } else if (currentStatus === 'returned') {
+          // Transaction is already returned, just verify it
+          console.log('Transaction already returned, verifying...');
+          response = await api.post(`/transactions/${transactionId}/verify-return`, {
+            verification_notes: 'Return verified and completed'
+          });
+        } else {
+          throw new Error(`Transaction status is ${currentStatus}. Cannot verify return.`);
         }
         
-        // Call the return API endpoint
-        const response = await api.post(`/transactions/${transactionId}/return`, {
-          return_condition: 'good_condition',
-          return_notes: ''
-        });
-        
         if (response.data.success) {
+          // Track processed transactions and equipment
+          processedTransactionIds.push(transactionId);
+          if (returnItem.equipment_id) {
+            processedEquipmentIds.push(returnItem.equipment_id);
+          }
+
           // Log the return activity
           await activityLogService.logEquipmentReturn(transactionId, returnItem);
           
@@ -556,11 +585,21 @@ const ViewRequest = () => {
             console.error('Error dispatching returned add event:', e);
           }
         } else {
-          throw new Error(response.data.message || 'Failed to process return');
+          throw new Error(response.data.message || 'Failed to verify return');
         }
       }
       
-      // After processing all returns, refresh data and show success
+      // Immediately remove processed returns from verifyReturns state
+      if (processedTransactionIds.length > 0) {
+        setVerifyReturns(prev => 
+          prev.filter(returnItem => {
+            const transactionId = returnItem.id || returnItem.transaction_id;
+            return !processedTransactionIds.includes(transactionId);
+          })
+        );
+      }
+      
+      // After processing all returns, refresh data to ensure everything is synced
       await refreshData();
       handleCloseViewReturnModal();
       
@@ -568,7 +607,7 @@ const ViewRequest = () => {
         window.showToast({
           type: 'success',
           title: 'Returns Confirmed',
-          message: `All equipment items have been successfully returned`,
+          message: `All equipment items have been successfully returned and are now available`,
           duration: 4000
         });
       }

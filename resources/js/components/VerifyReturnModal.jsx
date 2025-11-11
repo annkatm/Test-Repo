@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Package, Laptop, Mouse, Keyboard } from 'lucide-react';
 
 // Minimal modal used by ViewRequest and ViewApproved
 const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => {
@@ -25,6 +26,16 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
       .join('')
       .toUpperCase()
       .slice(0, 2);
+  };
+
+  // Get icon based on item name
+  const getItemIcon = (itemName) => {
+    const name = itemName?.toLowerCase() || '';
+    if (name.includes('laptop') || name.includes('computer')) return Laptop;
+    if (name.includes('mouse')) return Mouse;
+    if (name.includes('keyboard')) return Keyboard;
+    if (name.includes('monitor') || name.includes('display')) return Package;
+    return Package; // Default icon
   };
 
   const avatarUrl = getAvatarUrl(data);
@@ -66,28 +77,80 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
           {/* Items Section */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Items to Return</label>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {data.items && data.items.length > 0 ? (
-                data.items.map((item, index) => (
-                  <div key={index} className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg bg-gray-50">
-                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                    </svg>
-                    <div className="flex-1">
-                      <p className="font-medium text-gray-900">{item.equipment_name || item.name}</p>
-                      <p className="text-xs text-gray-600">Equipment Item</p>
-                    </div>
-                  </div>
-                ))
+                (() => {
+                  // Group items by equipment name
+                  const groupedItems = {};
+                  data.items.forEach((item) => {
+                    const equipmentName = item.equipment_name || item.name || 'Item';
+                    if (!groupedItems[equipmentName]) {
+                      groupedItems[equipmentName] = [];
+                    }
+                    groupedItems[equipmentName].push(item);
+                  });
+
+                  return Object.entries(groupedItems).map(([equipmentName, equipmentItems], groupIndex) => {
+                    const IconComponent = getItemIcon(equipmentName);
+                    
+                    return (
+                      <div key={groupIndex} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                        {/* Item Header Section */}
+                        <div className="px-3 py-2.5">
+                          <div className="flex items-center space-x-3">
+                            <IconComponent className="h-5 w-5 text-gray-700 flex-shrink-0" />
+                            <h5 className="text-sm font-semibold text-gray-900">
+                              {equipmentName}
+                            </h5>
+                          </div>
+                        </div>
+                        
+                        {/* Divider */}
+                        <div className="border-t border-gray-200"></div>
+                        
+                        {/* Table Section */}
+                        <div className="overflow-hidden">
+                          {/* Table Header */}
+                          <div className="bg-gray-100 border-b border-gray-200">
+                            <div className="grid grid-cols-2">
+                              <div className="px-3 py-1.5 border-r border-gray-200">
+                                <span className="text-xs font-medium text-gray-700">Serial</span>
+                              </div>
+                              <div className="px-3 py-1.5">
+                                <span className="text-xs font-medium text-gray-700">Specs</span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Table Rows */}
+                          <div className="bg-white">
+                            {equipmentItems.map((item, itemIndex) => {
+                              const specs = item.specifications || item.specs || '';
+                              const serialNumber = item.serial_number || 'N/A';
+                              
+                              return (
+                                <div 
+                                  key={item.id || itemIndex} 
+                                  className={`grid grid-cols-2 ${itemIndex < equipmentItems.length - 1 ? 'border-b border-gray-200' : ''}`}
+                                >
+                                  <div className="px-3 py-2 border-r border-gray-200">
+                                    <span className="text-xs text-gray-700">{serialNumber}</span>
+                                  </div>
+                                  <div className="px-3 py-2">
+                                    <span className="text-xs text-gray-700">{specs || 'N/A'}</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()
               ) : (
-                <div className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg bg-gray-50">
-                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                  </svg>
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-900">{data.equipment_name || 'N/A'}</p>
-                    <p className="text-xs text-gray-600">Equipment Item</p>
-                  </div>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
+                  <p className="text-sm text-gray-500">No items to return</p>
                 </div>
               )}
             </div>
