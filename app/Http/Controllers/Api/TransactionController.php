@@ -11,6 +11,7 @@ use App\Models\Transaction;
 use App\Models\Equipment;
 use App\Models\Employee;
 use App\Models\User;
+use App\Services\ActivityLogService;
 
 class TransactionController extends Controller
 {
@@ -1168,6 +1169,18 @@ class TransactionController extends Controller
                     DB::raw("COALESCE(equipment.model, '') as model")
                 )
                 ->first();
+
+            // Log the release activity with the person who released it
+            $releasedByUser = User::find($updateData['released_by']);
+            $releasedByName = $releasedByUser ? $releasedByUser->name : 'Unknown';
+            $employeeName = trim(($updatedTransaction->first_name ?? '') . ' ' . ($updatedTransaction->last_name ?? ''));
+            $equipmentInfo = trim(($updatedTransaction->equipment_name ?? '') . ' ' . ($updatedTransaction->brand ?? ''));
+            
+            ActivityLogService::logTransactionActivity(
+                'Released',
+                "Equipment '{$equipmentInfo}' released to {$employeeName} by {$releasedByName}",
+                Transaction::find($id)
+            );
 
             return response()->json([
                 'success' => true,
