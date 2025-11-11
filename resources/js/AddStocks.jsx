@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import HomeSidebar from './HomeSidebar';
 import { Copy, Plus, Minus, X, ChevronRight, ArrowLeft, Grid3X3, Search } from 'lucide-react';
 import GlobalHeader from './components/GlobalHeader';
@@ -851,6 +851,7 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
   const [receiptPreview, setReceiptPreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const serialInputRefs = useRef([]);
 
   // Fetch products when category is selected
   useEffect(() => {
@@ -944,6 +945,26 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
     const newSerialNumbers = [...serialNumbers];
     newSerialNumbers[index] = value;
     setSerialNumbers(newSerialNumbers);
+  };
+
+  const handleSerialKeyDown = (index, e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      
+      // If this is the last field and it has content, add a new field
+      if (index === serialNumbers.length - 1 && serialNumbers[index].trim()) {
+        addSerialField();
+        // Focus will be set after the new field is added
+        setTimeout(() => {
+          if (serialInputRefs.current[index + 1]) {
+            serialInputRefs.current[index + 1].focus();
+          }
+        }, 0);
+      } else if (index < serialNumbers.length - 1) {
+        // Move to next existing field
+        serialInputRefs.current[index + 1]?.focus();
+      }
+    }
   };
 
   const addSerialField = () => {
@@ -1213,14 +1234,21 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
 
             {/* Serial Numbers */}
             <div className="mb-6">
-              <label className="text-sm text-gray-600 mb-2 block">Serial Numbers</label>
-              <div className="space-y-3 max-h-48 overflow-y-auto">
+              <div className="flex items-center mb-2">
+                <label className="text-sm text-gray-600">Serial Numbers</label>
+                <span className="ml-2 px-2 py-0.5 rounded-full bg-gray-800 text-white text-xs font-semibold">
+                  {serialNumbers.length}
+                </span>
+              </div>
+              <div className="space-y-3 max-h-[220px] overflow-y-auto pr-2 select-scrollbar">
                 {serialNumbers.map((serial, idx) => (
                   <div key={idx} className="flex items-center space-x-3">
                     <label className="text-sm text-gray-500 w-20">Serial No.</label>
                     <input 
+                      ref={(el) => (serialInputRefs.current[idx] = el)}
                       value={serial}
                       onChange={(e) => handleSerialChange(idx, e.target.value)}
+                      onKeyDown={(e) => handleSerialKeyDown(idx, e)}
                       placeholder="4354354"
                       className="flex-1 px-3 py-2 rounded-md bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" 
                     />
@@ -1536,7 +1564,7 @@ const AddItemModal = ({ onClose, categories = [], onSuccess }) => {
                   {/* Dropdown trigger button */}
                   <div 
                     onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                    className={`w-full px-3 py-2 rounded-md bg-gray-100 cursor-pointer flex items-center justify-between ${
+                    className={`w-full px-3 py-2 rounded-md bg-gray-100 cursor-pointer ${
                       errors.category ? 'border-red-500' : 'border-transparent'
                     } border hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500`}
                   >
@@ -1545,11 +1573,6 @@ const AddItemModal = ({ onClose, categories = [], onSuccess }) => {
                         categories.find(c => c.id === formData.category)?.name 
                         : 'Select a category'}
                     </span>
-                    <ChevronRight 
-                      className={`h-4 w-4 text-gray-700 transform transition-transform ${
-                        isDropdownOpen ? 'rotate-90' : ''
-                      }`} 
-                    />
                   </div>
 
                   {/* Dropdown menu */}
