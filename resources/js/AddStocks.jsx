@@ -1396,6 +1396,94 @@ const AddItemModal = ({ onClose, categories = [], onSuccess }) => {
     }
   };
 
+  const formatPrice = (value) => {
+    if (!value || value === '' || value === null || value === undefined) return '';
+    // Convert to string and remove all non-digit characters except decimal point
+    const numericValue = value.toString().replace(/[^\d.]/g, '');
+    if (numericValue === '' || numericValue === '.') return '';
+    
+    // Split by decimal point
+    const parts = numericValue.split('.');
+    // Format the integer part with commas
+    const integerPart = parts[0] ? parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '0';
+    // Keep decimal part if exists (max 2 decimal places)
+    const decimalPart = parts[1] ? '.' + parts[1].slice(0, 2) : '';
+    
+    return integerPart + decimalPart;
+  };
+
+  const parsePrice = (value) => {
+    if (!value || value === '') return '';
+    // Remove commas and keep only numbers and decimal point
+    return value.toString().replace(/,/g, '');
+  };
+
+  const handlePriceChange = (e) => {
+    const value = e.target.value;
+    // Parse the input to get raw numeric value
+    const rawValue = parsePrice(value);
+    
+    // Allow empty string, numbers, and decimal points
+    if (rawValue === '' || /^\d*\.?\d*$/.test(rawValue)) {
+      // Store raw value in formData
+      setFormData(prev => ({
+        ...prev,
+        price: rawValue
+      }));
+    }
+    if (errors.price) {
+      setErrors(prev => ({ ...prev, price: null }));
+    }
+  };
+
+  const handlePriceBlur = (e) => {
+    // Format the price on blur - ensure 2 decimal places
+    const rawValue = parsePrice(e.target.value);
+    if (rawValue && rawValue !== '' && !isNaN(rawValue)) {
+      const numValue = parseFloat(rawValue);
+      if (!isNaN(numValue)) {
+        const formattedValue = numValue.toFixed(2);
+        setFormData(prev => ({
+          ...prev,
+          price: formattedValue
+        }));
+      }
+    } else if (rawValue === '') {
+      setFormData(prev => ({
+        ...prev,
+        price: ''
+      }));
+    }
+  };
+
+  const handlePriceIncrement = () => {
+    const currentPrice = parseFloat(formData.price) || 0;
+    // Use larger step for larger values, smaller step for smaller values
+    const step = currentPrice >= 100 ? 1 : 0.01;
+    const newPrice = (currentPrice + step).toFixed(2);
+    setFormData(prev => ({
+      ...prev,
+      price: newPrice
+    }));
+    if (errors.price) {
+      setErrors(prev => ({ ...prev, price: null }));
+    }
+  };
+
+  const handlePriceDecrement = () => {
+    const currentPrice = parseFloat(formData.price) || 0;
+    // Use larger step for larger values, smaller step for smaller values
+    const step = currentPrice >= 100 ? 1 : 0.01;
+    const newPrice = Math.max(0, currentPrice - step).toFixed(2);
+    setFormData(prev => ({
+      ...prev,
+      price: newPrice
+    }));
+    if (errors.price) {
+      setErrors(prev => ({ ...prev, price: null }));
+    }
+  };
+
   const handleFileChange = (e) => {
     const { name, files } = e.target;
     if (files && files[0]) {
@@ -1530,7 +1618,7 @@ const AddItemModal = ({ onClose, categories = [], onSuccess }) => {
       brand: '',
       supplier: '',
       description: '',
-      price: '0',
+      price: '',
       item_image: null,
       receipt_image: null
     });
@@ -1664,16 +1752,40 @@ const AddItemModal = ({ onClose, categories = [], onSuccess }) => {
             
             <div>
               <label className="text-sm text-gray-600">Price</label>
-              <input 
-                name="price"
-                type="number"
-                value={formData.price}
-                onChange={handleInputChange}
-                className="mt-2 w-full px-3 py-2 rounded-md bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="₱ 0.00"
-                min="0"
-                step="0.01"
-              />
+              <div className="mt-2 relative">
+                <input 
+                  name="price"
+                  type="text"
+                  value={formatPrice(formData.price)}
+                  onChange={handlePriceChange}
+                  onBlur={handlePriceBlur}
+                  className="w-full px-3 py-2 pr-10 rounded-md bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="0.00"
+                  inputMode="decimal"
+                />
+                <div className="absolute right-0 top-0 bottom-0 flex flex-col border-l border-gray-300">
+                  <button
+                    type="button"
+                    onClick={handlePriceIncrement}
+                    className="flex-1 px-2 flex items-center justify-center text-gray-600 hover:text-blue-600 hover:bg-blue-50 transition-colors border-b border-gray-200"
+                    aria-label="Increase price"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handlePriceDecrement}
+                    className="flex-1 px-2 flex items-center justify-center text-gray-600 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                    aria-label="Decrease price"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div>

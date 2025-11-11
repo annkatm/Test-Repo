@@ -58,6 +58,38 @@ const EmployeeHome = () => {
     }, ttl);
   };
 
+  // Function to clear cancelled IDs (for debugging)
+  const clearCancelledIds = () => {
+    setCancelledReqIds([]);
+    setCancelledEquipIds([]);
+    try {
+      sessionStorage.setItem('ireply_cancelled_req_ids', JSON.stringify([]));
+      sessionStorage.setItem('ireply_cancelled_equip_ids', JSON.stringify([]));
+    } catch (_) {}
+    console.log('[EmployeeHome] Cleared cancelled IDs');
+    // Also refresh pending transactions
+    fetchPendingTransactions();
+  };
+
+  // Debug function to test API directly
+  const debugPendingRequests = async () => {
+    try {
+      const response = await fetch('/api/debug/pending-requests', { credentials: 'same-origin' });
+      const data = await response.json();
+      console.log('[DEBUG] Pending requests debug data:', data);
+      
+      // Also test the regular API
+      const response2 = await fetch('/api/requests?status=pending', { credentials: 'same-origin' });
+      const data2 = await response2.json();
+      console.log('[DEBUG] Regular API response:', data2);
+      
+      showToast('Check console for debug info', 'info');
+    } catch (error) {
+      console.error('[DEBUG] Error:', error);
+      showToast('Debug failed - check console', 'error');
+    }
+  };
+
   // Ensure denied requests are loaded so Recent Activities shows them
   useEffect(() => {
     (async () => {
@@ -207,20 +239,29 @@ const EmployeeHome = () => {
       const reqId = e?.detail?.request_id;
       const equipId = e?.detail?.equipment_id;
       if (!reqId && !equipId) return;
+      
+      // Permanently store cancelled IDs in both session and local storage
       if (reqId) {
         setCancelledReqIds((prev) => {
           const next = Array.from(new Set([...(Array.isArray(prev) ? prev : []), String(reqId)]));
-          try { sessionStorage.setItem('ireply_cancelled_req_ids', JSON.stringify(next)); } catch (_) {}
+          try { 
+            sessionStorage.setItem('ireply_cancelled_req_ids', JSON.stringify(next)); 
+            localStorage.setItem('ireply_cancelled_req_ids_permanent', JSON.stringify(next));
+          } catch (_) {}
           return next;
         });
       }
       if (equipId) {
         setCancelledEquipIds((prev) => {
           const next = Array.from(new Set([...(Array.isArray(prev) ? prev : []), String(equipId)]));
-          try { sessionStorage.setItem('ireply_cancelled_equip_ids', JSON.stringify(next)); } catch (_) {}
+          try { 
+            sessionStorage.setItem('ireply_cancelled_equip_ids', JSON.stringify(next)); 
+            localStorage.setItem('ireply_cancelled_equip_ids_permanent', JSON.stringify(next));
+          } catch (_) {}
           return next;
         });
       }
+      
       setPendingTransactions((prev) => (
         Array.isArray(prev)
           ? prev.filter((r) => {
@@ -230,14 +271,16 @@ const EmployeeHome = () => {
             })
           : prev
       ));
-      try { showToast('Request cancelled', 'warning'); } catch (_) {}
+      
+      try { showToast('Request cancelled successfully', 'success'); } catch (_) {}
+      
       // Add a cancel activity for Recent panel
       try {
         const when = new Date().toISOString();
         const entry = {
           id: `cancel:${reqId || equipId || when}`,
           item: e?.detail?.equipment_name || e?.detail?.item || 'Request',
-          message: 'Successfully request cancelled',
+          message: 'Request cancelled successfully',
           variant: 'cancel',
           date: when,
           time: when,
@@ -252,8 +295,9 @@ const EmployeeHome = () => {
           return merged;
         });
       } catch (_) {}
-      // Fallback: refresh pending from server shortly after
-      setTimeout(() => { try { fetchPendingTransactions(); } catch (_) {} }, 300);
+      
+      // Refresh pending from server to ensure consistency
+      setTimeout(() => { try { fetchPendingTransactions(); } catch (_) {} }, 500);
     };
     window.addEventListener('ireply:request:cancelled', onCancelled);
     const onCreated = (e) => {
@@ -816,8 +860,14 @@ const EmployeeHome = () => {
         expected_start_date: t?.expected_start_date || null,
         equipment_id: t?.equipment_id || t?.equipment?.id || null,
         equipment_name: t?.equipment_name || t?.equipment?.name || t?.item || 'Item',
+        brand: t?.brand || t?.equipment?.brand || '',
+        model: t?.model || t?.equipment?.model || '',
+        request_number: t?.request_number || t?.number || '',
+        reason: t?.reason || t?.description || t?.notes || '',
         status: t?.status || 'Pending',
       }));
+
+      console.log('[fetchPendingTransactions] Final mapped transactions:', mapped);
 
       setPendingTransactions((prev) => {
         const base = Array.isArray(prev) ? prev : [];
@@ -828,6 +878,7 @@ const EmployeeHome = () => {
           const key = `${String(r?.id ?? '')}::${String(r?.equipment_id ?? '')}`;
           if (!seen.has(key)) { seen.add(key); deduped.push(r); }
         }
+        console.log('[fetchPendingTransactions] Final deduped transactions:', deduped);
         return deduped;
       });
     } catch (e) {
@@ -1208,12 +1259,17 @@ const EmployeeHome = () => {
         equipment_id: t?.equipment_id || t?.equipment?.id || null,
         date: date || '-',
         item: t?.equipment_name || t?.item || '-',
+        brand: t?.brand || t?.equipment?.brand || '-',
+        model: t?.model || t?.equipment?.model || '-',
+        number: t?.request_number || t?.number || '-',
+        request_number: t?.request_number || t?.number || '-',
+        reason: t?.reason || t?.description || t?.notes || '-',
         status: t?.status || 'Pending',
         details: [
           {
             name: t?.equipment_name || t?.item || '-',
-            description: t?.description || '',
-            icon: 'https://cdn-icons-png.flaticon.com/512/1086/1086933.png',
+            description: t?.reason || t?.description || t?.notes || 'Equipment request',
+            icon: '/images/placeholder-equipment.png',
           },
         ],
       };
@@ -1226,6 +1282,7 @@ const EmployeeHome = () => {
         deniedRequests={deniedRequests}
         setDeniedRequests={setDeniedRequests}
         fetchDeniedRequests={fetchDeniedRequests}
+        showToast={showToast}
       />
     );
   }
@@ -1254,17 +1311,27 @@ const EmployeeHome = () => {
           <div className="p-6 border-b border-gray-200">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-[#2262C6]">On Process</h2>
-              <button
-                onClick={() => {
-                  // Show the view immediately to avoid UX delay; fetch in background
-                  setShowPendings(true);
-                  try { fetchDeniedRequests(); } catch (_) {}
-                  try { fetchPendingTransactions(); } catch (_) {}
-                  logActivity('Opened On Process view', 'info');
-                }}
-                className="text-right text-blue-600 text-sm font-medium hover:text-blue-700">
-                View all
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    console.log('[DEBUG] Manual refresh clicked');
+                    clearCancelledIds();
+                  }}
+                  className="text-right text-red-600 text-xs font-medium hover:text-red-700">
+                  Refresh
+                </button>
+                <button
+                  onClick={() => {
+                    // Show the view immediately to avoid UX delay; fetch in background
+                    setShowPendings(true);
+                    try { fetchDeniedRequests(); } catch (_) {}
+                    try { fetchPendingTransactions(); } catch (_) {}
+                    logActivity('Opened On Process view', 'info');
+                  }}
+                  className="text-right text-blue-600 text-sm font-medium hover:text-blue-700">
+                  View all
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1611,6 +1678,34 @@ const EmployeeHome = () => {
           </div>
         </div>
       )}
+
+      {/* Toast Notifications */}
+      <div className="fixed top-4 right-4 z-50 space-y-2">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className={`px-4 py-3 rounded-lg shadow-lg border-l-4 max-w-sm transform transition-all duration-300 ease-in-out ${
+              toast.variant === 'success' 
+                ? 'bg-green-50 border-green-400 text-green-800' 
+                : toast.variant === 'error' 
+                ? 'bg-red-50 border-red-400 text-red-800'
+                : toast.variant === 'warning'
+                ? 'bg-yellow-50 border-yellow-400 text-yellow-800'
+                : 'bg-blue-50 border-blue-400 text-blue-800'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium">{toast.message}</p>
+              <button
+                onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
+                className="ml-2 text-gray-400 hover:text-gray-600"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
