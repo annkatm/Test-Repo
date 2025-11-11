@@ -8,17 +8,20 @@ const ErrorMessage = ({ message }) => (
 );
 
 // Password Input Component
-const PasswordInput = ({ value, onChange, onKeyPress, disabled, showPassword, onTogglePassword }) => (
+const PasswordInput = ({ value, onChange, onKeyPress, disabled, showPassword, onTogglePassword, error, onBlur }) => (
   <div className="relative mb-5">
     <input
       type={showPassword ? 'text' : 'password'}
-      className="w-full h-14 rounded-full px-5 border-none bg-[#f1f6ff] text-base shadow-md outline-none focus:shadow-lg disabled:opacity-60"
+      className={`w-full h-14 rounded-full px-5 border-none bg-[#f1f6ff] text-base shadow-md outline-none focus:shadow-lg disabled:opacity-60 ${
+        error ? 'border-2 border-red-500 bg-red-50' : ''
+      }`}
       id="password"
       name="password"
       placeholder="Password"
       value={value}
       onChange={onChange}
       onKeyPress={onKeyPress}
+      onBlur={onBlur}
       disabled={disabled}
       required
     />
@@ -29,6 +32,9 @@ const PasswordInput = ({ value, onChange, onKeyPress, disabled, showPassword, on
     >
       <i className={`fas ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
     </button>
+    {error && (
+      <p className="text-red-600 text-xs mt-1 ml-5">{error}</p>
+    )}
   </div>
 );
 
@@ -140,12 +146,14 @@ const LoginPage = ({ onAuthSuccess }) => {
   const validateForm = () => {
     const newErrors = {};
     
+    // Email validation
     if (!email.trim()) {
       newErrors.email = 'Email is required';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       newErrors.email = 'Please enter a valid email address';
     }
     
+    // Password validation
     if (!password) {
       newErrors.password = 'Password is required';
     } else if (password.length < 6) {
@@ -153,16 +161,56 @@ const LoginPage = ({ onAuthSuccess }) => {
     }
     
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return {
+      isValid: Object.keys(newErrors).length === 0,
+      errors: newErrors
+    };
+  };
+
+  const validateField = (name, value) => {
+    const newErrors = { ...errors };
+    
+    if (name === 'email') {
+      if (!value.trim()) {
+        newErrors.email = 'Email is required';
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())) {
+        newErrors.email = 'Please enter a valid email address';
+      } else {
+        delete newErrors.email;
+      }
+    }
+    
+    if (name === 'password') {
+      if (!value) {
+        newErrors.password = 'Password is required';
+      } else if (value.length < 6) {
+        newErrors.password = 'Password must be at least 6 characters';
+      } else {
+        delete newErrors.password;
+      }
+    }
+    
+    setErrors(newErrors);
   };
 
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
     
-    if (!validateForm()) return;
+    // Validate form before submission
+    const validation = validateForm();
+    if (!validation.isValid) {
+      // Focus on first error field
+      if (validation.errors.email) {
+        document.querySelector('input[name="email"]')?.focus();
+      } else if (validation.errors.password) {
+        document.querySelector('input[name="password"]')?.focus();
+      }
+      return;
+    }
     
     setIsLoading(true);
-    setErrors({});
+    // Clear field errors but keep general errors if any
+    setErrors(prev => ({ general: prev.general || null }));
     
     try {
       // Get CSRF token from meta tag or fetch from server
@@ -195,49 +243,69 @@ const LoginPage = ({ onAuthSuccess }) => {
         method: 'POST',
         headers: {
           'X-CSRF-TOKEN': csrfToken,
+          'Accept': 'application/json',
         },
         credentials: 'same-origin', // Include cookies for session authentication
         body: formData,
       });
 
-      // Check if the response is a redirect (status 302)
+      // Check if the response is a redirect (status 302) - means login was successful
       if (response.redirected || response.status === 302) {
         // Login was successful and we were redirected
         console.log('Login successful - redirected to dashboard');
-        console.log('Cookies after login:', document.cookie);
-        
-        // Check if session cookie is now available
-        const sessionCookie = document.cookie.split(';').find(cookie => cookie.trim().startsWith('laravel-session='));
-        console.log('Session cookie after login:', sessionCookie || 'NOT FOUND');
         
         // Redirect to the actual redirected URL instead of hardcoding /dashboard
         window.location.href = response.url || '/dashboard';
         return;
       }
       
-      // If it's a JSON response, handle it normally
-      const data = await response.json();
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      let data;
       
-      // Debug: Log the response
-      console.log('Login response:', data);
-      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-      console.log('Cookies after login:', document.cookie);
-
-      if (data.success) {
-        // Store user data in localStorage for frontend use
-        localStorage.setItem('user', JSON.stringify(data.user));
+      if (contentType && contentType.includes('application/json')) {
+        try {
+          data = await response.json();
+        } catch (parseError) {
+          // If JSON parsing fails, treat as authentication error
+          setErrors({ general: 'Wrong email or password. Please try again.' });
+          return;
+        }
+      } else {
+        // If not JSON, it's likely an HTML error page or validation error
+        // Check for common error status codes
+        if (response.status === 422 || response.status === 401 || response.status === 403) {
+          setErrors({ general: 'Wrong email or password. Please try again.' });
+          return;
+        }
         
-        // Debug: Check if session cookie is now available
-        const sessionCookie = document.cookie.split(';').find(cookie => cookie.trim().startsWith('laravel-session='));
-        console.log('Session cookie after login:', sessionCookie || 'NOT FOUND');
+        // For other non-JSON responses, show generic error
+        setErrors({ general: 'Wrong email or password. Please try again.' });
+        return;
+      }
+
+      // Handle JSON response
+      if (response.ok && data.success) {
+        // Store user data in localStorage for frontend use
+        if (data.user) {
+          localStorage.setItem('user', JSON.stringify(data.user));
+        }
         
         onAuthSuccess();
       } else {
-        setErrors({ general: data.message || 'Login failed. Please try again.' });
+        // Show appropriate error message
+        const errorMessage = data.message || data.error || 'Wrong email or password. Please try again.';
+        setErrors({ general: errorMessage });
       }
     } catch (error) {
       console.error('Login error:', error);
-      setErrors({ general: 'Network error. Please check your connection and try again.' });
+      
+      // Check if it's a JSON parse error (likely means server returned HTML error page)
+      if (error instanceof SyntaxError && error.message.includes('JSON')) {
+        setErrors({ general: 'Wrong email or password. Please try again.' });
+      } else {
+        setErrors({ general: 'Network error. Please check your connection and try again.' });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -349,25 +417,51 @@ const LoginPage = ({ onAuthSuccess }) => {
           {errors.general && <ErrorMessage message={errors.general} />}
 
           <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
-            <input
-              type="text"
-              className="w-full h-14 rounded-full px-5 mb-5 border-none bg-[#f1f6ff] text-base shadow-md outline-none focus:shadow-lg disabled:opacity-60"
-              name="email"
-              placeholder="User ID"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              onKeyPress={handleKeyPress}
-              disabled={isLoading}
-              required
-            />
+            <div className="mb-5">
+              <input
+                type="email"
+                className={`w-full h-14 rounded-full px-5 border-none bg-[#f1f6ff] text-base shadow-md outline-none focus:shadow-lg disabled:opacity-60 ${
+                  errors.email ? 'border-2 border-red-500 bg-red-50' : ''
+                }`}
+                name="email"
+                placeholder="Email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (errors.email) {
+                    validateField('email', e.target.value);
+                  }
+                  if (errors.general) {
+                    setErrors(prev => ({ ...prev, general: null }));
+                  }
+                }}
+                onBlur={(e) => validateField('email', e.target.value)}
+                onKeyPress={handleKeyPress}
+                disabled={isLoading}
+                required
+              />
+              {errors.email && (
+                <p className="text-red-600 text-xs mt-1 ml-5">{errors.email}</p>
+              )}
+            </div>
             
             <PasswordInput
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                if (errors.password) {
+                  validateField('password', e.target.value);
+                }
+                if (errors.general) {
+                  setErrors(prev => ({ ...prev, general: null }));
+                }
+              }}
+              onBlur={(e) => validateField('password', e.target.value)}
               onKeyPress={handleKeyPress}
               disabled={isLoading}
               showPassword={showPassword}
               onTogglePassword={togglePasswordVisibility}
+              error={errors.password}
             />
 
             <button
