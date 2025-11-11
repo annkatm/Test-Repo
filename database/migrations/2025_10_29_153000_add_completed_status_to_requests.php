@@ -12,6 +12,9 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Normalize any unexpected statuses to a safe value before altering the ENUM
+        DB::statement("UPDATE requests SET status = 'fulfilled' WHERE status NOT IN ('pending','approved','rejected','fulfilled','completed') OR status IS NULL");
+
         // Add 'completed' to the status enum for requests table
         DB::statement("ALTER TABLE requests MODIFY COLUMN status ENUM('pending', 'approved', 'rejected', 'fulfilled', 'completed') DEFAULT 'pending'");
     }
@@ -21,6 +24,9 @@ return new class extends Migration
      */
     public function down(): void
     {
+        // Convert 'completed' statuses back to a supported value before shrinking the ENUM
+        DB::statement("UPDATE requests SET status = 'fulfilled' WHERE status = 'completed'");
+
         // Remove 'completed' from the status enum
         DB::statement("ALTER TABLE requests MODIFY COLUMN status ENUM('pending', 'approved', 'rejected', 'fulfilled') DEFAULT 'pending'");
     }

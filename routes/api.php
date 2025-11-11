@@ -3,6 +3,8 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\RequestController;
@@ -70,8 +72,51 @@ Route::post('/requests/{id}/cancel', [RequestController::class, 'cancel']);
 Route::post('/requests/{id}/fulfill', [RequestController::class, 'fulfill']);
 Route::get('/requests/statistics', [RequestController::class, 'statistics']);
 
-
+// Debug route to check pending requests
+Route::get('/debug/pending-requests', function(): \Illuminate\Http\JsonResponse {
+    $user = Auth::user();
+    $employee = DB::table('employees')->where('user_id', $user->id)->first();
+    $requests = DB::table('requests')
+        ->leftJoin('employees', 'requests.employee_id', '=', 'employees.id')
+        ->leftJoin('equipment', 'requests.equipment_id', '=', 'equipment.id')
+        ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
+        ->where('requests.status', 'pending')
+        ->select(
+            'requests.*',
+            'equipment.name as equipment_name',
+            'equipment.brand',
+            'equipment.model',
+            'categories.name as category_name'
+        )
+        ->get();
     
+    // Also get cancelled requests for debugging
+    $cancelledRequests = DB::table('requests')
+        ->leftJoin('employees', 'requests.employee_id', '=', 'employees.id')
+        ->leftJoin('equipment', 'requests.equipment_id', '=', 'equipment.id')
+        ->where('requests.status', 'cancelled')
+        ->select(
+            'requests.*',
+            'equipment.name as equipment_name',
+            'equipment.brand',
+            'equipment.model'
+        )
+        ->get();
+    
+    return response()->json([
+        'current_user' => $user,
+        'employee' => $employee,
+        'all_pending_requests' => $requests,
+        'user_pending_requests' => $employee ? $requests->where('employee_id', $employee->id) : [],
+        'cancelled_requests' => $cancelledRequests,
+        'debug_info' => [
+            'total_requests' => DB::table('requests')->count(),
+            'pending_count' => DB::table('requests')->where('status', 'pending')->count(),
+            'cancelled_count' => DB::table('requests')->where('status', 'cancelled')->count(),
+            'all_statuses' => DB::table('requests')->select('status', DB::raw('count(*) as count'))->groupBy('status')->get()
+        ]
+    ]);
+});
 
     // Request routes
     Route::get('/requests', [RequestController::class, 'index']);
