@@ -176,6 +176,8 @@ const VerificationModal = ({
 
                   return Object.entries(groupedItems).map(([equipmentName, equipmentItems], groupIndex) => {
                     const IconComponent = getItemIcon(equipmentName);
+                    // Get category from first item in the group
+                    const categoryName = equipmentItems[0]?.category_name || equipmentItems[0]?.category || equipmentName;
                     
                     return (
                       <div key={groupIndex} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
@@ -184,7 +186,7 @@ const VerificationModal = ({
                           <div className="flex items-center space-x-3">
                             <IconComponent className="h-5 w-5 text-gray-700 flex-shrink-0" />
                             <h5 className="text-sm font-semibold text-gray-900">
-                              {equipmentName}
+                              {categoryName}
                             </h5>
                           </div>
                         </div>
@@ -198,7 +200,7 @@ const VerificationModal = ({
                           <div className="bg-gray-100 border-b border-gray-200">
                             <div className="grid grid-cols-2">
                               <div className="px-3 py-1.5 border-r border-gray-200">
-                                <span className="text-xs font-medium text-gray-700">Serial</span>
+                                <span className="text-xs font-medium text-gray-700">Brand</span>
                               </div>
                               <div className="px-3 py-1.5">
                                 <span className="text-xs font-medium text-gray-700">Specs</span>
@@ -210,18 +212,19 @@ const VerificationModal = ({
                           <div className="bg-white">
                             {equipmentItems.map((item, itemIndex) => {
                               const specs = item.specifications || item.specs || '';
-                              const serialNumber = item.serial_number || 'N/A';
+                              const brand = item.brand || 'N/A';
                               
                               return (
-                                <div 
-                                  key={item.id || item.requestId || itemIndex} 
-                                  className={`grid grid-cols-2 ${itemIndex < equipmentItems.length - 1 ? 'border-b border-gray-200' : ''}`}
-                                >
-                                  <div className="px-3 py-2 border-r border-gray-200">
-                                    <span className="text-xs text-gray-700">{serialNumber}</span>
-                                  </div>
-                                  <div className="px-3 py-2">
-                                    <span className="text-xs text-gray-700">{specs || 'N/A'}</span>
+                                <div key={item.id || item.requestId || itemIndex}>
+                                  <div 
+                                    className={`grid grid-cols-2 ${itemIndex < equipmentItems.length - 1 ? 'border-b border-gray-200' : ''}`}
+                                  >
+                                    <div className="px-3 py-2 border-r border-gray-200">
+                                      <span className="text-xs text-gray-700">{brand}</span>
+                                    </div>
+                                    <div className="px-3 py-2">
+                                      <span className="text-xs text-gray-700">{specs || 'N/A'}</span>
+                                    </div>
                                   </div>
                                 </div>
                               );

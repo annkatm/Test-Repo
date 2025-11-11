@@ -69,7 +69,9 @@ const ExchangePanel = ({
   const baseDetails = {
     Brand: transaction?.brand || equipment?.brand,
     Model: transaction?.model || equipment?.model,
-    Category: equipment?.category_name || equipment?.category || equipment?.type,
+    Category: equipment?.category_name || 
+             (equipment?.category ? (typeof equipment.category === 'object' ? equipment.category.name : equipment.category) : null) || 
+             equipment?.type,
     Specs: equipment?.specs || equipment?.specifications || equipment?.specification,
     Condition: equipment?.condition,
     Status: equipment?.status,
@@ -79,7 +81,8 @@ const ExchangePanel = ({
   };
 
   const excludeKeys = new Set([
-    'id','equipment_id','transaction_id','request_id','user_id','employee_id','status','date','created_at','updated_at','deleted_at','exchangeitems','serial','serial_no','serial_number','sn','equipment_name','item','name','image','avatar','avatar_url','photo','photo_url'
+    'id','equipment_id','transaction_id','request_id','user_id','employee_id','status','date','created_at','updated_at','deleted_at','exchangeitems','serial','serial_no','serial_number','sn','equipment_name','item','name','image','avatar','avatar_url','photo','photo_url',
+    'item_image','receipt_image','item_image_url','receipt_image_url'  // Added image-related fields to exclude
   ]);
   const shouldInclude = (k, v) => {
     if (v == null) return false;
@@ -103,8 +106,22 @@ const ExchangePanel = ({
     .filter(([k, v]) => shouldInclude(k, v))
     .reduce((acc, [k, v]) => ({ ...acc, [labelize(k)]: v }), {});
 
+  // Format price with thousand separators
+  const formatPrice = (value) => {
+    if (value == null) return null;
+    const num = Number(value);
+    return isNaN(num) ? value : num.toLocaleString('en-US');
+  };
+
   const detailPairs = Object.entries({ ...baseDetails, ...extraFromTransaction, ...extraFromEquipment })
-    .filter(([_, v]) => v && String(v).trim() !== '');
+    .filter(([_, v]) => v && String(v).trim() !== '')
+    .map(([k, v]) => {
+      // Format price-related fields
+      if (k.toLowerCase().includes('price') || k.toLowerCase().includes('cost')) {
+        return [k, formatPrice(v) || v];
+      }
+      return [k, v];
+    });
 
   return (
     <div className={`bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 h-full flex flex-col ${className}`}>

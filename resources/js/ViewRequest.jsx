@@ -157,6 +157,8 @@ const ViewRequest = () => {
         name: req.equipment_name || 'Unknown Item',
         brand: req.brand || '',
         model: req.model || '',
+        category_name: req.category_name || '',
+        category: req.category_name || '',
         serial_number: req.serial_number || req.equipment_serial_number || req.asset_tag || 'N/A',
         specifications: req.specifications || req.specs || [req.brand, req.model].filter(Boolean).join(' ') || req.category_name || '',
         specs: req.specifications || req.specs || [req.brand, req.model].filter(Boolean).join(' ') || req.category_name || ''
