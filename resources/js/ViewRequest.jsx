@@ -1048,14 +1048,14 @@ const ViewRequest = () => {
               <span className="text-sm font-medium">
                 {view === 'viewRequest' ? 'View Request' : 
                  view === 'viewApproved' ? 'View Approved' :
-                 view === 'currentHolder' ? 'Current holder' : 'Verify return'}
+                 view === 'currentHolder' ? 'Approved requests' : 'Verify return'}
               </span>
               <ChevronDown className="h-4 w-4" />
             </button>
             {isMenuOpen && (
               <div className="absolute right-0 z-10 mt-2 w-44 bg-white rounded-md shadow border border-gray-200">
                 <button onClick={() => handleSelect('viewRequest')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50">View Request</button>
-                <button onClick={() => handleSelect('currentHolder')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50">Current holder</button>
+                <button onClick={() => handleSelect('currentHolder')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50">Approved requests</button>
                 <button onClick={() => handleSelect('verifyReturn')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50">Verify return</button>
               </div>
             )}
@@ -1199,7 +1199,7 @@ const ViewRequest = () => {
   <>
     <div className="mt-8">
       <div className="flex items-center justify-between mb-6">
-        <h3 className="text-2xl font-semibold text-gray-800">Current holder</h3>
+        <h3 className="text-2xl font-semibold text-gray-800">Approved requests</h3>
         <div className="relative">
           <button
             type="button"
@@ -1209,14 +1209,14 @@ const ViewRequest = () => {
             <span className="text-sm font-medium">
               {view === 'viewRequest' ? 'View Request' : 
                view === 'viewApproved' ? 'View Approved' :
-               view === 'currentHolder' ? 'Current holder' : 'Verify return'}
+               view === 'currentHolder' ? 'Approved requests' : 'Verify return'}
             </span>
             <ChevronDown className="h-4 w-4" />
           </button>
           {isMenuOpen && (
             <div className="absolute right-0 z-10 mt-2 w-44 bg-white rounded-md shadow border border-gray-200">
               <button onClick={() => handleSelect('viewRequest')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50">View Request</button>
-              <button onClick={() => handleSelect('currentHolder')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50">Current holder</button>
+              <button onClick={() => handleSelect('currentHolder')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50">Approved requests</button>
               <button onClick={() => handleSelect('verifyReturn')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50">Verify return</button>
             </div>
           )}
@@ -1333,14 +1333,14 @@ const ViewRequest = () => {
             <span className="text-sm font-medium">
               {view === 'viewRequest' ? 'View Request' : 
                view === 'viewApproved' ? 'View Approved' :
-               view === 'currentHolder' ? 'Current holder' : 'Verify return'}
+               view === 'currentHolder' ? 'Approved requests' : 'Verify return'}
             </span>
             <ChevronDown className="h-4 w-4" />
           </button>
           {isMenuOpen && (
             <div className="absolute right-0 z-10 mt-2 w-44 bg-white rounded-md shadow border border-gray-200">
               <button onClick={() => handleSelect('viewRequest')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50">View Request</button>
-              <button onClick={() => handleSelect('currentHolder')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50">Current holder</button>
+              <button onClick={() => handleSelect('currentHolder')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50">Approved requests</button>
               <button onClick={() => handleSelect('verifyReturn')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50">Verify return</button>
             </div>
           )}

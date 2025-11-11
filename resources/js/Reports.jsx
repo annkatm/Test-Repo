@@ -95,9 +95,31 @@ const Reports = () => {
             approvedBy: t.approvedBy || '-'
           })));
 
+          // Helper function to combine brand and item name without duplication
+          const combineBrandAndItem = (brand, itemName) => {
+            const brandTrimmed = (brand || '').trim();
+            const itemNameTrimmed = (itemName || '').trim();
+            
+            if (!brandTrimmed && !itemNameTrimmed) return 'Unknown';
+            if (!brandTrimmed) return itemNameTrimmed;
+            if (!itemNameTrimmed) return brandTrimmed;
+            
+            // Check if item name already contains the brand (case-insensitive)
+            const itemNameLower = itemNameTrimmed.toLowerCase();
+            const brandLower = brandTrimmed.toLowerCase();
+            
+            // If item name already contains brand, use item name only
+            if (itemNameLower.includes(brandLower) || itemNameLower === brandLower) {
+              return itemNameTrimmed;
+            }
+            
+            // Otherwise, combine them
+            return `${brandTrimmed} ${itemNameTrimmed}`.trim();
+          };
+
           // Update top borrowed items from API
           const borrowedItems = (data.topBorrowed || []).map(item => ({
-            item: `${item.brand || ''} ${item.item || ''}`.trim() || 'Unknown',
+            item: combineBrandAndItem(item.brand, item.item),
             borrowed: parseInt(item.borrowed_count) || 0,
             category: item.category || 'Uncategorized'
           }));
@@ -112,9 +134,7 @@ const Reports = () => {
             // Create a unique key from brand and item name
             const brand = (item.brand || '').trim();
             const itemName = (item.item || '').trim();
-            const combinedName = brand && itemName 
-              ? `${brand} ${itemName}`.trim()
-              : brand || itemName || 'Unknown';
+            const combinedName = combineBrandAndItem(brand, itemName);
             const itemValue = parseFloat(item.value) || 0;
             const itemCount = parseInt(item.count) || 1;
             const existing = equipmentMap.get(combinedName);
