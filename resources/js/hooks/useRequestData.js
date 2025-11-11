@@ -21,7 +21,11 @@ export const useRequestData = () => {
       // Fetch pending requests
       const pendingRes = await api.get('/requests', { params: { status: 'pending' } });
       if (pendingRes.data.success) {
-        setPendingRequests(pendingRes.data.data);
+        // Extra filter to ensure no cancelled requests slip through
+        const filteredPending = (pendingRes.data.data || []).filter(req => 
+          req.status !== 'cancelled' && req.status !== 'canceled'
+        );
+        setPendingRequests(filteredPending);
       }
 
       // Fetch approved requests
@@ -60,6 +64,44 @@ export const useRequestData = () => {
 
   useEffect(() => {
     fetchData();
+
+    // Listen for cancelled request events from employee side
+    const handleRequestCancelled = (event) => {
+      const { request_id, equipment_id } = event.detail || {};
+      console.log('[useRequestData] Request cancelled event received:', { request_id, equipment_id });
+      
+      if (request_id) {
+        // Remove the cancelled request from pending requests
+        setPendingRequests(prev => prev.filter(req => String(req.id) !== String(request_id)));
+        
+        // Also remove from approved requests if it was there
+        setApprovedRequests(prev => prev.filter(req => String(req.id) !== String(request_id)));
+        
+        console.log('[useRequestData] Removed cancelled request from admin view');
+        
+        // Force a refresh after a short delay to ensure consistency
+        setTimeout(() => {
+          console.log('[useRequestData] Refreshing data after cancellation');
+          fetchData();
+        }, 1000);
+      }
+    };
+
+    // Listen for multiple event types
+    window.addEventListener('ireply:request:cancelled', handleRequestCancelled);
+    window.addEventListener('ireply:request:canceled', handleRequestCancelled); // Alternative spelling
+
+    // Set up periodic refresh to keep data in sync (every 30 seconds)
+    const refreshInterval = setInterval(() => {
+      console.log('[useRequestData] Periodic refresh triggered');
+      fetchData();
+    }, 30000);
+
+    return () => {
+      window.removeEventListener('ireply:request:cancelled', handleRequestCancelled);
+      window.removeEventListener('ireply:request:canceled', handleRequestCancelled);
+      clearInterval(refreshInterval);
+    };
   }, [fetchData]);
 
   return {

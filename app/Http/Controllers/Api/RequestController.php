@@ -90,6 +90,9 @@ class RequestController extends Controller
                     DB::raw("COALESCE(equipment.name, '') as equipment_name"),
                     DB::raw("COALESCE(equipment.brand, '') as brand"),
                     DB::raw("COALESCE(equipment.model, '') as model"),
+                    DB::raw("COALESCE(equipment.serial_number, '') as serial_number"),
+                    DB::raw("COALESCE(equipment.specifications, '') as specifications"),
+                    DB::raw("COALESCE(equipment.asset_tag, '') as asset_tag"),
                     DB::raw("COALESCE(categories.name, '') as category_name"),
                     DB::raw("COALESCE(approver.name, '') as approved_by_name")
                 )
@@ -97,8 +100,11 @@ class RequestController extends Controller
 
         // Filter by status
         if ($request->has('status')) {
-                $query->where('requests.status', $request->status);
-            }
+            $query->where('requests.status', $request->status);
+        } else {
+            // If no status specified, exclude cancelled requests by default
+            $query->where('requests.status', '!=', 'cancelled');
+        }
 
             // Filter by employee
             if ($request->has('employee_id')) {
@@ -712,6 +718,82 @@ class RequestController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error fulfilling request: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Cancel a pending request
+     */
+    public function cancel(string $id): JsonResponse
+    {
+        try {
+            $equipmentRequest = DB::table('requests')->where('id', $id)->first();
+            
+            if (!$equipmentRequest) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Request not found'
+                ], 404);
+            }
+
+            if ($equipmentRequest->status !== 'pending') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Only pending requests can be cancelled'
+                ], 422);
+            }
+
+            DB::table('requests')->where('id', $id)->update([
+                'status' => 'cancelled',
+                'updated_at' => now(),
+            ]);
+
+            // Log the activity
+            ActivityLogService::logSystemActivity(
+                'Cancelled request',
+                "Cancelled request #{$equipmentRequest->request_number}"
+            );
+
+            // Fetch updated request with related data
+            $updatedRequest = DB::table('requests')
+                ->leftJoin('employees', 'requests.employee_id', '=', 'employees.id')
+                ->leftJoin('equipment', 'requests.equipment_id', '=', 'equipment.id')
+                ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
+                ->where('requests.id', $id)
+                ->select(
+                    'requests.*',
+                    DB::raw("CONCAT(COALESCE(employees.first_name, ''), ' ', COALESCE(employees.last_name, '')) as full_name"),
+                    DB::raw("COALESCE(employees.employee_type, '') as position"),
+                    DB::raw("COALESCE(equipment.name, '') as equipment_name"),
+                    DB::raw("COALESCE(equipment.brand, '') as brand"),
+                    DB::raw("COALESCE(equipment.model, '') as model"),
+                    DB::raw("COALESCE(categories.name, '') as category_name")
+                )
+                ->first();
+
+            // Broadcast update event
+            try {
+                event(new RequestUpdated((array) $updatedRequest));
+            } catch (\Exception $_) {}
+
+            // Broadcast the cancellation event
+            try {
+                event(new RequestUpdated((array) $updatedRequest));
+            } catch (\Exception $_) {}
+
+            return response()->json([
+                'success' => true,
+                'data' => $updatedRequest,
+                'message' => 'Request cancelled successfully',
+                'cancelled' => true,
+                'request_id' => $id
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error cancelling request: ' . $e->getMessage()
             ], 500);
         }
     }

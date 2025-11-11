@@ -154,8 +154,11 @@ const ViewRequest = () => {
         requestId: req.id,
         equipment_name: req.equipment_name || 'Unknown Item',
         name: req.equipment_name || 'Unknown Item',
-        specifications: [req.brand, req.model].filter(Boolean).join(' ') || req.category_name || '',
-        specs: [req.brand, req.model].filter(Boolean).join(' ') || req.category_name || ''
+        brand: req.brand || '',
+        model: req.model || '',
+        serial_number: req.serial_number || req.equipment_serial_number || req.asset_tag || 'N/A',
+        specifications: req.specifications || req.specs || [req.brand, req.model].filter(Boolean).join(' ') || req.category_name || '',
+        specs: req.specifications || req.specs || [req.brand, req.model].filter(Boolean).join(' ') || req.category_name || ''
       });
     });
     return Object.values(grouped);

@@ -9,6 +9,7 @@ const OnProcessTransactions = ({
   deniedRequests = [],
   setDeniedRequests = () => { },
   fetchDeniedRequests = async () => [],
+  showToast = () => {},
 }) => {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [list, setList] = useState(requests || []);
@@ -202,7 +203,15 @@ const OnProcessTransactions = ({
                         }`}
                     >
                       <div className="w-12 h-12 bg-gray-50 rounded-lg flex items-center justify-center border border-gray-200 shrink-0">
-                        <img src={item.icon} alt={item.name} className="w-7 h-7 object-contain" />
+                        <img 
+                          src={item.icon} 
+                          alt={item.name} 
+                          className="w-7 h-7 object-contain"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.parentElement.innerHTML = '<div class="w-7 h-7 bg-blue-100 rounded flex items-center justify-center text-blue-600 text-lg">📦</div>';
+                          }}
+                        />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-gray-900 mb-1">{item.name}</p>
@@ -264,11 +273,17 @@ const OnProcessTransactions = ({
                 className={`flex items-start gap-4 pb-4 ${index < selectedRequestData.details.length - 1 ? 'mb-4 border-b border-gray-200' : 'mb-8'
                   }`}
               >
-                <img
-                  src={item.icon}
-                  alt={item.name}
-                  className="w-14 h-14 object-contain shrink-0"
-                />
+                <div className="w-14 h-14 bg-gray-100 rounded-lg flex items-center justify-center shrink-0 border border-gray-200">
+                  <img
+                    src={item.icon}
+                    alt={item.name}
+                    className="w-10 h-10 object-contain"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.parentElement.innerHTML = '<div class="w-10 h-10 bg-blue-100 rounded flex items-center justify-center text-blue-600 text-2xl">📦</div>';
+                    }}
+                  />
+                </div>
                 <div className="min-w-0">
                   <p className="font-medium text-gray-900 mb-1">{item.name}</p>
                   <p className="text-sm text-gray-500 leading-relaxed">
@@ -292,7 +307,13 @@ const OnProcessTransactions = ({
                       const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
                       const baseHeaders = { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
                       const headers = csrf ? { ...baseHeaders, 'X-CSRF-TOKEN': csrf } : baseHeaders;
-                      try { await fetch(`/api/requests/${reqId}/cancel`, { method: 'POST', headers, credentials: 'same-origin' }); } catch (_) {}
+                      try { 
+                        const response = await fetch(`/api/requests/${reqId}/cancel`, { method: 'POST', headers, credentials: 'same-origin' });
+                        const result = await response.json();
+                        console.log('[OnProcessTransactions] Cancel API response:', result);
+                      } catch (e) { 
+                        console.error('[OnProcessTransactions] Cancel API error:', e);
+                      }
                       try { await fetch(`/api/requests/${reqId}`, { method: 'DELETE', headers, credentials: 'same-origin' }); } catch (_) {}
                     }
                     // Notify EmployeeHome to restore this equipment to the available list and un-reserve it for this user
@@ -315,10 +336,19 @@ const OnProcessTransactions = ({
                     try { window.dispatchEvent(new CustomEvent('ireply:request:cancelled', { detail: { request_id: reqId, equipment_id: equipId } })); } catch (_) {}
                     // Optimistically remove from local On Process list
                     try { setList((prev) => (Array.isArray(prev) ? prev.filter(r => String(r.id) !== String(reqId) && String(r.equipment_id || '') !== String(equipId || '')) : prev)); } catch (_) {}
-                  } finally {
+                    
+                    // Show success message
+                    try {
+                      showToast('Request cancelled successfully', 'success');
+                    } catch (_) {}
+                    
+                    // Close modal and clear selection first
                     setIsCancelModalOpen(false);
                     setSelectedRequest(null);
+                    
+                    // Navigate back to view request equipment page
                     onBack();
+                  } finally {
                     setActionLoading(false);
                   }
                 }}
