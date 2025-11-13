@@ -235,7 +235,11 @@ const ViewApproved = () => {
       grouped[employeeName].returns.push(returnItem);
       grouped[employeeName].items.push({
         id: returnItem.equipment_id || returnItem.id,
-        equipment_name: returnItem.equipment_name || 'Unknown Item'
+        equipment_name: returnItem.equipment_name || 'Unknown Item',
+        // pass through serial number from multiple possible fields
+        serial_number: returnItem.serial_number || returnItem.equipment_serial_number || returnItem.asset_tag || null,
+        // pass through specifications/specs
+        specifications: returnItem.specifications || returnItem.specs || [returnItem.brand, returnItem.model].filter(Boolean).join(' ')
       });
     });
     return Object.values(grouped);
