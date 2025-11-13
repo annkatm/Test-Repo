@@ -12,23 +12,6 @@ import { showSuccess, showError } from './utils/toastUtils';
 
 const ViewApproved = () => {
   const [approved, setApproved] = useState([]);
-  const [clickedItems, setClickedItems] = useState(new Set()); // Track clicked items
-  
-  useEffect(() => {
-    // Fetch approved requests from backend
-    const fetchApproved = async () => {
-      try {
-        const res = await fetch('/api/requests?status=approved');
-        const data = await res.json();
-        if (data.success && Array.isArray(data.data)) {
-          setApproved(data.data);
-        }
-      } catch (e) {
-        console.error('Failed to fetch approved requests:', e);
-      }
-    };
-    fetchApproved();
-  }, []);
 
   const [currentHolders, setCurrentHolders] = useState([]);
   const [verifyReturns, setVerifyReturns] = useState([]);
@@ -65,16 +48,32 @@ const ViewApproved = () => {
     returnData: null
   });
 
-  // Track clicked items
-  const handleRowClick = (itemId, view) => {
-    const key = `${view}-${itemId}`;
-    setClickedItems(prev => new Set([...prev, key]));
+  const [viewApprovedModal, setViewApprovedModal] = useState({
+    isOpen: false,
+    transactionData: null
+  });
+
+  // Helper function to get avatar URL from employee/user data
+  const getAvatarUrl = (data) => {
+    const avatar = data.avatar_url || data.profile_photo_url || data.photo_url || data.employee_image || data.avatar || null;
+    
+    // Check if avatar is null, undefined, empty string, or just whitespace
+    if (!avatar || (typeof avatar === 'string' && avatar.trim() === '')) return null;
+    // If it's already a full URL, return it
+    if (avatar.includes('http') || avatar.startsWith('/storage/')) return avatar;
+    // Otherwise prepend storage path
+    return `/storage/${avatar}`;
   };
 
-  // Check if item was clicked
-  const isItemClicked = (itemId, view) => {
-    const key = `${view}-${itemId}`;
-    return clickedItems.has(key);
+  // Helper function to get initials from name
+  const getInitials = (name) => {
+    if (!name) return '?';
+    return name
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
   };
 
   // Fetch data on component mount
@@ -165,6 +164,7 @@ const ViewApproved = () => {
           status: req.status || 'approved',
           approved_by_name: req.approved_by_name || 'N/A',
           employee_id: req.employee_id,
+          avatar_url: getAvatarUrl(req),
           requests: [],
           items: []
         };
@@ -174,7 +174,15 @@ const ViewApproved = () => {
         id: req.equipment_id,
         requestId: req.id,
         equipment_name: req.equipment_name || 'Unknown Item',
-        equipment_id: req.equipment_id
+        name: req.equipment_name || 'Unknown Item',
+        equipment_id: req.equipment_id,
+        brand: req.brand || '',
+        model: req.model || '',
+        category_name: req.category_name || '',
+        category: req.category_name || '',
+        serial_number: req.serial_number || req.equipment_serial_number || req.asset_tag || 'N/A',
+        specifications: req.specifications || req.specs || [req.brand, req.model].filter(Boolean).join(' ') || req.category_name || '',
+        specs: req.specifications || req.specs || [req.brand, req.model].filter(Boolean).join(' ') || req.category_name || ''
       });
     });
     return Object.values(grouped);
@@ -533,6 +541,23 @@ const ViewApproved = () => {
     });
   };
 
+  const handleViewApproved = (groupId) => {
+    const group = groupedApproved.find(g => g.id === groupId);
+    if (group) {
+      setViewApprovedModal({
+        isOpen: true,
+        transactionData: group
+      });
+    }
+  };
+
+  const handleCloseViewApprovedModal = () => {
+    setViewApprovedModal({
+      isOpen: false,
+      transactionData: null
+    });
+  };
+
   const handleConfirmReturn = async (returnData) => {
     try {
       // Get all returns in the group
@@ -659,112 +684,113 @@ const ViewApproved = () => {
 
           {view === 'viewApproved' && (
             <>
-              <div className="mt-10 flex items-center justify-between">
-                <h3 className="text-3xl font-semibold text-gray-700">View Approved</h3>
-                <div className="relative">
-                  <button
-                    type="button"
-                    className="w-44 h-10 bg-gray-300 rounded-md flex items-center justify-between px-4 text-gray-700"
-                    onClick={() => setIsMenuOpen(!isMenuOpen)}
-                  >
-                    <span className="text-sm font-medium">
-                      {view === 'viewApproved' ? 'View Approved' : 
-                       view === 'currentHolder' ? 'Approved requests' : 'Verify return'}
-                    </span>
-                    <ChevronDown className="h-4 w-4" />
-                  </button>
-                  {isMenuOpen && (
-                    <div className="absolute right-0 z-10 mt-2 w-44 bg-white rounded-md shadow border border-gray-200">
-                      <button onClick={() => handleSelect('viewApproved')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50">View Approved</button>
-                      <button onClick={() => handleSelect('currentHolder')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50">Approved requests</button>
-                      <button onClick={() => handleSelect('verifyReturn')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50">Verify return</button>
+              <div className="mt-8">
+                <div className="mb-6">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-lg font-semibold text-gray-800">View Approved</h4>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        className="w-44 h-10 bg-gray-300 rounded-md flex items-center justify-between px-4 text-gray-700"
+                        onClick={() => setIsMenuOpen(!isMenuOpen)}
+                      >
+                        <span className="text-sm font-medium">
+                          {view === 'viewApproved' ? 'View Approved' : 
+                           view === 'currentHolder' ? 'Approved requests' : 'Verify return'}
+                        </span>
+                        <ChevronDown className="h-4 w-4" />
+                      </button>
+                      {isMenuOpen && (
+                        <div className="absolute right-0 z-10 mt-2 w-44 bg-white rounded-md shadow border border-gray-200">
+                          <button onClick={() => handleSelect('viewApproved')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50">View Approved</button>
+                          <button onClick={() => handleSelect('currentHolder')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50">Approved requests</button>
+                          <button onClick={() => handleSelect('verifyReturn')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50">Verify return</button>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
+                  <div className="flex text-xs font-medium text-gray-900 uppercase tracking-wider mb-4 px-4 mt-4">
+                    <div className="flex-1">Name</div>
+                    <div className="flex-1">Item</div>
+                    <div className="w-32 text-right">Actions</div>
+                  </div>
                 </div>
-              </div>
-              <div className="mt-4 bg-white rounded-2xl shadow p-4 md:p-6 border border-gray-100 transition-all duration-300">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left min-w-full">
-                    <thead className="bg-gray-50 text-gray-600">
-                      <tr className="border-b">
-                        <th className="py-2 px-3">Name</th>
-                        <th className="py-2 px-3">Position</th>
-                        <th className="py-2 px-3">Item</th>
-                        <th className="py-2 px-3">Status</th>
-                        <th className="py-2 px-3">Approved by</th>
-                        <th className="py-2 px-3 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {loading ? (
-                      <tr>
-                        <td colSpan="6" className="py-8 text-center text-gray-500">
-                          Loading approved transactions...
-                        </td>
-                      </tr>
-                    ) : error ? (
-                      <tr>
-                        <td colSpan="6" className="py-8 text-center text-red-500">
-                          Error: {error}
-                        </td>
-                      </tr>
-                    ) : groupedApproved.length === 0 ? (
-                      <tr>
-                        <td colSpan="6" className="py-8 text-center text-gray-500">
-                          No approved transactions found
-                        </td>
-                      </tr>
-                    ) : (
-                      groupedApproved.map((group) => (
-                        <tr 
-                          key={group.id} 
-                          onClick={() => handleRowClick(group.id, 'viewApproved')}
-                          className={`border-b last:border-0 cursor-pointer transition-colors duration-200 ${
-                            isItemClicked(group.id, 'viewApproved') 
-                              ? 'bg-gray-200 hover:bg-blue-50' 
-                              : 'hover:bg-blue-50'
-                          }`}
-                        >
-                          <td className="py-3 px-3">{group.full_name}</td>
-                          <td className="py-3 px-3">{group.position}</td>
-                          <td className="py-3 px-3">
-                            <span>
-                              {group.items.length === 1 
-                                ? group.items[0].equipment_name 
-                                : `${group.items.length} items`}
-                            </span>
-                          </td>
-                          <td className="py-3 px-3"><span className="px-2.5 py-0.5 rounded-full text-xs bg-green-100 text-green-700">{group.status}</span></td>
-                          <td className="py-3 px-3">{group.approved_by_name}</td>
-                          <td className="py-3 px-3">
-                            <div className="flex items-center justify-end space-x-3">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handlePrint(group);
+                
+                {loading ? (
+                  <div className="py-8 text-center text-gray-500">
+                    Loading approved transactions...
+                  </div>
+                ) : error ? (
+                  <div className="py-8 text-center text-red-500">
+                    Error: {error}
+                  </div>
+                ) : groupedApproved.length === 0 ? (
+                  <div className="py-8 text-center text-gray-500">
+                    No approved transactions found
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {groupedApproved.map((group) => (
+                      <div
+                        key={group.id}
+                        onClick={() => handleViewApproved(group.id)}
+                        className="relative flex items-center py-4 px-4 rounded-xl cursor-pointer border-2 bg-white border-gray-300 hover:bg-blue-50 hover:border-blue-400 transition-all duration-200"
+                      >
+                        {/* Name with Avatar */}
+                        <div className="flex-1 flex items-center space-x-3">
+                          <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-semibold overflow-hidden flex-shrink-0">
+                            {group.avatar_url ? (
+                              <img 
+                                src={group.avatar_url} 
+                                alt={group.full_name} 
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                  e.target.parentElement.textContent = getInitials(group.full_name);
                                 }}
-                                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                                title="Print Receipt"
-                              >
-                                <Printer className="h-5 w-5 text-gray-500 hover:text-gray-700" />
-                              </button>
-                              <button 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openConfirmModal('release', group);
-                                }}
-                                className="px-3 py-1 bg-green-600 text-white rounded-full text-xs hover:bg-green-700 transition-colors"
-                              >
-                                Release
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                  </table>
-                </div>
+                              />
+                            ) : (
+                              getInitials(group.full_name)
+                            )}
+                          </div>
+                          <div className="text-base font-medium text-gray-900">{group.full_name}</div>
+                        </div>
+                        
+                        {/* Items (plain text, aligned like Name) */}
+                        <div className="flex-1">
+                          <div className="text-base font-medium text-gray-900">
+                            {group.items.length === 1
+                              ? group.items[0].equipment_name
+                              : `${group.items.length} items`}
+                          </div>
+                        </div>
+                        
+                        {/* Action Buttons */}
+                        <div className="w-32 flex items-center justify-end space-x-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePrint(group);
+                            }}
+                            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                            title="Print Receipt"
+                          >
+                            <Printer className="h-5 w-5 text-gray-500 hover:text-gray-700" />
+                          </button>
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openConfirmModal('release', group);
+                            }}
+                            className="px-3 py-1 bg-green-600 text-white rounded-full text-xs hover:bg-green-700 transition-colors"
+                          >
+                            Release
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </>
           )}
@@ -973,6 +999,8 @@ const ViewApproved = () => {
         isOpen={viewHolderModal.isOpen}
         onClose={handleCloseViewHolderModal}
         transactionData={viewHolderModal.holderData}
+        hideCancel={true}
+        buttonText="Close"
       />
 
       {/* View Return Modal */}
@@ -981,6 +1009,17 @@ const ViewApproved = () => {
         onClose={handleCloseViewReturnModal}
         returnData={viewReturnModal.returnData}
         onConfirmReturn={handleConfirmReturn}
+      />
+
+      {/* View Approved Modal */}
+      <ViewTransactionModal
+        isOpen={viewApprovedModal.isOpen}
+        onClose={handleCloseViewApprovedModal}
+        transactionData={viewApprovedModal.transactionData}
+        onRelease={async (data) => {
+          await handleRelease(data);
+          handleCloseViewApprovedModal();
+        }}
       />
 
     </div>
