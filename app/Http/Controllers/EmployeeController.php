@@ -20,7 +20,7 @@ class EmployeeController extends Controller
                 'last_name' => 'required|string|max:255',
                 'email' => 'required|email|max:255|unique:employees,email',
                 'user_id' => 'nullable|exists:users,id',
-                'employee_type' => 'nullable|in:End of Service,Independent Contractor,New hire,Probationary,Regular,Resigned,Separated,Terminated',
+                'employee_type' => 'nullable|string|max:255',
                 'department' => 'nullable|string|max:255',
                 'position' => 'nullable|string|max:255',
                 'client' => 'nullable|string|max:255',
@@ -36,6 +36,15 @@ class EmployeeController extends Controller
             // Remove issued_equipment_ids from validated data as it's not a column
             $equipmentIds = $validated['issued_equipment_ids'] ?? [];
             unset($validated['issued_equipment_ids']);
+            
+            // Convert employee_type name to employee_type_id
+            if (isset($validated['employee_type'])) {
+                $employeeType = \App\Models\EmployeeType::where('name', $validated['employee_type'])->first();
+                if ($employeeType) {
+                    $validated['employee_type_id'] = $employeeType->id;
+                }
+                unset($validated['employee_type']);
+            }
 
             // Generate a unique employee_id with timestamp + random number
             // Loop until we get a unique ID to prevent duplicate key errors
@@ -105,7 +114,7 @@ class EmployeeController extends Controller
                 'last_name' => 'required|string|max:255',
                 'email' => 'required|email|max:255|unique:employees,email,' . $id,
                 'user_id' => 'nullable|exists:users,id',
-                'employee_type' => 'nullable|in:End of Service,Independent Contractor,New hire,Probationary,Regular,Resigned,Separated,Terminated',
+                'employee_type' => 'nullable|string|max:255',
                 'department' => 'nullable|string|max:255',
                 'position' => 'nullable|string|max:255',
                 'client' => 'nullable|string|max:255',
@@ -115,6 +124,15 @@ class EmployeeController extends Controller
                 'status' => 'nullable|in:active,inactive,terminated',
                 'hire_date' => 'nullable|date',
             ]);
+            
+            // Convert employee_type name to employee_type_id
+            if (isset($validated['employee_type'])) {
+                $employeeType = \App\Models\EmployeeType::where('name', $validated['employee_type'])->first();
+                if ($employeeType) {
+                    $validated['employee_type_id'] = $employeeType->id;
+                }
+                unset($validated['employee_type']);
+            }
 
             // Get old issued equipment IDs from current issued_item JSON
             $oldEquipmentIds = [];
@@ -223,11 +241,13 @@ class EmployeeController extends Controller
     public function index(Request $request)
     {
         try {
-            $query = Employee::with('user');
+            $query = Employee::with(['user', 'employeeType']);
 
             // Apply filters
             if ($request->has('employee_type') && $request->employee_type !== 'all') {
-                $query->where('employee_type', $request->employee_type);
+                $query->whereHas('employeeType', function($q) use ($request) {
+                    $q->where('name', $request->employee_type);
+                });
             }
 
             if ($request->has('department') && $request->department !== 'all') {
@@ -253,8 +273,10 @@ class EmployeeController extends Controller
 
             $employees = $query->orderBy('first_name', 'asc')->get();
 
-            // Enhance each employee with issued equipment details
+            // Enhance each employee with issued equipment details and employee type name
             $employees->each(function ($employee) {
+                // Add employee_type name for frontend compatibility
+                $employee->employee_type = $employee->employeeType ? $employee->employeeType->name : null;
                 if ($employee->issued_item) {
                     try {
                         $issuedData = json_decode($employee->issued_item, true);
@@ -300,7 +322,7 @@ class EmployeeController extends Controller
     public function show($id)
     {
         try {
-            $employee = Employee::with('user')->find($id);
+            $employee = Employee::with(['user', 'employeeType'])->find($id);
             
             if (!$employee) {
                 return response()->json([
@@ -308,6 +330,9 @@ class EmployeeController extends Controller
                     'message' => 'Employee not found'
                 ], 404);
             }
+
+            // Add employee_type name for frontend compatibility
+            $employee->employee_type = $employee->employeeType ? $employee->employeeType->name : null;
 
             // Enhance with issued equipment details
             if ($employee->issued_item) {

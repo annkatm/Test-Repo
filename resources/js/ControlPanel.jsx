@@ -35,6 +35,7 @@ const ControlPanel = () => {
     'employee type': []
   });
   const [newItemName, setNewItemName] = React.useState('');
+  const [newItemCode, setNewItemCode] = React.useState('');
   const [itemError, setItemError] = React.useState('');
   const [itemLoading, setItemLoading] = React.useState(false);
 
@@ -67,7 +68,11 @@ const ControlPanel = () => {
       if (res?.data?.success && Array.isArray(res.data.data)) {
         setDropdownItems(prev => ({
           ...prev,
-          [type]: res.data.data.map(item => ({ id: item.id, name: item.name }))
+          [type]: res.data.data.map(item => ({ 
+            id: item.id, 
+            name: item.name,
+            code: item.code 
+          }))
         }));
       }
     } catch (e) {
@@ -95,6 +100,18 @@ const ControlPanel = () => {
     return displayNames[type] || type;
   };
 
+  // Predefined mapping of employee type codes to names
+  const employeeTypeMapping = {
+    0: 'Regular',
+    1: 'New hire',
+    2: 'Probationary',
+    3: 'Terminated',
+    4: 'Independent Contractor',
+    5: 'Benched',
+    6: 'Separated',
+    7: 'End of Service'
+  };
+
   const addNewItem = async () => {
     if (!newItemName.trim()) {
       setItemError('Name is required');
@@ -106,10 +123,29 @@ const ControlPanel = () => {
     
     try {
       const endpoint = getEndpointForType(activeModal);
-      const res = await api.post(endpoint, { name: newItemName.trim() });
+      let payload = { name: newItemName.trim() };
+      
+      // For employee type, check if user entered a code number
+      if (activeModal === 'employee type') {
+        const inputValue = newItemName.trim();
+        const codeNumber = parseInt(inputValue);
+        
+        // If user entered a number (0-7), map it to the predefined name
+        if (!isNaN(codeNumber) && employeeTypeMapping[codeNumber]) {
+          payload.name = employeeTypeMapping[codeNumber];
+          payload.code = codeNumber;
+        } else {
+          // User entered a custom name, auto-generate next code
+          const maxCode = Math.max(...dropdownItems[activeModal].map(item => item.code || 0), -1);
+          payload.code = maxCode + 1;
+        }
+      }
+      
+      const res = await api.post(endpoint, payload);
       
       if (res?.data?.success) {
         setNewItemName('');
+        setNewItemCode('');
         await loadDropdownItems(activeModal);
         // Notify other components
         window.dispatchEvent(new CustomEvent(`${activeModal}:updated`));
@@ -117,7 +153,8 @@ const ControlPanel = () => {
         setItemError(res?.data?.message || 'Failed to add item');
       }
     } catch (e) {
-      setItemError('Failed to add item');
+      const errorMsg = e.response?.data?.message || e.response?.data?.errors?.code?.[0] || 'Failed to add item';
+      setItemError(errorMsg);
     } finally {
       setItemLoading(false);
     }
@@ -141,6 +178,7 @@ const ControlPanel = () => {
   const closeGenericModal = () => {
     setActiveModal(null);
     setNewItemName('');
+    setNewItemCode('');
     setItemError('');
   };
 
@@ -336,6 +374,16 @@ const ControlPanel = () => {
                 {/* Add new item */}
                 <div className="mb-4">
                   <label className="block text-[12px] text-gray-600 mb-1">Add New {getDisplayName(activeModal)}</label>
+                  
+                  {/* Show next code for employee type */}
+                  {activeModal === 'employee type' && (
+                    <div className="mb-2 text-xs text-gray-500">
+                      Next code will be: <span className="font-mono font-semibold text-blue-600">
+                        {Math.max(...dropdownItems[activeModal].map(item => item.code || 0), -1) + 1}
+                      </span>
+                    </div>
+                  )}
+                  
                   <div className="flex space-x-2">
                     <input
                       type="text"
@@ -366,7 +414,12 @@ const ControlPanel = () => {
                     <div className="max-h-40 overflow-y-auto divide-y divide-gray-100">
                       {dropdownItems[activeModal]?.map((item, idx) => (
                         <div key={item.id ?? idx} className="flex items-center justify-between px-4 py-2 text-sm hover:bg-blue-50">
-                          <span className="text-gray-700">{item.name}</span>
+                          <div className="flex items-center space-x-2">
+                            {activeModal === 'employee type' && item.code !== undefined && (
+                              <span className="text-xs font-mono bg-blue-100 text-blue-700 px-2 py-0.5 rounded">{item.code}</span>
+                            )}
+                            <span className="text-gray-700">{item.name}</span>
+                          </div>
                           <button type="button" onClick={() => removeItem(idx)} className="text-red-500 hover:text-red-600">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M6 7h12l-1 12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 7Zm3-3h6l1 2H8l1-2Z"/></svg>
                           </button>

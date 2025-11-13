@@ -21,6 +21,7 @@ return new class extends Migration
             $table->string('position'); // Job title/position
             $table->string('department')->nullable();
             $table->string('phone')->nullable();
+            $table->unsignedBigInteger('employee_type_id')->nullable();
             $table->enum('status', ['active', 'inactive', 'terminated'])->default('active');
             $table->date('hire_date')->nullable();
             $table->timestamps();
