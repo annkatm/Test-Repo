@@ -1,8 +1,16 @@
 import React from 'react';
 import { X, Calendar, User, Package, MapPin, FileText, Clock, CheckCircle } from 'lucide-react';
 
-const ViewTransactionModal = ({ isOpen, onClose, transactionData }) => {
+const ViewTransactionModal = ({ isOpen, onClose, transactionData, hideCancel = false, buttonText = 'Release', onRelease = null }) => {
   if (!isOpen || !transactionData) return null;
+
+  const handleButtonClick = () => {
+    if (onRelease) {
+      onRelease(transactionData);
+    } else {
+      onClose();
+    }
+  };
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -11,10 +19,6 @@ const ViewTransactionModal = ({ isOpen, onClose, transactionData }) => {
       month: 'long',
       day: 'numeric'
     });
-  };
-
-  const formatRequestMode = (mode) => {
-    return mode === 'work_from_home' ? 'Work From Home' : 'Onsite';
   };
 
   const formatCondition = (condition) => {
@@ -140,47 +144,23 @@ const ViewTransactionModal = ({ isOpen, onClose, transactionData }) => {
               )}
             </div>
           </div>
-
-          {/* Request Mode */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Request Mode</label>
-            <div className="w-full px-3 py-2 rounded-md bg-gray-100 text-gray-900">
-              {formatRequestMode(transactionData.request_mode || transactionData.requestMode)}
-            </div>
-          </div>
-
-          {/* Status */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-            <div className="w-full px-3 py-2 rounded-md bg-gray-100 text-gray-900">
-              <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                transactionData.status === 'released' 
-                  ? 'bg-green-100 text-green-800' 
-                  : transactionData.status === 'returned'
-                  ? 'bg-blue-100 text-blue-800'
-                  : transactionData.status === 'pending'
-                  ? 'bg-yellow-100 text-yellow-800'
-                  : 'bg-gray-100 text-gray-800'
-              }`}>
-                {transactionData.status?.charAt(0).toUpperCase() + transactionData.status?.slice(1) || 'Active'}
-              </span>
-            </div>
-          </div>
         </div>
 
         {/* Footer */}
         <div className="flex justify-end p-6 border-t border-gray-200 space-x-3">
+          {!hideCancel && (
+            <button
+              onClick={onClose}
+              className="px-4 py-2 rounded-md border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 transition-colors"
+            >
+              Cancel
+            </button>
+          )}
           <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-md border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onClose}
+            onClick={handleButtonClick}
             className="px-6 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors"
           >
-            Close
+            {buttonText}
           </button>
         </div>
       </div>

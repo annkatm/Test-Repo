@@ -999,6 +999,8 @@ const ViewApproved = () => {
         isOpen={viewHolderModal.isOpen}
         onClose={handleCloseViewHolderModal}
         transactionData={viewHolderModal.holderData}
+        hideCancel={true}
+        buttonText="Close"
       />
 
       {/* View Return Modal */}
@@ -1014,6 +1016,10 @@ const ViewApproved = () => {
         isOpen={viewApprovedModal.isOpen}
         onClose={handleCloseViewApprovedModal}
         transactionData={viewApprovedModal.transactionData}
+        onRelease={async (data) => {
+          await handleRelease(data);
+          handleCloseViewApprovedModal();
+        }}
       />
 
     </div>
