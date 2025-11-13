@@ -11,7 +11,7 @@ const EmployeeDashboard = ({
   employeeName: propEmployeeName,
   notifications: propNotifications = 3
 }) => {
-  const [activeMenu, setActiveMenu] = useState('Transaction');
+  const [activeMenu, setActiveMenu] = useState('Home');
   const [userData, setUserData] = useState(null);
   const [employeeName, setEmployeeName] = useState(propEmployeeName || 'Employee User');
   const [userRole, setUserRole] = useState('employee');
@@ -115,7 +115,7 @@ const EmployeeDashboard = ({
       case 'Returned Items':
         return <EmployeeReturnItems />;
       default:
-        return <EmployeeTransaction />;
+        return <EmployeeHome />;
     }
   };
 
