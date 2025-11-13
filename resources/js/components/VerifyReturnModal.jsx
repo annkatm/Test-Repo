@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Package, Laptop, Mouse, Keyboard } from 'lucide-react';
 
 // Minimal modal used by ViewRequest and ViewApproved
 const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => {
@@ -28,14 +27,58 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
       .slice(0, 2);
   };
 
-  // Get icon based on item name
-  const getItemIcon = (itemName) => {
-    const name = itemName?.toLowerCase() || '';
-    if (name.includes('laptop') || name.includes('computer')) return Laptop;
-    if (name.includes('mouse')) return Mouse;
-    if (name.includes('keyboard')) return Keyboard;
-    if (name.includes('monitor') || name.includes('display')) return Package;
-    return Package; // Default icon
+  // Get icon URL based on category name
+  const getItemIconUrl = (categoryName) => {
+    if (!categoryName) return 'https://api.iconify.design/mdi:package-variant.svg';
+    
+    const category = categoryName.toLowerCase().trim();
+    
+    // Map categories to icon URLs using Iconify API
+    const iconMap = {
+      'laptop': 'https://api.iconify.design/mdi:laptop.svg',
+      'computer': 'https://api.iconify.design/mdi:laptop.svg',
+      'mouse': 'https://api.iconify.design/mdi:mouse.svg',
+      'keyboard': 'https://api.iconify.design/mdi:keyboard.svg',
+      'monitor': 'https://api.iconify.design/mdi:monitor.svg',
+      'display': 'https://api.iconify.design/mdi:monitor.svg',
+      'headphone': 'https://api.iconify.design/mdi:headphones.svg',
+      'headphones': 'https://api.iconify.design/mdi:headphones.svg',
+      'webcam': 'https://api.iconify.design/mdi:webcam.svg',
+      'camera': 'https://api.iconify.design/mdi:camera.svg',
+      'printer': 'https://api.iconify.design/mdi:printer.svg',
+      'scanner': 'https://api.iconify.design/mdi:scanner.svg',
+      'tablet': 'https://api.iconify.design/mdi:tablet.svg',
+      'phone': 'https://api.iconify.design/mdi:phone.svg',
+      'mobile': 'https://api.iconify.design/mdi:cellphone.svg',
+      'router': 'https://api.iconify.design/mdi:router-wireless.svg',
+      'switch': 'https://api.iconify.design/mdi:network-switch.svg',
+      'server': 'https://api.iconify.design/mdi:server.svg',
+      'desktop': 'https://api.iconify.design/mdi:desktop-classic.svg',
+      'projector': 'https://api.iconify.design/mdi:projector.svg',
+      'speaker': 'https://api.iconify.design/mdi:speaker.svg',
+      'microphone': 'https://api.iconify.design/mdi:microphone.svg',
+      'usb': 'https://api.iconify.design/mdi:usb.svg',
+      'cable': 'https://api.iconify.design/mdi:cable-data.svg',
+      'adapter': 'https://api.iconify.design/mdi:power-plug.svg',
+      'charger': 'https://api.iconify.design/mdi:power-plug.svg',
+      'dock': 'https://api.iconify.design/mdi:dock-window.svg',
+      'stand': 'https://api.iconify.design/mdi:monitor-stand.svg',
+    };
+    
+    // Check for exact match first
+    if (iconMap[category]) {
+      return iconMap[category];
+    }
+    
+    // Check for partial matches
+    for (const [key, url] of Object.entries(iconMap)) {
+      if (category.includes(key) || key.includes(category)) {
+        return url;
+      }
+    }
+    
+    // Default icon
+    return 'https://api.iconify.design/mdi:package-variant.svg';
   };
 
   const avatarUrl = getAvatarUrl(data);
@@ -91,16 +134,26 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
                   });
 
                   return Object.entries(groupedItems).map(([equipmentName, equipmentItems], groupIndex) => {
-                    const IconComponent = getItemIcon(equipmentName);
+                    // Get category from first item in the group
+                    const categoryName = equipmentItems[0]?.category_name || equipmentItems[0]?.category || equipmentName;
+                    const iconUrl = getItemIconUrl(categoryName);
                     
                     return (
                       <div key={groupIndex} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
                         {/* Item Header Section */}
                         <div className="px-3 py-2.5">
                           <div className="flex items-center space-x-3">
-                            <IconComponent className="h-5 w-5 text-gray-700 flex-shrink-0" />
+                            <img 
+                              src={iconUrl} 
+                              alt={categoryName}
+                              className="h-5 w-5 flex-shrink-0"
+                              onError={(e) => {
+                                // Fallback to default icon if image fails to load
+                                e.target.src = 'https://api.iconify.design/mdi:package-variant.svg';
+                              }}
+                            />
                             <h5 className="text-sm font-semibold text-gray-900">
-                              {equipmentName}
+                              {categoryName}
                             </h5>
                           </div>
                         </div>
