@@ -12,7 +12,7 @@ const Archive = () => {
     const initialTotalFromDom = archiveRoot?.dataset.total ? parseInt(archiveRoot.dataset.total, 10) : initialItems.length;
     const initialFilterType = archiveRoot?.dataset.filterType || 'all';
     const initialSearchTerm = archiveRoot?.dataset.searchTerm || '';
-    
+
     const [archivedItems, setArchivedItems] = useState(initialItems);
     const [totalItems, setTotalItems] = useState(Number.isFinite(initialTotalFromDom) ? initialTotalFromDom : initialItems.length);
     const [initialLoading, setInitialLoading] = useState(!Array.isArray(initialItems) || initialItems.length === 0);
@@ -48,7 +48,7 @@ const Archive = () => {
             const params = new URLSearchParams();
             if (filterType !== 'all') params.append('type', filterType);
             if (searchTerm) params.append('search', searchTerm);
-            
+
             const res = await fetch(`/archive?${params.toString()}`, {
                 headers: { 'Accept': 'application/json' }
             });
@@ -93,8 +93,8 @@ const Archive = () => {
     };
 
     const handleSelectItem = (itemId) => {
-        setSelectedItems(prev => 
-            prev.includes(itemId) 
+        setSelectedItems(prev =>
+            prev.includes(itemId)
                 ? prev.filter(id => id !== itemId)
                 : [...prev, itemId]
         );
@@ -120,7 +120,7 @@ const Archive = () => {
                 },
                 credentials: 'same-origin'
             });
-            
+
             const result = await response.json().catch(() => ({}));
             if (response.ok && result?.success !== false) {
                 fetchArchivedItems('refresh');
@@ -145,7 +145,7 @@ const Archive = () => {
                 },
                 credentials: 'same-origin'
             });
-            
+
             const result = await response.json().catch(() => ({}));
             if (response.ok && result?.success !== false) {
                 fetchArchivedItems('refresh');
@@ -160,14 +160,14 @@ const Archive = () => {
 
     const handleBulkRestore = async () => {
         if (selectedItems.length === 0) return;
-        
+
         try {
             // Prepare item data with type and id for bulk restore
             const itemData = selectedItems.map(itemId => {
                 const item = archivedItems.find(item => item.id === itemId);
                 return { type: item.type, id: item.id };
             });
-            
+
             const response = await fetch('/archive/bulk-restore', {
                 method: 'POST',
                 headers: {
@@ -179,11 +179,11 @@ const Archive = () => {
                 credentials: 'same-origin',
                 body: JSON.stringify({ itemIds: itemData })
             });
-            
+
             const result = await response.json().catch(() => ({}));
             if (response.ok && result?.success !== false) {
                 fetchArchivedItems('refresh');
-            setSelectedItems([]);
+                setSelectedItems([]);
             } else {
                 throw new Error(result?.message || 'Failed to restore items');
             }
@@ -195,14 +195,14 @@ const Archive = () => {
 
     const handleBulkDelete = async () => {
         if (selectedItems.length === 0) return;
-        
+
         try {
             // Prepare item data with type and id for bulk delete
             const itemData = selectedItems.map(itemId => {
                 const item = archivedItems.find(item => item.id === itemId);
                 return { type: item.type, id: item.id };
             });
-            
+
             const response = await fetch('/archive/bulk-delete', {
                 method: 'POST',
                 headers: {
@@ -214,7 +214,7 @@ const Archive = () => {
                 credentials: 'same-origin',
                 body: JSON.stringify({ itemIds: itemData })
             });
-            
+
             const result = await response.json().catch(() => ({}));
             if (response.ok && result?.success !== false) {
                 fetchArchivedItems('refresh');
@@ -244,19 +244,19 @@ const Archive = () => {
     return (
         <div className="min-h-screen bg-gray-50">
             {/* Global Header with iREPLY Logo */}
-            <GlobalHeader 
-                title="Archive" 
+            <GlobalHeader
+                title="Archive"
                 hideSearch={false}
                 showTitle={true}
             />
-            
+
             {/* Main Content Container */}
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
                 {/* Page Header */}
                 <div className="mb-8">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-4">
-                            <button 
+                            <button
                                 onClick={() => window.history.back()}
                                 className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors"
                             >
@@ -284,7 +284,7 @@ const Archive = () => {
                                     )}
                                 </div>
                             </div>
-                            <button 
+                            <button
                                 onClick={() => window.location.href = '/dashboard'}
                                 className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                             >
@@ -300,9 +300,9 @@ const Archive = () => {
                     <div className="flex flex-col sm:flex-row gap-4">
                         {/* iREPLY Logo */}
                         <div className="flex items-center space-x-3">
-                            <img 
+                            <img
                                 src="/images/Frame_89-removebg-preview.png"
-                                alt="iREPLY Logo" 
+                                alt="iREPLY Logo"
                                 className="h-8 w-auto object-contain"
                                 onError={(e) => {
                                     console.error('Logo failed to load:', e.target.src);
@@ -328,7 +328,7 @@ const Archive = () => {
                                 </h1>
                             </div>
                         </div>
-                        
+
                         {/* Search */}
                         <div className="flex-1">
                             <div className="relative">
@@ -407,7 +407,7 @@ const Archive = () => {
                             </div>
                             <h3 className="text-xl font-semibold text-gray-900 mb-2">No archived items</h3>
                             <p className="text-gray-500 mb-6">Items that are archived will appear here.</p>
-                            <button 
+                            <button
                                 onClick={() => window.location.href = '/dashboard'}
                                 className="inline-flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
                             >
@@ -472,23 +472,24 @@ const Archive = () => {
                                                             {item.name}
                                                         </div>
                                                         <div className="text-sm text-gray-500">
-                                                            {item.brand && item.model ? `${item.brand} ${item.model}` : 
-                                                             item.employee ? item.employee :
-                                                             item.email ? item.email : 
-                                                             item.reason ? item.reason : ''}
+                                                            {item.type === 'equipment' && item.serial_number ? (
+                                                                <>Serial: {item.serial_number}{item.brand && item.model ? ` • ${item.brand} ${item.model}` : ''}</>
+                                                            ) : item.brand && item.model ? `${item.brand} ${item.model}` :
+                                                                item.employee ? item.employee :
+                                                                    item.email ? item.email :
+                                                                        item.reason ? item.reason : ''}
                                                         </div>
                                                     </div>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
-                                                    item.type === 'equipment' ? 'bg-blue-100 text-blue-800' :
-                                                    item.type === 'request' ? 'bg-green-100 text-green-800' :
-                                                    item.type === 'transaction' ? 'bg-purple-100 text-purple-800' :
-                                                    item.type === 'employee' ? 'bg-orange-100 text-orange-800' :
-                                                    item.type === 'user' ? 'bg-indigo-100 text-indigo-800' :
-                                                    'bg-gray-100 text-gray-800'
-                                                }`}>
+                                                <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${item.type === 'equipment' ? 'bg-blue-100 text-blue-800' :
+                                                        item.type === 'request' ? 'bg-green-100 text-green-800' :
+                                                            item.type === 'transaction' ? 'bg-purple-100 text-purple-800' :
+                                                                item.type === 'employee' ? 'bg-orange-100 text-orange-800' :
+                                                                    item.type === 'user' ? 'bg-indigo-100 text-indigo-800' :
+                                                                        'bg-gray-100 text-gray-800'
+                                                    }`}>
                                                     {item.type}
                                                 </span>
                                             </td>

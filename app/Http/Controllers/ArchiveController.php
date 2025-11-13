@@ -29,7 +29,8 @@ class ArchiveController extends Controller
                 $equipmentQuery->where(function($query) use ($searchTerm) {
                     $query->where('name', 'like', "%{$searchTerm}%")
                           ->orWhere('brand', 'like', "%{$searchTerm}%")
-                          ->orWhere('model', 'like', "%{$searchTerm}%");
+                          ->orWhere('model', 'like', "%{$searchTerm}%")
+                          ->orWhere('serial_number', 'like', "%{$searchTerm}%");
                 });
             }
             
@@ -41,6 +42,7 @@ class ArchiveController extends Controller
                         'name' => $item->name,
                         'brand' => $item->brand,
                         'model' => $item->model,
+                        'serial_number' => $item->serial_number,
                         'category' => $item->category?->name,
                         'deleted_at' => $item->deleted_at,
                         'status' => $item->status,
