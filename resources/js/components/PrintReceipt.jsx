@@ -16,6 +16,7 @@ const PrintReceipt = ({
     department: 'YD Level 1',
     equipment_name: '',
     serial_number: '',
+    other: '',
     it_admin: 'Arvin D. Salas',
     hr_lead: 'MAUMondres/PMagdadaro',
     it_admin_title: 'IT Administrator',
@@ -28,6 +29,17 @@ In the event that I am unable to return any of the company-issued equipment upon
   // Initialize editable data when transactionData changes
   React.useEffect(() => {
     if (transactionData) {
+      // Collect all "other" content from items
+      const items = transactionData.items || [{
+        equipment_name: transactionData.equipment_name,
+        serial_number: transactionData.serial_number,
+      }];
+      
+      const allOthers = items
+        .map(item => item.other || item.notes || item.additional_info || '')
+        .filter(other => other.trim() !== '')
+        .join(', ');
+      
       setEditableData(prev => ({
         ...prev,
         full_name: transactionData.full_name || '',
@@ -35,13 +47,10 @@ In the event that I am unable to return any of the company-issued equipment upon
         department: transactionData.department || 'YD Level 1',
         equipment_name: transactionData.equipment_name || '',
         serial_number: transactionData.serial_number || '',
+        other: allOthers || transactionData.other || transactionData.notes || '',
       }));
       
       // Initialize editable items
-      const items = transactionData.items || [{
-        equipment_name: transactionData.equipment_name,
-        serial_number: transactionData.serial_number,
-      }];
       setEditableItems(items);
     }
   }, [transactionData]);
@@ -66,6 +75,22 @@ In the event that I am unable to return any of the company-issued equipment upon
     setEditableData(prev => ({
       ...prev,
       [field]: value
+    }));
+  };
+
+  const handleItemChange = (index, field, value) => {
+    const newItems = [...editableItems];
+    if (!newItems[index]) {
+      newItems[index] = {};
+    }
+    newItems[index][field] = value;
+    setEditableItems(newItems);
+  };
+
+  const handleOtherChange = (value) => {
+    setEditableData(prev => ({
+      ...prev,
+      other: value
     }));
   };
 
@@ -231,6 +256,21 @@ In the event that I am unable to return any of the company-issued equipment upon
                   </tr>
                 `;
               }).join('')}
+              ${(() => {
+                // Get "other" content from editableData (user-editable field)
+                const otherContent = editableData.other || '';
+                
+                // Show "Other:" row
+                return `
+                  <tr class="others-row">
+                    <td>Other:</td>
+                    <td>${otherContent}</td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                  </tr>
+                `;
+              })()}
             </tbody>
           </table>
 
@@ -405,6 +445,21 @@ In the event that I am unable to return any of the company-issued equipment upon
                     </tr>
                   `;
                 }).join('')}
+                ${(() => {
+                  // Get "other" content from editableData (user-editable field)
+                  const otherContent = editableData.other || '';
+                  
+                  // Show "Other:" row
+                  return `
+                    <tr class="others-row">
+                      <td>Other:</td>
+                      <td>${otherContent}</td>
+                      <td></td>
+                      <td></td>
+                      <td></td>
+                    </tr>
+                  `;
+                })()}
               </tbody>
             </table>
 
@@ -650,6 +705,20 @@ In the event that I am unable to return any of the company-issued equipment upon
                       </div>
                     );
                   })}
+                  
+                  {/* Other Field - Always Editable */}
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-medium text-gray-700 min-w-[60px]">Other:</span>
+                      <input
+                        type="text"
+                        value={editableData.other || ''}
+                        onChange={(e) => handleOtherChange(e.target.value)}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                        placeholder="Enter other information (e.g., MEW HIRE)..."
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
 

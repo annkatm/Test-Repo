@@ -401,7 +401,7 @@ const HomePage = () => {
                   </div>
                 </div>
                 <div className="bg-gray-100 rounded-2xl p-3 shadow flex flex-col h-26">
-                  <h4 className="text-xs font-semibold text-gray-600">Current holder</h4>
+                  <h4 className="text-xs font-semibold text-gray-600">Approved requests</h4>
                   <div className="mt-2 flex items-center justify-between">
                     <p className="text-2xl font-bold text-gray-900">{loading ? '...' : dashboardData.currentHolder}</p>
                     <User className="w-8 h-8 text-gray-500" />
@@ -509,7 +509,7 @@ const HomePage = () => {
             <div className="mt-6">
               <div className="bg-white rounded-2xl border border-gray-100 shadow-md p-4 md:p-5 transition-all duration-300">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-800">Current Holders</h3>
+                  <h3 className="text-lg font-semibold text-gray-800">Approved requests</h3>
                   <span className="text-sm text-gray-500">{dashboardData.currentHolder} {dashboardData.currentHolder === 1 ? 'Employee' : 'Employees'}</span>
                 </div>
                 <div className="overflow-hidden rounded-xl border border-gray-200">
@@ -531,7 +531,7 @@ const HomePage = () => {
                         </tr>
                       ) : dashboardData.holderDetails.length === 0 ? (
                         <tr>
-                          <td colSpan="6" className="py-4 px-4 text-center text-gray-500">No current holders</td>
+                          <td colSpan="4" className="py-4 px-4 text-center text-gray-500">No approved requests</td>
                         </tr>
                       ) : (
                         dashboardData.holderDetails.map((holder, index) => (
