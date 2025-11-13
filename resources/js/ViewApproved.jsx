@@ -872,7 +872,6 @@ const ViewApproved = () => {
                           <td className="py-3 px-3 text-red-600">{group.expected_return_date || 'N/A'}</td>
                           <td className="py-3 px-3">
                             <div className="flex items-center justify-end space-x-4 text-gray-700">
-                              <span className="px-3 py-1 rounded-full text-xs bg-blue-100 text-blue-700">Active</span>
                               <span className="px-3 py-1 rounded-full text-xs bg-green-600 text-white">Released</span>
                             </div>
                           </td>

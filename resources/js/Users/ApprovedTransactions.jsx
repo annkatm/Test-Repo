@@ -47,6 +47,8 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
   const [exchangeReason, setExchangeReason] = useState('');
   const [uploadedFile, setUploadedFile] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [borrowedRemarks, setBorrowedRemarks] = useState('');
+  const [returnCondition, setReturnCondition] = useState('good_condition');
   const [isViewAllOpen, setIsViewAllOpen] = useState(false);
   const [isBorrowedOpen, setIsBorrowedOpen] = useState(false);
   const [isLaptopListOpen, setIsLaptopListOpen] = useState(false);
@@ -807,8 +809,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
               {/* Table Header - Hidden on mobile, visible on tablet+ */}
               <div className="hidden sm:grid grid-cols-12 bg-gray-50 text-gray-700 font-semibold text-base lg:text-lg py-4 xl:py-5 px-4 sm:px-6 border-b border-gray-200">
                 <div className="col-span-3 text-center">Date</div>
-                <div className="col-span-6 text-center">Item</div>
-                <div className="col-span-3 text-center">Status</div>
+                <div className="col-span-6 text-center">Category</div>
               </div>
 
               {/* Scrollable Table Rows Container */
@@ -909,7 +910,35 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
             </h2>
 
             {/* Dynamic Item List */}
-            <div className="space-y-4 mb-6">
+            <div className="space-y-4 mb-4">
+              <div className="space-y-2">
+                <label htmlFor="borrowedRemarks" className="block text-sm font-medium text-gray-700">
+                  Borrowed Remarks (for next borrower)
+                </label>
+                <textarea
+                  id="borrowedRemarks"
+                  rows="3"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  placeholder="Leave any notes or remarks for the next borrower..."
+                  value={borrowedRemarks}
+                  onChange={(e) => setBorrowedRemarks(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="returnCondition" className="block text-sm font-medium text-gray-700">
+                  Item Condition
+                </label>
+                <select
+                  id="returnCondition"
+                  value={returnCondition}
+                  onChange={(e) => setReturnCondition(e.target.value)}
+                  className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+                >
+                  <option value="good_condition">Good Condition</option>
+                  <option value="damaged">Damaged</option>
+                  <option value="has_defect">Has Defect</option>
+                </select>
+              </div>
               {Array.isArray(selectedTransactionData.exchangeItems) && selectedTransactionData.exchangeItems.map((item, index) => (
                 <div
                   key={index}
@@ -929,7 +958,12 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
             {/* Buttons */}
             <div className="flex justify-end gap-3">
               <button
-                onClick={() => { setShowReturnModal(false); logActivity('Approved: Return modal closed', 'info'); }}
+                onClick={() => { 
+                  setShowReturnModal(false); 
+                  setBorrowedRemarks('');
+                  setReturnCondition('good_condition');
+                  logActivity('Approved: Return modal closed', 'info'); 
+                }}
                 className="px-5 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 shadow-sm transition-all"
               >
                 Cancel
@@ -938,6 +972,8 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                 onClick={async () => {
                   if (actionLoading) return;
                   setActionLoading(true);
+                  setBorrowedRemarks('');
+                  setReturnCondition('good_condition');
                   try {
                     console.log('Confirm Return clicked');
                     console.log('returnTxId:', returnTxId);
@@ -960,8 +996,9 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                       },
                       credentials: 'same-origin',
                       body: JSON.stringify({
-                        return_condition: 'good_condition',
-                        return_notes: ''
+                        return_condition: returnCondition,
+                        return_notes: '',
+                        borrowed_remarks: borrowedRemarks
                       }),
                     });
                     if (!res.ok) {
@@ -1448,7 +1485,6 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                   <tr className="border-b-2 border-gray-200">
                     <th className="text-left p-3 text-base font-semibold text-gray-800">Date</th>
                     <th className="text-left p-3 text-base font-semibold text-gray-800">Item</th>
-                    <th className="text-left p-3 text-base font-semibold text-gray-800">Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1456,14 +1492,11 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                     <tr key={idx} className="border-b border-gray-100">
                       <td className="p-3 text-base text-gray-800 font-semibold">{row.date}</td>
                       <td className="p-3 text-base text-gray-800 font-semibold">{row.item}</td>
-                      <td className="p-3">
-                        <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">{row.status}</span>
-                      </td>
                     </tr>
                   ))}
                   {paginated.length === 0 && (
                     <tr>
-                      <td colSpan="3" className="p-6 text-center text-gray-500">No records</td>
+                      <td colSpan="2" className="p-6 text-center text-gray-500">No records</td>
                     </tr>
                   )}
                 </tbody>
