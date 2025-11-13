@@ -119,26 +119,6 @@ class RequestController extends Controller
         // Filter by status
         if ($request->has('status')) {
             $query->where('requests.status', $request->status);
-
-            // If viewing approved list, exclude any request that already has a follow-up transaction
-            if ($request->status === 'approved') {
-                // 1) Exclude when a linked transaction exists with non-pending status
-                $query->whereNotExists(function($q) {
-                    $q->select(DB::raw(1))
-                      ->from('transactions')
-                      ->whereColumn('transactions.request_id', 'requests.id')
-                      ->whereIn('transactions.status', ['released','returned','completed']);
-                });
-
-                // 2) Fallback for legacy rows without request_id linkage: match by employee+equipment
-                $query->whereNotExists(function($q) {
-                    $q->select(DB::raw(1))
-                      ->from('transactions')
-                      ->whereColumn('transactions.employee_id', 'requests.employee_id')
-                      ->whereColumn('transactions.equipment_id', 'requests.equipment_id')
-                      ->whereIn('transactions.status', ['released','returned','completed']);
-                });
-            }
         } else {
             // If no status specified, exclude cancelled requests by default
             $query->where('requests.status', '!=', 'cancelled');

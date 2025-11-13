@@ -1336,13 +1336,14 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
               </div>
               <button
                 onClick={() => {
+                  if (!chosenUnit) return;
                   setShowBrowseLaptopsModal(false);
                   setShowReasonModal(true);
                   logActivity('Approved: Proceed to Reason for Exchange', 'exchange');
+                  setShowExchangeConfirmModal(true);
                 }}
                 disabled={!chosenUnit}
                 className={`px-8 py-3 rounded-lg font-semibold shadow-md transition-all transform hover:scale-105 ${chosenUnit ? 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-xl' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
-                onClick={() => setShowExchangeConfirmModal(true)}
               >
                 Confirm
               </button>
