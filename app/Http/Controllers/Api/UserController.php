@@ -94,24 +94,50 @@ class UserController extends Controller
 
             // If this is an employee account, link to existing employee or create new one
             if ($roleName === 'employee') {
+                // Get employee_type_id if employee_type is provided
+                $employeeTypeId = null;
+                if ($request->has('employee_type')) {
+                    $employeeType = DB::table('employee_types')
+                        ->where('name', $request->input('employee_type'))
+                        ->whereNull('deleted_at')
+                        ->first();
+                    $employeeTypeId = $employeeType ? $employeeType->id : null;
+                }
+                
+                // If no employee_type provided, try to get 'Regular' as default
+                if (!$employeeTypeId) {
+                    $regularType = DB::table('employee_types')
+                        ->where('name', 'Regular')
+                        ->whereNull('deleted_at')
+                        ->first();
+                    $employeeTypeId = $regularType ? $regularType->id : null;
+                }
+                
                 // First, check if employee already exists by email
                 $existingEmployee = DB::table('employees')->where('email', $request->email)->first();
                 
                 if ($existingEmployee) {
                     // Employee exists, just update the user_id link
+                    $updateData = [
+                        'user_id' => $user->id,
+                        'updated_at' => now(),
+                    ];
+                    
+                    // Only update employee_type_id if we have a value
+                    if ($employeeTypeId) {
+                        $updateData['employee_type_id'] = $employeeTypeId;
+                    }
+                    
                     DB::table('employees')
                         ->where('id', $existingEmployee->id)
-                        ->update([
-                            'user_id' => $user->id,
-                            'updated_at' => now(),
-                        ]);
+                        ->update($updateData);
                 } else {
                     // Employee doesn't exist, create new record
                     $nameParts = preg_split('/\s+/', trim((string) $request->name));
                     $firstName = $nameParts[0] ?? '';
                     $lastName = count($nameParts) > 1 ? implode(' ', array_slice($nameParts, 1)) : '';
 
-                    DB::table('employees')->insert([
+                    $insertData = [
                         'user_id' => $user->id,
                         'employee_id' => $request->username ?: 'EMP' . time(),
                         'first_name' => $firstName,
@@ -120,11 +146,17 @@ class UserController extends Controller
                         'position' => $request->position,
                         'department' => $request->department,
                         'phone' => $request->phone,
-                        'employee_type' => $request->input('employee_type', 'Regular'),
                         'status' => 'active',
                         'created_at' => now(),
                         'updated_at' => now(),
-                    ]);
+                    ];
+                    
+                    // Only add employee_type_id if we have a value
+                    if ($employeeTypeId) {
+                        $insertData['employee_type_id'] = $employeeTypeId;
+                    }
+                    
+                    DB::table('employees')->insert($insertData);
                 }
             }
 
@@ -247,27 +279,53 @@ class UserController extends Controller
 
             // Sync employee record when switching/keeping employee role
             if (($role && $role->name === 'employee') || (!$role && $user->role && $user->role->name === 'employee')) {
+                // Get employee_type_id if employee_type is provided
+                $employeeTypeId = null;
+                if ($request->has('employee_type')) {
+                    $employeeType = DB::table('employee_types')
+                        ->where('name', $request->input('employee_type'))
+                        ->whereNull('deleted_at')
+                        ->first();
+                    $employeeTypeId = $employeeType ? $employeeType->id : null;
+                }
+                
+                // If no employee_type provided, try to get 'Regular' as default
+                if (!$employeeTypeId) {
+                    $regularType = DB::table('employee_types')
+                        ->where('name', 'Regular')
+                        ->whereNull('deleted_at')
+                        ->first();
+                    $employeeTypeId = $regularType ? $regularType->id : null;
+                }
+                
                 // Check if employee already exists by email
                 $existingEmployee = DB::table('employees')->where('email', $request->email)->first();
                 
                 if ($existingEmployee) {
                     // Employee exists, update the record and link user_id
+                    $updateData = [
+                        'user_id' => $user->id,
+                        'position' => $request->position,
+                        'department' => $request->department,
+                        'phone' => $request->phone,
+                        'updated_at' => now(),
+                    ];
+                    
+                    // Only update employee_type_id if we have a value
+                    if ($employeeTypeId) {
+                        $updateData['employee_type_id'] = $employeeTypeId;
+                    }
+                    
                     DB::table('employees')
                         ->where('id', $existingEmployee->id)
-                        ->update([
-                            'user_id' => $user->id,
-                            'position' => $request->position,
-                            'department' => $request->department,
-                            'phone' => $request->phone,
-                            'updated_at' => now(),
-                        ]);
+                        ->update($updateData);
                 } else {
                     // Employee doesn't exist, create new record
                     $nameParts = preg_split('/\s+/', trim((string) $request->name));
                     $firstName = $nameParts[0] ?? '';
                     $lastName = count($nameParts) > 1 ? implode(' ', array_slice($nameParts, 1)) : '';
 
-                    DB::table('employees')->insert([
+                    $insertData = [
                         'user_id' => $user->id,
                         'employee_id' => $request->username ?: 'EMP' . time(),
                         'first_name' => $firstName,
@@ -276,11 +334,17 @@ class UserController extends Controller
                         'position' => $request->position,
                         'department' => $request->department,
                         'phone' => $request->phone,
-                        'employee_type' => $request->input('employee_type', 'Regular'),
                         'status' => 'active',
                         'created_at' => now(),
                         'updated_at' => now(),
-                    ]);
+                    ];
+                    
+                    // Only add employee_type_id if we have a value
+                    if ($employeeTypeId) {
+                        $insertData['employee_type_id'] = $employeeTypeId;
+                    }
+                    
+                    DB::table('employees')->insert($insertData);
                 }
             }
 
