@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ActivityLog;
 use App\Models\Category;
 use App\Models\Employee;
 use App\Models\Equipment;
@@ -12,6 +13,44 @@ use Illuminate\Http\Request;
 
 class ArchiveController extends Controller
 {
+    /**
+     * Get who deleted an item from ActivityLog
+     */
+    private function getDeletedBy($modelType, $modelId, $deletedAt)
+    {
+        // Map model types to ActivityLog model_type format
+        $modelTypeMap = [
+            'equipment' => 'App\\Models\\Equipment',
+            'request' => 'App\\Models\\Request',
+            'transaction' => 'App\\Models\\Transaction',
+            'employee' => 'App\\Models\\Employee',
+            'user' => 'App\\Models\\User',
+            'category' => 'App\\Models\\Category',
+        ];
+        
+        $fullModelType = $modelTypeMap[$modelType] ?? null;
+        if (!$fullModelType) {
+            return 'System';
+        }
+        
+        // Find the delete activity log for this item
+        // Look for logs around the deletion time (within 1 minute)
+        $log = ActivityLog::where('model_type', $fullModelType)
+            ->where('model_id', $modelId)
+            ->where('action', 'like', '%Deleted%')
+            ->where('created_at', '>=', \Carbon\Carbon::parse($deletedAt)->subMinute())
+            ->where('created_at', '<=', \Carbon\Carbon::parse($deletedAt)->addMinute())
+            ->with('user')
+            ->orderBy('created_at', 'desc')
+            ->first();
+        
+        if ($log && $log->user) {
+            return $log->user->name;
+        }
+        
+        return 'System';
+    }
+
     public function index(Request $request)
     {
         $filterType = $request->get('type', 'all');
@@ -45,6 +84,7 @@ class ArchiveController extends Controller
                         'serial_number' => $item->serial_number,
                         'category' => $item->category?->name,
                         'deleted_at' => $item->deleted_at,
+                        'deleted_by' => $this->getDeletedBy('equipment', $item->id, $item->deleted_at),
                         'status' => $item->status,
                         'condition' => $item->condition,
                     ];
@@ -74,6 +114,7 @@ class ArchiveController extends Controller
                         'equipment' => $item->equipment?->name,
                         'reason' => $item->reason,
                         'deleted_at' => $item->deleted_at,
+                        'deleted_by' => $this->getDeletedBy('request', $item->id, $item->deleted_at),
                         'status' => $item->status,
                     ];
                 });
@@ -98,6 +139,7 @@ class ArchiveController extends Controller
                         'employee' => $item->employee?->full_name,
                         'equipment' => $item->equipment?->name,
                         'deleted_at' => $item->deleted_at,
+                        'deleted_by' => $this->getDeletedBy('transaction', $item->id, $item->deleted_at),
                         'status' => $item->status,
                     ];
                 });
@@ -126,6 +168,7 @@ class ArchiveController extends Controller
                         'department' => $item->department,
                         'position' => $item->position,
                         'deleted_at' => $item->deleted_at,
+                        'deleted_by' => $this->getDeletedBy('employee', $item->id, $item->deleted_at),
                     ];
                 });
             $archivedItems = $archivedItems->merge($employees);
@@ -153,6 +196,7 @@ class ArchiveController extends Controller
                         'role' => $item->role?->name,
                         'department' => $item->department,
                         'deleted_at' => $item->deleted_at,
+                        'deleted_by' => $this->getDeletedBy('user', $item->id, $item->deleted_at),
                     ];
                 });
             $archivedItems = $archivedItems->merge($users);
@@ -174,6 +218,7 @@ class ArchiveController extends Controller
                         'name' => $item->name,
                         'description' => $item->description,
                         'deleted_at' => $item->deleted_at,
+                        'deleted_by' => $this->getDeletedBy('category', $item->id, $item->deleted_at),
                     ];
                 });
             $archivedItems = $archivedItems->merge($categories);
