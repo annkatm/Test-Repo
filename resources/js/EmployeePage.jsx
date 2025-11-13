@@ -343,6 +343,9 @@ const EmployeePage = () => {
         newOptions[key] = options;
       });
 
+      // No fallback - employee types are fully dynamic now
+      // Users must add employee types through Control Panel
+
       setDropdownOptions(newOptions);
     } catch (e) {
       console.error('Failed to load dropdown options:', e);
