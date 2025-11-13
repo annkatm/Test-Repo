@@ -1342,8 +1342,9 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                 }}
                 disabled={!chosenUnit}
                 className={`px-8 py-3 rounded-lg font-semibold shadow-md transition-all transform hover:scale-105 ${chosenUnit ? 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-xl' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
+                onClick={() => setShowExchangeConfirmModal(true)}
               >
-                Next
+                Confirm
               </button>
             </div>
           </div>
@@ -1491,56 +1492,151 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
       {/* EXCHANGE REQUEST CONFIRMATION MODAL */}
       {showExchangeConfirmModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
             {/* Header */}
-            <h2 className="text-lg font-bold text-gray-900 mb-4">Exchange Request</h2>
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-6 text-white">
+              <h2 className="text-2xl font-bold">Exchange Confirmation</h2>
+              <p className="text-blue-100 text-sm mt-1">Please review your exchange details</p>
+            </div>
 
-            {/* Item Info */}
-            <div className="flex items-center gap-4 mb-6 pb-4 border-b border-gray-200">
-              <img
-                src="https://cdn-icons-png.flaticon.com/512/1086/1086933.png"
-                alt="Laptop"
-                className="w-16 h-16 object-contain"
-              />
-              <div>
-                <p className="font-semibold text-gray-900">{chosenUnit?.name || 'Laptop'}</p>
-                {chosenUnit?.brand && <p className="text-sm text-gray-500">{chosenUnit.brand}</p>}
-                {chosenUnit?.specs && <p className="text-sm text-gray-500">{chosenUnit.specs}</p>}
+            {/* Receipt Body */}
+            <div className="p-6">
+              {/* Current Item */}
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold text-gray-500 mb-3">CURRENT ITEM</h3>
+                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <div className="flex items-center gap-4">
+                    <div className="bg-blue-100 p-3 rounded-lg">
+                      <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900">{selectedRow?.item || 'Current Laptop'}</p>
+                      {selectedRow?.specs && <p className="text-sm text-gray-500">{selectedRow.specs}</p>}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Exchange Arrow */}
+              <div className="flex justify-center my-2">
+                <div className="bg-blue-100 rounded-full p-2">
+                  <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                  </svg>
+                </div>
+              </div>
+
+              {/* New Item */}
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold text-gray-500 mb-3">NEW ITEM</h3>
+                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <div className="flex items-center gap-4">
+                    <div className="bg-green-100 p-3 rounded-lg">
+                      <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900">{chosenUnit?.name || 'New Laptop'}</p>
+                      {chosenUnit?.brand && <p className="text-sm text-gray-500">{chosenUnit.brand}</p>}
+                      {chosenUnit?.specs && <p className="text-sm text-gray-500">{chosenUnit.specs}</p>}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Exchange Reason */}
+              {exchangeReason && (
+                <div className="mb-6">
+                  <h3 className="text-sm font-semibold text-gray-500 mb-2">REASON FOR EXCHANGE</h3>
+                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <p className="text-gray-800">{exchangeReason}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Exchange Summary */}
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <h3 className="text-sm font-semibold text-gray-900 mb-3">Exchange Summary</h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Exchange Date</span>
+                    <span className="text-sm font-medium text-gray-900">{new Date().toLocaleDateString('en-US', { 
+                      year: 'numeric', 
+                      month: 'long', 
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Requested By</span>
+                    <span className="text-sm font-medium text-gray-900">
+                      {localStorage.getItem('user_name') || 'Current User'}
+                    </span>
+                  </div>
+                  <div className="pt-2 border-t border-gray-200">
+                    <p className="text-xs text-gray-500">
+                      By confirming, you agree to return your current device in good condition.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Exchange Summary */}
-            <div className="bg-gray-50 rounded-lg p-4 mb-6">
-              <h3 className="text-sm font-semibold text-gray-900 mb-3">Exchange Summary</h3>
-              <div className="space-y-2">
-                <div>
-                  <p className="text-xs text-gray-500">Laptop</p>
-                  <p className="text-sm text-gray-900">{chosenUnit ? `${chosenUnit.brand || ''} ${chosenUnit.name || ''}`.trim() : '—'}</p>
-                </div>
-                <div className="pt-2 border-t border-gray-200">
-                  <p className="text-xs text-gray-500">Request Date</p>
-                  <p className="text-sm text-gray-900">{new Date().toLocaleDateString()}</p>
-                </div>
-              </div>
+            {/* Action Buttons */}
+            <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+              <button
+                onClick={() => setShowExchangeConfirmModal(false)}
+                className="px-5 py-2.5 text-gray-700 bg-white border border-gray-300 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                disabled={actionLoading}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (actionLoading) return;
+                  setActionLoading(true);
+                  // Here you would typically make an API call to process the exchange
+                  logActivity(`Exchange requested: ${selectedRow?.item || 'N/A'} → ${chosenUnit?.name || 'N/A'}`, 'info');
+                  
+                  // Simulate API call
+                  setTimeout(() => {
+                    setShowExchangeConfirmModal(false);
+                    setShowBrowseLaptopsModal(false);
+                    setSelectedRow(null);
+                    setChosenUnit(null);
+                    setExchangeReason('');
+                    setActionLoading(false);
+                    
+                    // Show success message or redirect
+                    alert('Exchange request submitted successfully!');
+                    onBack();
+                  }, 1500);
+                }}
+                disabled={actionLoading}
+                className="px-5 py-2.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+              >
+                {actionLoading ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Confirm Exchange
+                  </>
+                )}
+              </button>
             </div>
-
-            {/* Send Request Button */}
-            <button
-              onClick={() => {
-                if (actionLoading) return;
-                setActionLoading(true);
-                setTimeout(() => {
-                  setShowExchangeConfirmModal(false);
-                  setSelectedRow(null);
-                  onBack();
-                  setActionLoading(false);
-                }, 1000);
-              }}
-              disabled={actionLoading}
-              className="w-full bg-blue-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg hover:bg-blue-700 transition-colors shadow-md"
-            >
-              {actionLoading ? 'Sending...' : 'Send Request'}
-            </button>
           </div>
         </div>
       )}
