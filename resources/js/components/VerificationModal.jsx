@@ -208,20 +208,28 @@ const VerificationModal = ({
             <div className="space-y-3">
               {items.length > 0 ? (
                 (() => {
-                  // Group items by equipment name
+                  // Group items by category_id/category_name first, then by equipment_id
                   const groupedItems = {};
                   items.forEach((item) => {
-                    const equipmentName = item.equipment_name || item.name || 'Item';
-                    if (!groupedItems[equipmentName]) {
-                      groupedItems[equipmentName] = [];
+                    // Use category_id if available, otherwise use category_name as unique identifier
+                    const categoryId = item.category_id || item.category_name || 'Uncategorized';
+                    const equipmentId = item.id || item.equipment_id || 'unknown';
+                    // Create unique group key: category_id + equipment_id
+                    const groupKey = `${categoryId}|${equipmentId}`;
+                    
+                    if (!groupedItems[groupKey]) {
+                      groupedItems[groupKey] = {
+                        categoryId: categoryId,
+                        categoryName: item.category_name || item.category || 'Uncategorized',
+                        equipmentId: equipmentId,
+                        items: []
+                      };
                     }
-                    groupedItems[equipmentName].push(item);
+                    groupedItems[groupKey].items.push(item);
                   });
 
-                  return Object.entries(groupedItems).map(([equipmentName, equipmentItems], groupIndex) => {
-                    // Get category from first item in the group
-                    const categoryName = equipmentItems[0]?.category_name || equipmentItems[0]?.category || equipmentName;
-                    const iconUrl = getItemIconUrl(categoryName);
+                  return Object.entries(groupedItems).map(([groupKey, group], groupIndex) => {
+                    const iconUrl = getItemIconUrl(group.categoryName);
                     
                     return (
                       <div key={groupIndex} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
@@ -230,7 +238,7 @@ const VerificationModal = ({
                           <div className="flex items-center space-x-3">
                             <img 
                               src={iconUrl} 
-                              alt={categoryName}
+                              alt={group.categoryName}
                               className="h-5 w-5 flex-shrink-0"
                               onError={(e) => {
                                 // Fallback to default icon if image fails to load
@@ -238,7 +246,7 @@ const VerificationModal = ({
                               }}
                             />
                             <h5 className="text-sm font-semibold text-gray-900">
-                              {categoryName}
+                              {group.categoryName}
                             </h5>
                           </div>
                         </div>
@@ -262,14 +270,14 @@ const VerificationModal = ({
                           
                           {/* Table Rows */}
                           <div className="bg-white">
-                            {equipmentItems.map((item, itemIndex) => {
+                            {group.items.map((item, itemIndex) => {
                               const specs = item.specifications || item.specs || '';
                               const brand = item.brand || 'N/A';
                               
                               return (
                                 <div key={item.id || item.requestId || itemIndex}>
                                   <div 
-                                    className={`grid grid-cols-2 ${itemIndex < equipmentItems.length - 1 ? 'border-b border-gray-200' : ''}`}
+                                    className={`grid grid-cols-2 ${itemIndex < group.items.length - 1 ? 'border-b border-gray-200' : ''}`}
                                   >
                                     <div className="px-3 py-2 border-r border-gray-200">
                                       <span className="text-xs text-gray-700">{brand}</span>

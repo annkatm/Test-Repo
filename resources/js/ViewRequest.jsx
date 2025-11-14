@@ -153,10 +153,12 @@ const ViewRequest = () => {
       grouped[employeeName].items.push({
         id: req.equipment_id,
         requestId: req.id,
+        equipment_id: req.equipment_id,
         equipment_name: req.equipment_name || 'Unknown Item',
         name: req.equipment_name || 'Unknown Item',
         brand: req.brand || '',
         model: req.model || '',
+        category_id: req.category_id || null,
         category_name: req.category_name || '',
         category: req.category_name || '',
         serial_number: req.serial_number || req.equipment_serial_number || req.asset_tag || 'N/A',
