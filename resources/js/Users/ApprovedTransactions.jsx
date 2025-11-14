@@ -45,8 +45,12 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
   const [selectedLaptop, setSelectedLaptop] = useState(null);
   const [activeCategory, setActiveCategory] = useState('Laptops');
   const [exchangeReason, setExchangeReason] = useState('');
+  const [exchangeReasonError, setExchangeReasonError] = useState('');
   const [uploadedFile, setUploadedFile] = useState(null);
+  const [fileError, setFileError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [borrowedRemarks, setBorrowedRemarks] = useState('');
+  const [returnCondition, setReturnCondition] = useState('good_condition');
   const [isViewAllOpen, setIsViewAllOpen] = useState(false);
   const [isBorrowedOpen, setIsBorrowedOpen] = useState(false);
   const [isLaptopListOpen, setIsLaptopListOpen] = useState(false);
@@ -178,8 +182,8 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
             ? 'Approved'
             : (t?.status || 'Approved');
           return {
-            id: t?.id ?? t?.transaction_id ?? t?.request_id ?? t?.transactionID ?? t?.trans_id ?? t?.trx_id ?? t?.uuid ?? t?.pivot?.transaction_id ?? (i + 1),
-            tx_id: t?.id ?? t?.transaction_id ?? t?.request_id ?? t?.transactionID ?? t?.trans_id ?? t?.trx_id ?? t?.uuid ?? t?.pivot?.transaction_id ?? null,
+            id: t?.id ?? t?.transaction_id ?? t?.request_id ?? i + 1,
+            tx_id: t?.id ?? t?.transaction_id ?? t?.request_id ?? null,
             date,
             item: (
               t?.category_name || t?.category || t?.equipment_category || t?.equipment_type || t?.type || t?.item_type ||
@@ -551,7 +555,19 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
     if (file) {
+      // Check file type (image or video)
+      const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'video/mp4', 'video/webm'];
+      if (!validTypes.includes(file.type)) {
+        setFileError('Please upload a valid image (JPEG, PNG, GIF) or video (MP4, WebM)');
+        return;
+      }
+      // Check file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        setFileError('File size should not exceed 10MB');
+        return;
+      }
       setUploadedFile(file);
+      setFileError('');
     }
   };
 
@@ -612,6 +628,33 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
     } finally {
       setActionLoading(false);
     }
+  };
+
+  const handleOpenExchangeModal = () => {
+    setExchangeReason('');
+    setUploadedFile(null);
+    setExchangeReasonError('');
+    setFileError('');
+    setShowReasonModal(true);
+  };
+
+  const handleOpenBrowse = () => {
+    // Validate reason
+    if (!exchangeReason.trim()) {
+      setExchangeReasonError('Please provide a reason for exchange');
+      return;
+    }
+    
+    // Validate file
+    if (!uploadedFile) {
+      setFileError('Please upload an image or video of the issue');
+      return;
+    }
+    
+    // If validation passes, open browse laptops modal
+    setShowReasonModal(false);
+    setShowBrowseLaptopsModal(true);
+    logActivity('Opened Browse Laptops after providing reason and file', 'exchange');
   };
 
   return (
@@ -754,7 +797,9 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
             <h3 className="text-lg font-bold text-gray-900 mb-4">Confirm Selection</h3>
             <div className="flex items-start gap-4 mb-6">
-              <div className="w-12 h-12 rounded-md bg-gray-100 flex items-center justify-center">💻</div>
+              <div className="w-12 h-12 rounded-md bg-gray-100 flex items-center justify-center text-2xl">
+                {selectedUnit.icon}
+              </div>
               <div>
                 <div className="font-semibold text-gray-900">{selectedUnit.name}</div>
                 <div className="text-sm text-gray-600">Brand: {selectedUnit.brand}</div>
@@ -807,8 +852,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
               {/* Table Header - Hidden on mobile, visible on tablet+ */}
               <div className="hidden sm:grid grid-cols-12 bg-gray-50 text-gray-700 font-semibold text-base lg:text-lg py-4 xl:py-5 px-4 sm:px-6 border-b border-gray-200">
                 <div className="col-span-3 text-center">Date</div>
-                <div className="col-span-6 text-center">Item</div>
-                <div className="col-span-3 text-center">Status</div>
+                <div className="col-span-6 text-center">Category</div>
               </div>
 
               {/* Scrollable Table Rows Container */
@@ -890,7 +934,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                     setShowReturnModal(true); 
                     logActivity('Approved: Clicked Return Now', 'return'); 
                   }}
-                  onOpenBrowse={() => { setShowBrowseLaptopsModal(true); logActivity('Approved: Clicked Exchange', 'exchange'); }}
+                  onOpenBrowse={handleOpenExchangeModal}
                   className="flex-1"
                 />
                 
@@ -909,7 +953,35 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
             </h2>
 
             {/* Dynamic Item List */}
-            <div className="space-y-4 mb-6">
+            <div className="space-y-4 mb-4">
+              <div className="space-y-2">
+                <label htmlFor="borrowedRemarks" className="block text-sm font-medium text-gray-700">
+                  Borrowed Remarks (for next borrower)
+                </label>
+                <textarea
+                  id="borrowedRemarks"
+                  rows="3"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  placeholder="Leave any notes or remarks for the next borrower..."
+                  value={borrowedRemarks}
+                  onChange={(e) => setBorrowedRemarks(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="returnCondition" className="block text-sm font-medium text-gray-700">
+                  Item Condition
+                </label>
+                <select
+                  id="returnCondition"
+                  value={returnCondition}
+                  onChange={(e) => setReturnCondition(e.target.value)}
+                  className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+                >
+                  <option value="good_condition">Good Condition</option>
+                  <option value="damaged">Damaged</option>
+                  <option value="has_defect">Has Defect</option>
+                </select>
+              </div>
               {Array.isArray(selectedTransactionData.exchangeItems) && selectedTransactionData.exchangeItems.map((item, index) => (
                 <div
                   key={index}
@@ -929,7 +1001,12 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
             {/* Buttons */}
             <div className="flex justify-end gap-3">
               <button
-                onClick={() => { setShowReturnModal(false); logActivity('Approved: Return modal closed', 'info'); }}
+                onClick={() => { 
+                  setShowReturnModal(false); 
+                  setBorrowedRemarks('');
+                  setReturnCondition('good_condition');
+                  logActivity('Approved: Return modal closed', 'info'); 
+                }}
                 className="px-5 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 shadow-sm transition-all"
               >
                 Cancel
@@ -938,6 +1015,8 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                 onClick={async () => {
                   if (actionLoading) return;
                   setActionLoading(true);
+                  setBorrowedRemarks('');
+                  setReturnCondition('good_condition');
                   try {
                     console.log('Confirm Return clicked');
                     console.log('returnTxId:', returnTxId);
@@ -960,8 +1039,9 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                       },
                       credentials: 'same-origin',
                       body: JSON.stringify({
-                        return_condition: 'good_condition',
-                        return_notes: ''
+                        return_condition: returnCondition,
+                        return_notes: '',
+                        borrowed_remarks: borrowedRemarks
                       }),
                     });
                     if (!res.ok) {
@@ -1113,8 +1193,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                           <p className="text-sm text-gray-600 mb-1">Available Unit:</p>
                           <p className="text-2xl font-bold text-blue-600">{item.available}</p>
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
+                            onClick={() => {
                               setSelectedLaptop(item.brand);
                               const count = Number(item.available) || 0;
                               const units = Array.from({ length: count }, (_, i) => ({ id: `${item.brand}-${i + 1}`, name: `${item.brand} Projector #${i + 1}`, specs: '1080p, 3500 lumens' }));
@@ -1139,8 +1218,7 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                           <p className="text-sm text-gray-600 mb-1">Available Items:</p>
                           <p className="text-2xl font-bold text-blue-600">{item.available}</p>
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
+                            onClick={() => {
                               setSelectedLaptop(item.brand);
                               const count = Number(item.available) || 0;
                               const units = Array.from({ length: count }, (_, i) => ({ id: `${item.brand}-${i + 1}`, name: `${item.brand} #${i + 1}`, specs: 'Standard accessory' }));
@@ -1258,14 +1336,16 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
               </div>
               <button
                 onClick={() => {
+                  if (!chosenUnit) return;
                   setShowBrowseLaptopsModal(false);
                   setShowReasonModal(true);
                   logActivity('Approved: Proceed to Reason for Exchange', 'exchange');
+                  setShowExchangeConfirmModal(true);
                 }}
                 disabled={!chosenUnit}
                 className={`px-8 py-3 rounded-lg font-semibold shadow-md transition-all transform hover:scale-105 ${chosenUnit ? 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-xl' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
               >
-                Next
+                Confirm
               </button>
             </div>
           </div>
@@ -1278,15 +1358,14 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden transform transition-all duration-500 scale-100 rotate-[0.5deg] hover:rotate-0 hover:scale-[1.02] shadow-blue-900/30 hover:shadow-blue-800/50 perspective-[1000px] motion-safe:animate-pop3D">
             {/* Header */}
             <div className="flex items-center justify-between p-6 border-b bg-gradient-to-r from-blue-600/5 to-blue-300/10">
-              <h2 className="text-xl font-bold text-gray-900 drop-shadow-md">
-                Reason and Evidence
-              </h2>
+              <h2 className="text-2xl font-bold text-gray-900">Exchange Request</h2>
               <button
                 onClick={() => {
                   setShowReasonModal(false);
                   setExchangeReason('');
                   setUploadedFile(null);
-                  logActivity('Approved: Closed Reason modal', 'info');
+                  setExchangeReasonError('');
+                  setFileError('');
                 }}
                 className="text-gray-400 hover:text-gray-600 transition"
               >
@@ -1298,132 +1377,267 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Reason for Exchange */}
               <div>
-                <label className="block text-base font-semibold text-gray-900 mb-3">
-                  Reason for Exchange:
+                <label htmlFor="exchangeReason" className="block text-sm font-medium text-gray-700 mb-2">
+                  Reason for Exchange <span className="text-red-500">*</span>
                 </label>
                 <textarea
+                  id="exchangeReason"
+                  rows={4}
+                  className={`w-full px-3 py-2 border ${
+                    exchangeReasonError ? 'border-red-500' : 'border-gray-300'
+                  } rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500`}
+                  placeholder="Please explain why you need to exchange this item..."
                   value={exchangeReason}
-                  onChange={(e) => setExchangeReason(e.target.value)}
-                  placeholder="Enter your reason for exchange..."
-                  className="w-full h-40 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none bg-gray-50 shadow-inner"
-                />
-              </div>
-
-              <div>
-                <label className="block text-base font-semibold text-gray-900 mb-3">
-                  Upload Photo/Video:
-                </label>
-                <div className="relative">
-                  <input
-                    type="file"
-                    accept="image/*,video/*"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                    id="file-upload"
-                  />
-                  <label
-                    htmlFor="file-upload"
-                    className="flex flex-col items-center justify-center w-full h-48 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 shadow-inner transition-colors"
-                  >
-                    {uploadedFile ? (
-                      <div className="flex flex-col items-center">
-                        <svg className="w-12 h-12 text-green-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                        <p className="text-sm font-medium text-gray-700">{uploadedFile.name}</p>
-                        <p className="text-xs text-gray-500 mt-1">Click to change file</p>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center">
-                        <svg className="w-16 h-16 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        <p className="text-sm text-gray-500">Click to upload photo or video</p>
-                      </div>
-                    )}
-                  </label>
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  onClick={() => {
-                    setShowReasonModal(false);
-                    setExchangeReason('');
-                    setUploadedFile(null);
-                    logActivity('Approved: Cancel Reason modal', 'info');
+                  onChange={(e) => {
+                    setExchangeReason(e.target.value);
+                    if (e.target.value.trim()) {
+                      setExchangeReasonError('');
+                    }
                   }}
-                  className="px-5 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 shadow-sm transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => { logActivity('Approved: Confirm Reason for Exchange', 'exchange'); handleConfirmExchange(); }}
-                  className="px-5 py-2 bg-blue-600 text-white rounded-lg font-medium shadow-md hover:bg-blue-700 hover:shadow-xl transition-all"
-                >
-                  Confirm
-                </button>
+                />
+                {exchangeReasonError && (
+                  <p className="mt-1 text-sm text-red-600">{exchangeReasonError}</p>
+                )}
               </div>
+
+              {/* Evidence Upload */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Upload Evidence (Image/Video) <span className="text-red-500">*</span>
+                </label>
+                <div
+                  className={`mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed ${
+                    fileError ? 'border-red-500' : 'border-gray-300'
+                  } rounded-md`}
+                >
+                  <div className="space-y-1 text-center">
+                    <svg
+                      className="mx-auto h-12 w-12 text-gray-400"
+                      stroke="currentColor"
+                      fill="none"
+                      viewBox="0 0 48 48"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    <div className="flex text-sm text-gray-600">
+                      <label
+                        htmlFor="file-upload"
+                        className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none"
+                      >
+                        <span>Upload a file</span>
+                        <input
+                          id="file-upload"
+                          name="file-upload"
+                          type="file"
+                          className="sr-only"
+                          accept="image/*,video/*"
+                          onChange={handleFileUpload}
+                        />
+                      </label>
+                      <p className="pl-1">or drag and drop</p>
+                    </div>
+                    <p className="text-xs text-gray-500">PNG, JPG, GIF, MP4 up to 10MB</p>
+                  </div>
+                </div>
+                {fileError && (
+                  <p className="mt-1 text-sm text-red-600">{fileError}</p>
+                )}
+                {uploadedFile && !fileError && (
+                  <div className="mt-2 text-sm text-green-600">
+                    File selected: {uploadedFile.name} ({(uploadedFile.size / 1024).toFixed(2)} KB)
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="bg-gray-50 px-6 py-4 border-t flex justify-end space-x-3">
+              <button
+                type="button"
+                className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                onClick={() => {
+                  setShowReasonModal(false);
+                  setExchangeReason('');
+                  setUploadedFile(null);
+                  setExchangeReasonError('');
+                  setFileError('');
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={`px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
+                  !exchangeReason.trim() || !uploadedFile
+                    ? 'bg-blue-400 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
+                }`}
+                disabled={!exchangeReason.trim() || !uploadedFile}
+                onClick={handleOpenBrowse}
+              >
+                Continue to Browse Laptops
+              </button>
             </div>
           </div>
         </div>
-      )}
+      )}  
 
       {/* EXCHANGE REQUEST CONFIRMATION MODAL */}
       {showExchangeConfirmModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
             {/* Header */}
-            <h2 className="text-lg font-bold text-gray-900 mb-4">Exchange Request</h2>
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-6 text-white">
+              <h2 className="text-2xl font-bold">Exchange Confirmation</h2>
+              <p className="text-blue-100 text-sm mt-1">Please review your exchange details</p>
+            </div>
 
-            {/* Item Info */}
-            <div className="flex items-center gap-4 mb-6 pb-4 border-b border-gray-200">
-              <img
-                src="https://cdn-icons-png.flaticon.com/512/1086/1086933.png"
-                alt="Laptop"
-                className="w-16 h-16 object-contain"
-              />
-              <div>
-                <p className="font-semibold text-gray-900">{chosenUnit?.name || 'Laptop'}</p>
-                {chosenUnit?.brand && <p className="text-sm text-gray-500">{chosenUnit.brand}</p>}
-                {chosenUnit?.specs && <p className="text-sm text-gray-500">{chosenUnit.specs}</p>}
+            {/* Receipt Body */}
+            <div className="p-6">
+              {/* Current Item */}
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold text-gray-500 mb-3">CURRENT ITEM</h3>
+                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <div className="flex items-center gap-4">
+                    <div className="bg-blue-100 p-3 rounded-lg">
+                      <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900">{selectedRow?.item || 'Current Laptop'}</p>
+                      {selectedRow?.specs && <p className="text-sm text-gray-500">{selectedRow.specs}</p>}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Exchange Arrow */}
+              <div className="flex justify-center my-2">
+                <div className="bg-blue-100 rounded-full p-2">
+                  <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                  </svg>
+                </div>
+              </div>
+
+              {/* New Item */}
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold text-gray-500 mb-3">NEW ITEM</h3>
+                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <div className="flex items-center gap-4">
+                    <div className="bg-green-100 p-3 rounded-lg">
+                      <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900">{chosenUnit?.name || 'New Laptop'}</p>
+                      {chosenUnit?.brand && <p className="text-sm text-gray-500">{chosenUnit.brand}</p>}
+                      {chosenUnit?.specs && <p className="text-sm text-gray-500">{chosenUnit.specs}</p>}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Exchange Reason */}
+              {exchangeReason && (
+                <div className="mb-6">
+                  <h3 className="text-sm font-semibold text-gray-500 mb-2">REASON FOR EXCHANGE</h3>
+                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <p className="text-gray-800">{exchangeReason}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Exchange Summary */}
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <h3 className="text-sm font-semibold text-gray-900 mb-3">Exchange Summary</h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Exchange Date</span>
+                    <span className="text-sm font-medium text-gray-900">{new Date().toLocaleDateString('en-US', { 
+                      year: 'numeric', 
+                      month: 'long', 
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Requested By</span>
+                    <span className="text-sm font-medium text-gray-900">
+                      {localStorage.getItem('user_name') || 'Current User'}
+                    </span>
+                  </div>
+                  <div className="pt-2 border-t border-gray-200">
+                    <p className="text-xs text-gray-500">
+                      By confirming, you agree to return your current device in good condition.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Exchange Summary */}
-            <div className="bg-gray-50 rounded-lg p-4 mb-6">
-              <h3 className="text-sm font-semibold text-gray-900 mb-3">Exchange Summary</h3>
-              <div className="space-y-2">
-                <div>
-                  <p className="text-xs text-gray-500">Laptop</p>
-                  <p className="text-sm text-gray-900">{chosenUnit ? `${chosenUnit.brand || ''} ${chosenUnit.name || ''}`.trim() : '—'}</p>
-                </div>
-                <div className="pt-2 border-t border-gray-200">
-                  <p className="text-xs text-gray-500">Request Date</p>
-                  <p className="text-sm text-gray-900">{new Date().toLocaleDateString()}</p>
-                </div>
-              </div>
+            {/* Action Buttons */}
+            <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+              <button
+                onClick={() => setShowExchangeConfirmModal(false)}
+                className="px-5 py-2.5 text-gray-700 bg-white border border-gray-300 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                disabled={actionLoading}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (actionLoading) return;
+                  setActionLoading(true);
+                  // Here you would typically make an API call to process the exchange
+                  logActivity(`Exchange requested: ${selectedRow?.item || 'N/A'} → ${chosenUnit?.name || 'N/A'}`, 'info');
+                  
+                  // Simulate API call
+                  setTimeout(() => {
+                    setShowExchangeConfirmModal(false);
+                    setShowBrowseLaptopsModal(false);
+                    setSelectedRow(null);
+                    setChosenUnit(null);
+                    setExchangeReason('');
+                    setActionLoading(false);
+                    
+                    // Show success message or redirect
+                    alert('Exchange request submitted successfully!');
+                    onBack();
+                  }, 1500);
+                }}
+                disabled={actionLoading}
+                className="px-5 py-2.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+              >
+                {actionLoading ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Confirm Exchange
+                  </>
+                )}
+              </button>
             </div>
-
-            {/* Send Request Button */}
-            <button
-              onClick={() => {
-                if (actionLoading) return;
-                setActionLoading(true);
-                setTimeout(() => {
-                  setShowExchangeConfirmModal(false);
-                  setSelectedRow(null);
-                  onBack();
-                  setActionLoading(false);
-                }, 1000);
-              }}
-              disabled={actionLoading}
-              className="w-full bg-blue-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg hover:bg-blue-700 transition-colors shadow-md"
-            >
-              {actionLoading ? 'Sending...' : 'Send Request'}
-            </button>
           </div>
         </div>
       )}
@@ -1448,7 +1662,6 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                   <tr className="border-b-2 border-gray-200">
                     <th className="text-left p-3 text-base font-semibold text-gray-800">Date</th>
                     <th className="text-left p-3 text-base font-semibold text-gray-800">Item</th>
-                    <th className="text-left p-3 text-base font-semibold text-gray-800">Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1456,14 +1669,11 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                     <tr key={idx} className="border-b border-gray-100">
                       <td className="p-3 text-base text-gray-800 font-semibold">{row.date}</td>
                       <td className="p-3 text-base text-gray-800 font-semibold">{row.item}</td>
-                      <td className="p-3">
-                        <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">{row.status}</span>
-                      </td>
                     </tr>
                   ))}
                   {paginated.length === 0 && (
                     <tr>
-                      <td colSpan="3" className="p-6 text-center text-gray-500">No records</td>
+                      <td colSpan="2" className="p-6 text-center text-gray-500">No records</td>
                     </tr>
                   )}
                 </tbody>

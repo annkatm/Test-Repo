@@ -533,6 +533,18 @@ class TransactionController extends Controller
                     'status' => 'completed',
                     'updated_at' => now()
                 ]);
+            } else {
+                // Fallback for legacy rows without request linkage
+                if ($transaction->employee_id && $transaction->equipment_id) {
+                    DB::table('requests')
+                        ->where('employee_id', $transaction->employee_id)
+                        ->where('equipment_id', $transaction->equipment_id)
+                        ->whereIn('status', ['approved', 'fulfilled'])
+                        ->update([
+                            'status' => 'completed',
+                            'updated_at' => now()
+                        ]);
+                }
             }
 
             // Ensure equipment status is available (should already be, but double-check)
@@ -1154,6 +1166,23 @@ class TransactionController extends Controller
 
             DB::table('transactions')->where('id', $id)->update($updateData);
 
+            // Ensure linked request is not shown in Approved anymore
+            if ($transaction->request_id) {
+                DB::table('requests')->where('id', $transaction->request_id)->update([
+                    'status' => 'fulfilled',
+                    'updated_at' => now()
+                ]);
+            } else if ($transaction->employee_id && $transaction->equipment_id) {
+                DB::table('requests')
+                    ->where('employee_id', $transaction->employee_id)
+                    ->where('equipment_id', $transaction->equipment_id)
+                    ->whereIn('status', ['approved'])
+                    ->update([
+                        'status' => 'fulfilled',
+                        'updated_at' => now()
+                    ]);
+            }
+
             $updatedTransaction = DB::table('transactions')
                 ->leftJoin('employees', 'transactions.employee_id', '=', 'employees.id')
                 ->leftJoin('equipment', 'transactions.equipment_id', '=', 'equipment.id')
@@ -1163,7 +1192,7 @@ class TransactionController extends Controller
                     DB::raw("COALESCE(employees.first_name, '') as first_name"),
                     DB::raw("COALESCE(employees.last_name, '') as last_name"),
                     DB::raw("CONCAT(COALESCE(employees.first_name, ''), ' ', COALESCE(employees.last_name, '')) as full_name"),
-                    DB::raw("COALESCE(employees.employee_type, '') as position"),
+                    DB::raw("COALESCE(employees.position, '') as position"),
                     DB::raw("COALESCE(equipment.name, '') as equipment_name"),
                     DB::raw("COALESCE(equipment.brand, '') as brand"),
                     DB::raw("COALESCE(equipment.model, '') as model")

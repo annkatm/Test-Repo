@@ -235,7 +235,11 @@ const ViewApproved = () => {
       grouped[employeeName].returns.push(returnItem);
       grouped[employeeName].items.push({
         id: returnItem.equipment_id || returnItem.id,
-        equipment_name: returnItem.equipment_name || 'Unknown Item'
+        equipment_name: returnItem.equipment_name || 'Unknown Item',
+        // pass through serial number from multiple possible fields
+        serial_number: returnItem.serial_number || returnItem.equipment_serial_number || returnItem.asset_tag || null,
+        // pass through specifications/specs
+        specifications: returnItem.specifications || returnItem.specs || [returnItem.brand, returnItem.model].filter(Boolean).join(' ')
       });
     });
     return Object.values(grouped);
@@ -872,7 +876,6 @@ const ViewApproved = () => {
                           <td className="py-3 px-3 text-red-600">{group.expected_return_date || 'N/A'}</td>
                           <td className="py-3 px-3">
                             <div className="flex items-center justify-end space-x-4 text-gray-700">
-                              <span className="px-3 py-1 rounded-full text-xs bg-blue-100 text-blue-700">Active</span>
                               <span className="px-3 py-1 rounded-full text-xs bg-green-600 text-white">Released</span>
                             </div>
                           </td>
