@@ -274,8 +274,8 @@ const HomeSidebar = ({ onSelect }) => {
                       <div
                         onClick={() => handleDropdownItemClick("/viewrequest")}
                         className={`inline-block px-3 py-1 rounded-full text-sm w-fit transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer ${isActive("/viewrequest")
-                            ? "bg-white text-[#2262C6] shadow-sm scale-105"
-                            : "text-white/90 hover:bg-white hover:text-[#2262C6]"
+                          ? "bg-white text-[#2262C6] shadow-sm scale-105"
+                          : "text-white/90 hover:bg-white hover:text-[#2262C6]"
                           }`}
                       >
                         View Request
@@ -287,8 +287,8 @@ const HomeSidebar = ({ onSelect }) => {
                       <div
                         onClick={() => handleDropdownItemClick("/viewapproved")}
                         className={`inline-block px-3 py-1 rounded-full text-sm w-fit transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer ${isActive("/viewapproved")
-                            ? "bg-white text-[#2262C6] shadow-sm scale-105"
-                            : "text-white/90 hover:bg-white hover:text-[#2262C6]"
+                          ? "bg-white text-[#2262C6] shadow-sm scale-105"
+                          : "text-white/90 hover:bg-white hover:text-[#2262C6]"
                           }`}
                       >
                         View Approved
@@ -321,8 +321,8 @@ const HomeSidebar = ({ onSelect }) => {
                       <div
                         onClick={() => handleDropdownItemClick("/equipment")}
                         className={`inline-block px-3 py-1 rounded-full text-sm w-fit transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer ${isActive("/equipment")
-                            ? "bg-white text-[#2262C6] shadow-sm scale-105"
-                            : "text-white/90 hover:bg-white hover:text-[#2262C6]"
+                          ? "bg-white text-[#2262C6] shadow-sm scale-105"
+                          : "text-white/90 hover:bg-white hover:text-[#2262C6]"
                           }`}
                       >
                         Inventory
@@ -334,8 +334,8 @@ const HomeSidebar = ({ onSelect }) => {
                       <div
                         onClick={() => handleDropdownItemClick("/addstocks")}
                         className={`inline-block px-3 py-1 rounded-full text-sm w-fit transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer ${isActive("/addstocks")
-                            ? "bg-white text-[#2262C6] shadow-sm scale-105"
-                            : "text-white/90 hover:bg-white hover:text-[#2262C6]"
+                          ? "bg-white text-[#2262C6] shadow-sm scale-105"
+                          : "text-white/90 hover:bg-white hover:text-[#2262C6]"
                           }`}
                       >
                         Add Stocks
