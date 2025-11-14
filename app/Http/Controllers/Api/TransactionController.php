@@ -398,7 +398,7 @@ class TransactionController extends Controller
             }
 
             $validatedData = $request->validate([
-                'return_condition' => 'required|in:good_condition,damaged,lost',
+                'return_condition' => 'required|in:good_condition,damaged,has_defect,lost',
                 'return_notes' => 'nullable|string|max:500'
             ]);
 
@@ -413,21 +413,52 @@ class TransactionController extends Controller
 
             DB::table('transactions')->where('id', $id)->update($updateData);
 
-            // Update equipment status back to available
+            // Update equipment status - keep as 'issued' until admin verifies
+            // This prevents equipment from being requested again before verification
             if ($transaction->equipment_id) {
                 DB::table('equipment')
                     ->where('id', $transaction->equipment_id)
                     ->update([
-                        'status' => 'available',
+                        'status' => 'issued', // Keep as issued until verified
                         'updated_at' => now()
                     ]);
             }
 
-            // Get updated equipment info
+            // Get updated equipment info and employee info for logging
             $equipment = null;
+            $employee = null;
             if ($transaction->equipment_id) {
                 $equipment = DB::table('equipment')->where('id', $transaction->equipment_id)->first();
             }
+            if ($transaction->employee_id) {
+                $employee = DB::table('employees')->where('id', $transaction->employee_id)->first();
+            }
+
+            // Log the return activity with condition information
+            $conditionText = match($validatedData['return_condition']) {
+                'good_condition' => 'Good Condition',
+                'damaged' => 'Damaged',
+                'has_defect' => 'Has Defect',
+                'lost' => 'Lost',
+                default => 'Unknown'
+            };
+            
+            $employeeName = $employee ? "{$employee->first_name} {$employee->last_name}" : 'Unknown Employee';
+            $equipmentName = $equipment ? ($equipment->brand ?? $equipment->name) : 'Unknown Equipment';
+            $serialNumber = $equipment->serial_number ?? 'N/A';
+            
+            $description = "Equipment returned by {$employeeName}: {$equipmentName} (SN: {$serialNumber}) - Condition: {$conditionText}";
+            if ($validatedData['return_notes']) {
+                $description .= " | Notes: {$validatedData['return_notes']}";
+            }
+            
+            ActivityLogService::logTransactionActivity(
+                'Equipment Returned',
+                $description,
+                null,
+                ['status' => 'released'],
+                ['status' => 'returned', 'return_condition' => $validatedData['return_condition']]
+            );
 
             return response()->json([
                 'success' => true,
@@ -547,28 +578,127 @@ class TransactionController extends Controller
                 }
             }
 
-            // Ensure equipment status is available (should already be, but double-check)
+            // Update equipment status/condition based on return condition
             if ($transaction->equipment_id) {
+                // Default mappings to allowed enum values
+                $equipmentStatus = 'available';
+                $equipmentCondition = 'good';
+
+                $rc = $transaction->return_condition;
+                if ($rc === 'damaged') {
+                    $equipmentStatus = 'issued'; // remain withheld for inspection/repair
+                    $equipmentCondition = 'poor';
+                } elseif ($rc === 'has_defect') {
+                    $equipmentStatus = 'issued';
+                    $equipmentCondition = 'fair';
+                } elseif ($rc === 'lost') {
+                    $equipmentStatus = 'issued';
+                    $equipmentCondition = 'poor';
+                } elseif ($rc === 'good_condition') {
+                    $equipmentStatus = 'available';
+                    $equipmentCondition = 'good';
+                }
+
                 DB::table('equipment')
                     ->where('id', $transaction->equipment_id)
                     ->update([
-                        'status' => 'available',
+                        'status' => $equipmentStatus,
+                        'condition' => $equipmentCondition,
                         'updated_at' => now()
                     ]);
             }
 
-            // Get updated equipment info
+            // Remove equipment from employee's issued items
+            if ($transaction->employee_id && $transaction->equipment_id) {
+                $employee = DB::table('employees')->where('id', $transaction->employee_id)->first();
+                
+                if ($employee && $employee->issued_item) {
+                    try {
+                        $issuedItems = json_decode($employee->issued_item, true);
+                        
+                        if (is_array($issuedItems)) {
+                            // Remove the equipment from issued items array
+                            $issuedItems = array_filter($issuedItems, function($item) use ($transaction) {
+                                return isset($item['id']) && $item['id'] != $transaction->equipment_id;
+                            });
+                            
+                            // Re-index array to avoid gaps
+                            $issuedItems = array_values($issuedItems);
+                            
+                            // Update employee's issued items
+                            DB::table('employees')
+                                ->where('id', $transaction->employee_id)
+                                ->update([
+                                    'issued_item' => json_encode($issuedItems),
+                                    'updated_at' => now()
+                                ]);
+                        }
+                    } catch (\Exception $e) {
+                        // Log error but don't fail the transaction
+                        \Log::warning('Failed to update employee issued items: ' . $e->getMessage());
+                    }
+                }
+            }
+
+            // Get updated equipment info and employee info for logging
             $equipment = null;
+            $employee = null;
             if ($transaction->equipment_id) {
                 $equipment = DB::table('equipment')->where('id', $transaction->equipment_id)->first();
+            }
+            if ($transaction->employee_id) {
+                $employee = DB::table('employees')->where('id', $transaction->employee_id)->first();
+            }
+
+            // Log the verification activity with condition information
+            $conditionText = match($transaction->return_condition) {
+                'good_condition' => 'Good Condition',
+                'damaged' => 'Damaged',
+                'has_defect' => 'Has Defect',
+                'lost' => 'Lost',
+                default => 'Not Specified'
+            };
+            
+            $verifierName = Auth::user() ? Auth::user()->name : 'System';
+            $employeeName = $employee ? "{$employee->first_name} {$employee->last_name}" : 'Unknown Employee';
+            $equipmentName = $equipment ? ($equipment->brand ?? $equipment->name) : 'Unknown Equipment';
+            $serialNumber = $equipment->serial_number ?? 'N/A';
+            
+            $description = "Return verified by {$verifierName}: {$equipmentName} (SN: {$serialNumber}) from {$employeeName} - Condition: {$conditionText}";
+            if ($validatedData['verification_notes']) {
+                $description .= " | Admin Notes: {$validatedData['verification_notes']}";
+            }
+            if ($transaction->return_notes) {
+                $description .= " | Employee Notes: {$transaction->return_notes}";
+            }
+            
+            ActivityLogService::logTransactionActivity(
+                'Return Verified',
+                $description,
+                null,
+                ['status' => 'returned'],
+                ['status' => 'completed', 'verified_by' => Auth::id()]
+            );
+
+            // Create appropriate success message based on condition
+            $statusMessage = 'Return verified and transaction completed successfully.';
+            if ($transaction->return_condition === 'good_condition') {
+                $statusMessage .= ' Equipment is now available for new requests.';
+            } elseif ($transaction->return_condition === 'damaged') {
+                $statusMessage .= ' Equipment marked as damaged.';
+            } elseif ($transaction->return_condition === 'has_defect') {
+                $statusMessage .= ' Equipment marked as having defects.';
+            } elseif ($transaction->return_condition === 'lost') {
+                $statusMessage .= ' Equipment marked as lost.';
             }
 
             return response()->json([
                 'success' => true,
-                'message' => 'Return verified and transaction completed successfully. Equipment is now available for new requests.',
+                'message' => $statusMessage,
                 'data' => [
                     'transaction_id' => $id,
-                    'equipment' => $equipment
+                    'equipment' => $equipment,
+                    'return_condition' => $transaction->return_condition
                 ]
             ]);
         } catch (\Exception $e) {

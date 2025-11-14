@@ -223,9 +223,13 @@ const ViewRequest = () => {
         name: returnItem.equipment_name || 'Unknown Item',
         brand: returnItem.brand || '',
         model: returnItem.model || '',
+        category_name: returnItem.category_name || returnItem.category || 'Uncategorized',
         serial_number: returnItem.serial_number || returnItem.equipment_serial_number || returnItem.asset_tag || 'N/A',
         specifications: returnItem.specifications || returnItem.specs || [returnItem.brand, returnItem.model].filter(Boolean).join(' ') || returnItem.category_name || '',
-        specs: returnItem.specifications || returnItem.specs || [returnItem.brand, returnItem.model].filter(Boolean).join(' ') || returnItem.category_name || ''
+        specs: returnItem.specifications || returnItem.specs || [returnItem.brand, returnItem.model].filter(Boolean).join(' ') || returnItem.category_name || '',
+        // pass through return condition and notes
+        return_condition: returnItem.return_condition || null,
+        return_notes: returnItem.return_notes || null
       });
     });
     return Object.values(grouped);
@@ -542,13 +546,13 @@ const ViewRequest = () => {
           
           // Now verify the return
           response = await api.post(`/transactions/${transactionId}/verify-return`, {
-            verification_notes: 'Return verified and completed'
+            verification_notes: returnData.verificationNotes || 'Return verified and completed'
           });
         } else if (currentStatus === 'returned') {
           // Transaction is already returned, just verify it
           console.log('Transaction already returned, verifying...');
           response = await api.post(`/transactions/${transactionId}/verify-return`, {
-            verification_notes: 'Return verified and completed'
+            verification_notes: returnData.verificationNotes || 'Return verified and completed'
           });
         } else {
           throw new Error(`Transaction status is ${currentStatus}. Cannot verify return.`);

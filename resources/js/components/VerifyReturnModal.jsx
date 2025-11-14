@@ -1,11 +1,38 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 // Minimal modal used by ViewRequest and ViewApproved
 const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => {
   const [isProcessing, setIsProcessing] = useState(false);
-  
-  if (!isOpen) return null;
+  const [itemConditions, setItemConditions] = useState({});
+  const [verificationNotes, setVerificationNotes] = useState('');
   const data = returnData || {};
+
+  // Initialize conditions and reset notes when modal opens
+  useEffect(() => {
+    if (!isOpen || !data.items) {
+      setItemConditions({});
+      setVerificationNotes('');
+      return;
+    }
+
+    const initialConditions = {};
+    data.items.forEach((item, index) => {
+      const itemKey = item.id || `item-${index}`;
+      initialConditions[itemKey] = 'good_condition'; // Default to good condition
+    });
+    setItemConditions(initialConditions);
+    setVerificationNotes('');
+  }, [isOpen, data.items]);
+
+  if (!isOpen) return null;
+  
+  // Handle condition change for an item
+  const handleConditionChange = (itemKey, condition) => {
+    setItemConditions(prev => ({
+      ...prev,
+      [itemKey]: condition
+    }));
+  };
 
   // Helper function to get avatar URL
   const getAvatarUrl = (data) => {
@@ -183,22 +210,49 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
                             </div>
                           </div>
                           
-                          {/* Table Rows */}
+                          {/* Table Rows with Condition Selection */}
                           <div className="bg-white">
                             {group.items.map((item, itemIndex) => {
                               const specs = item.specifications || item.specs || '';
                               const serialNumber = item.serial_number || 'N/A';
+                              const itemKey = item.id || `item-${groupIndex}-${itemIndex}`;
+                              const currentCondition = itemConditions[itemKey] || 'good_condition';
                               
                               return (
                                 <div 
-                                  key={item.id || itemIndex} 
-                                  className={`grid grid-cols-2 ${itemIndex < group.items.length - 1 ? 'border-b border-gray-200' : ''}`}
+                                  key={itemKey} 
+                                  className={`${itemIndex < group.items.length - 1 ? 'border-b border-gray-200' : ''}`}
                                 >
-                                  <div className="px-3 py-2 border-r border-gray-200">
-                                    <span className="text-xs text-gray-700">{serialNumber}</span>
+                                  <div className="grid grid-cols-2">
+                                    <div className="px-3 py-2 border-r border-gray-200">
+                                      <span className="text-xs text-gray-700">{serialNumber}</span>
+                                    </div>
+                                    <div className="px-3 py-2">
+                                      <span className="text-xs text-gray-700">{specs || 'N/A'}</span>
+                                    </div>
                                   </div>
-                                  <div className="px-3 py-2">
-                                    <span className="text-xs text-gray-700">{specs || 'N/A'}</span>
+                                  {/* Condition Display (Read-only for admin verification) */}
+                                  <div className="px-3 py-2 bg-gray-50 border-t border-gray-200">
+                                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                                      Condition Reported by Employee
+                                    </label>
+                                    <div className={`text-xs px-2 py-1.5 rounded-md font-medium ${
+                                      item.return_condition === 'good_condition' ? 'bg-green-100 text-green-800' :
+                                      item.return_condition === 'damaged' ? 'bg-red-100 text-red-800' :
+                                      item.return_condition === 'has_defect' ? 'bg-yellow-100 text-yellow-800' :
+                                      'bg-gray-100 text-gray-800'
+                                    }`}>
+                                      {item.return_condition === 'good_condition' ? '✓ Good Condition' :
+                                       item.return_condition === 'damaged' ? '⚠ Damaged' :
+                                       item.return_condition === 'has_defect' ? '⚡ Has Defect' :
+                                       'Not Specified'}
+                                    </div>
+                                    {item.return_notes && (
+                                      <div className="mt-2">
+                                        <span className="text-xs font-medium text-gray-600">Notes:</span>
+                                        <p className="text-xs text-gray-700 mt-1">{item.return_notes}</p>
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               );
@@ -218,6 +272,22 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
           </div>
         </div>
 
+        {/* Admin Verification Notes */}
+        <div className="mt-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Admin Verification Notes (Optional)
+          </label>
+          <textarea
+            value={verificationNotes}
+            onChange={(e) => setVerificationNotes(e.target.value)}
+            placeholder="Add any verification notes or observations..."
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            rows="2"
+            maxLength="500"
+          />
+          <p className="text-xs text-gray-500 mt-1">{verificationNotes.length}/500 characters</p>
+        </div>
+
         <div className="flex justify-end gap-3 mt-5">
           <button 
             type="button" 
@@ -233,7 +303,12 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
               if (onConfirmReturn) {
                 setIsProcessing(true);
                 try {
-                  await onConfirmReturn(data);
+                  // Pass the item conditions and verification notes along with the return data
+                  await onConfirmReturn({ 
+                    ...data, 
+                    itemConditions,
+                    verificationNotes 
+                  });
                 } finally {
                   setIsProcessing(false);
                 }
@@ -255,7 +330,7 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                Confirm Return
+                Verify & Complete Return
               </>
             )}
           </button>

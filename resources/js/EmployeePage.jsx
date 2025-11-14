@@ -1417,9 +1417,8 @@ const EmployeePage = () => {
                 </div>
               </div>
 
-              {/* Issued Item Section - Full Width - Only show for New hire and Probationary */}
-              {form.employeeType !== 'Regular' && (
-                <div className="mt-6 mb-6">
+              {/* Issued Item Section - Full Width */}
+              <div className="mt-6 mb-6">
                   <div className="space-y-4">
                     <label className="block text-sm text-gray-700 font-medium mb-2">
                       Issued Item
@@ -1482,36 +1481,31 @@ const EmployeePage = () => {
                         </div>
                       </div>
                       <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
-                        {(form.employeeType === 'New hire' || form.employeeType === 'Probationary') && (
-                          <button
-                            type="button"
-                            onClick={openEquipmentModal}
-                            className="px-4 py-2 bg-blue-500 border border-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
-                            tabIndex={10}
-                          >
-                            Add New
-                          </button>
-                        )}
-                        {(form.employeeType === 'New hire' || form.employeeType === 'Probationary') && (
-                          <button
-                            type="button"
-                            onClick={openPrintModal}
-                            disabled={issuedEquipment.length === 0}
-                            className={`p-2 rounded transition-colors ${
-                              issuedEquipment.length === 0
-                                ? 'text-gray-300 cursor-not-allowed'
-                                : 'text-gray-600 hover:text-gray-800'
-                            }`}
-                            title={issuedEquipment.length === 0 ? 'No equipment selected' : 'Print'}
-                          >
-                            <Printer className="h-4 w-4" />
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={openEquipmentModal}
+                          className="px-4 py-2 bg-blue-500 border border-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
+                          tabIndex={10}
+                        >
+                          Add New
+                        </button>
+                        <button
+                          type="button"
+                          onClick={openPrintModal}
+                          disabled={issuedEquipment.length === 0}
+                          className={`p-2 rounded transition-colors ${
+                            issuedEquipment.length === 0
+                              ? 'text-gray-300 cursor-not-allowed'
+                              : 'text-gray-600 hover:text-gray-800'
+                          }`}
+                          title={issuedEquipment.length === 0 ? 'No equipment selected' : 'Print'}
+                        >
+                          <Printer className="h-4 w-4" />
+                        </button>
                       </div>
                     </div>
                   </div>
                 </div>
-              )}
 
               <div className="mt-8 flex items-center justify-between">
                 <button onClick={resetAll} className="text-blue-500 hover:text-blue-600 font-medium" tabIndex={12}>Reset all</button>
@@ -1694,31 +1688,27 @@ const EmployeePage = () => {
                       </div>
                     </div>
                     <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
-                      {(form.employeeType === 'New hire' || form.employeeType === 'Probationary') && (
-                        <button
-                          type="button"
-                          onClick={openEquipmentModal}
-                          className="px-4 py-2 bg-blue-500 border border-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
-                          tabIndex={10}
-                        >
-                          Add New
-                        </button>
-                      )}
-                      {(form.employeeType === 'New hire' || form.employeeType === 'Probationary') && (
-                        <button
-                          type="button"
-                          onClick={openPrintModal}
-                          disabled={issuedEquipment.length === 0}
-                          className={`p-2 rounded transition-colors ${
-                            issuedEquipment.length === 0
-                              ? 'text-gray-300 cursor-not-allowed'
-                              : 'text-gray-600 hover:text-gray-800'
-                          }`}
-                          title={issuedEquipment.length === 0 ? 'No equipment selected' : 'Print'}
-                        >
-                          <Printer className="h-4 w-4" />
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={openEquipmentModal}
+                        className="px-4 py-2 bg-blue-500 border border-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
+                        tabIndex={10}
+                      >
+                        Add New
+                      </button>
+                      <button
+                        type="button"
+                        onClick={openPrintModal}
+                        disabled={issuedEquipment.length === 0}
+                        className={`p-2 rounded transition-colors ${
+                          issuedEquipment.length === 0
+                            ? 'text-gray-300 cursor-not-allowed'
+                            : 'text-gray-600 hover:text-gray-800'
+                        }`}
+                        title={issuedEquipment.length === 0 ? 'No equipment selected' : 'Print'}
+                      >
+                        <Printer className="h-4 w-4" />
+                      </button>
                     </div>
                   </div>
                 </div>

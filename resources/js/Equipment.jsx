@@ -52,6 +52,7 @@ const Equipment = () => {
   const [editingItem, setEditingItem] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editSerialNumber, setEditSerialNumber] = useState('');
+  const [editCondition, setEditCondition] = useState('');
   const [contextMenu, setContextMenu] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedItemDetails, setSelectedItemDetails] = useState(null);
@@ -85,6 +86,7 @@ const Equipment = () => {
     e.stopPropagation();
     setEditingItem(item);
     setEditSerialNumber(item.serial_number || '');
+    setEditCondition(item.condition || 'good');
     setShowEditModal(true);
   };
 
@@ -96,21 +98,33 @@ const Equipment = () => {
       return;
     }
 
+    // Automatically set status based on condition
+    let autoStatus = 'issued'; // Default to issued (withheld)
+    if (editCondition === 'good') {
+      autoStatus = 'available'; // Make available if in good condition
+    }
+
     try {
       const response = await api.put(`/equipment/${editingItem.id}`, {
-        serial_number: editSerialNumber.trim()
+        serial_number: editSerialNumber.trim(),
+        status: autoStatus,
+        condition: editCondition
       });
       
       if (response.data.success) {
         await fetchData();
         // Notify other components (e.g., Home dashboard) to refresh
         window.dispatchEvent(new Event('equipment:updated'));
-        setSuccessMessage('Serial number updated successfully.');
+        const statusMessage = editCondition === 'good'
+          ? 'Equipment updated and marked as available.' 
+          : 'Equipment updated and withheld for repair.';
+        setSuccessMessage(statusMessage);
         setShowSuccess(true);
         setTimeout(() => setShowSuccess(false), 3000);
         setShowEditModal(false);
         setEditingItem(null);
         setEditSerialNumber('');
+        setEditCondition('');
       } else {
         alert(response.data.message || 'Failed to update serial number');
       }
@@ -124,6 +138,7 @@ const Equipment = () => {
     setShowEditModal(false);
     setEditingItem(null);
     setEditSerialNumber('');
+    setEditCondition('');
   };
 
   const handleContextMenu = (e, group) => {
@@ -434,9 +449,10 @@ const Equipment = () => {
                                     <div className="p-4">
                                       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
                                         <div className="bg-gray-100 px-4 py-3 border-b border-gray-200">
-                                          <div className="grid grid-cols-5 gap-4 text-sm font-semibold text-gray-700">
+                                          <div className="grid grid-cols-6 gap-4 text-sm font-semibold text-gray-700">
                                             <div>Serial Number</div>
                                             <div>Status</div>
+                                            <div>Condition</div>
                                             <div>Date Added</div>
                                             <div>Last Updated</div>
                                             <div className="text-center">Actions</div>
@@ -446,7 +462,7 @@ const Equipment = () => {
                                         <div className="divide-y divide-gray-200">
                                           {individualItems.map((item, itemIndex) => (
                                             <div key={`${item.id}-${itemIndex}`} className={`px-4 py-3 ${itemIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
-                                              <div className="grid grid-cols-5 gap-4 items-center text-sm">
+                                              <div className="grid grid-cols-6 gap-4 items-center text-sm">
                                                 <div className="font-medium text-gray-900">{item.serial_number || 'N/A'}</div>
                                                 <div>
                                                   <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -456,6 +472,20 @@ const Equipment = () => {
                                                     'bg-gray-100 text-gray-800'
                                                   }`}>
                                                     {item.status ? item.status.charAt(0).toUpperCase() + item.status.slice(1).replace('_', ' ') : 'Unknown'}
+                                                  </span>
+                                                </div>
+                                                <div>
+                                                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                                    item.condition === 'excellent' || item.condition === 'good' ? 'bg-green-100 text-green-800' :
+                                                    item.condition === 'fair' ? 'bg-yellow-100 text-yellow-800' :
+                                                    item.condition === 'poor' ? 'bg-red-100 text-red-800' :
+                                                    'bg-gray-100 text-gray-800'
+                                                  }`}>
+                                                    {item.condition === 'good' ? 'Good Condition' :
+                                                     item.condition === 'fair' ? 'Has Defect' :
+                                                     item.condition === 'poor' ? 'Damaged' :
+                                                     item.condition === 'excellent' ? 'Good Condition' :
+                                                     'N/A'}
                                                   </span>
                                                 </div>
                                                 <div className="text-gray-600">
@@ -910,31 +940,74 @@ const Equipment = () => {
                   </div>
                 </div>
                 <div className="ml-3">
-                  <h3 className="text-lg font-semibold text-gray-900">Edit Serial Number</h3>
+                  <h3 className="text-lg font-semibold text-gray-900">Edit Equipment</h3>
                 </div>
               </div>
               
-              <div className="mb-6">
-                <div className="bg-gray-50 rounded-lg p-3 border border-gray-200 mb-4">
+              <div className="mb-6 space-y-4">
+                <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
                   <p className="text-sm font-medium text-gray-900">
                     {editingItem.name || editingItem.brand || 'Unknown Item'}
                   </p>
                   <p className="text-xs text-gray-600 mt-1">
                     Current Serial: {editingItem.serial_number || 'N/A'}
                   </p>
+                  <p className="text-xs text-gray-600 mt-1">
+                    Current Status: <span className="font-medium">{editingItem.status || 'N/A'}</span>
+                  </p>
                 </div>
                 
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  New Serial Number
-                </label>
-                <input
-                  type="text"
-                  value={editSerialNumber}
-                  onChange={(e) => setEditSerialNumber(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Enter new serial number"
-                  autoFocus
-                />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Serial Number
+                  </label>
+                  <input
+                    type="text"
+                    value={editSerialNumber}
+                    onChange={(e) => setEditSerialNumber(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter serial number"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Condition
+                  </label>
+                  {(editingItem.status === 'issued' || editingItem.status === 'borrowed') && 
+                   (editingItem.condition === 'good' || editingItem.condition === 'excellent') ? (
+                    <>
+                      <div className="w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-100 text-gray-500">
+                        {editingItem.condition === 'good' ? 'Good Condition' : 
+                         editingItem.condition === 'fair' ? 'Has Defect' :
+                         editingItem.condition === 'poor' ? 'Damaged' : 'Good Condition'}
+                      </div>
+                      <p className="mt-2 text-xs text-yellow-600">
+                        ⚠ Cannot update condition while equipment is with an employee. 
+                        Condition will be updated when employee returns the equipment.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <select
+                        value={editCondition}
+                        onChange={(e) => setEditCondition(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="good">Good Condition - Working perfectly (will be available)</option>
+                        <option value="fair">Has Defect - Minor issues (will be withheld)</option>
+                        <option value="poor">Damaged - Needs repair (will be withheld)</option>
+                      </select>
+                      <p className="mt-2 text-xs text-gray-500">
+                        {editCondition === 'good' ? (
+                          <span className="text-green-600 font-medium">✓ Equipment will be marked as Available</span>
+                        ) : (
+                          <span className="text-orange-600 font-medium">⚠ Equipment will be withheld (Issued status)</span>
+                        )}
+                      </p>
+                    </>
+                  )}
+                </div>
               </div>
               
               <div className="flex justify-end space-x-3">

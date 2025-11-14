@@ -152,6 +152,7 @@ Route::get('/debug/pending-requests', function(): \Illuminate\Http\JsonResponse 
     // Equipment API routes
     Route::apiResource('/equipment', EquipmentController::class);
     Route::post('/equipment/add-stock', [EquipmentController::class, 'addStock']);
+    Route::post('/equipment/{id}/mark-as-repaired', [EquipmentController::class, 'markAsRepaired']);
 
     // Category API routes
     Route::apiResource('categories', CategoryController::class);
