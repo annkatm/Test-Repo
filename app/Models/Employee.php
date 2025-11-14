@@ -23,7 +23,7 @@ class Employee extends Model
         'client',
         'phone',
         'address',
-        'employee_type',
+        'employee_type_id',
         'issued_item',
         'status',
         'hire_date',
@@ -35,6 +35,14 @@ class Employee extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Get the employee type.
+     */
+    public function employeeType(): BelongsTo
+    {
+        return $this->belongsTo(EmployeeType::class);
     }
 
     /**

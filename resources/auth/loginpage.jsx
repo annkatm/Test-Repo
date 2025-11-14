@@ -15,34 +15,34 @@ const LoginPage = ({ onAuthSuccess }) => {
 
   const validateForm = () => {
     const newErrors = {};
-    
+
     if (!email.trim()) {
       newErrors.email = 'Email is required';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       newErrors.email = 'Please enter a valid email address';
     }
-    
+
     if (!password) {
       newErrors.password = 'Password is required';
     } else if (password.length < 6) {
       newErrors.password = 'Password must be at least 6 characters';
     }
-    
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
-    
+
     if (!validateForm()) return;
-    
+
     setIsLoading(true);
     setErrors({});
-    
+
     try {
       let csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || null;
-      
+
       if (!csrfToken) {
         const tokenResponse = await fetch('/csrf-token', {
           credentials: 'same-origin'
@@ -78,11 +78,13 @@ const LoginPage = ({ onAuthSuccess }) => {
         window.location.href = response.url || '/dashboard';
         return;
       }
-      
+
       const data = await response.json();
 
       if (data.success) {
         localStorage.setItem('user', JSON.stringify(data.user));
+        // Dispatch custom event to notify sidebar and other components
+        window.dispatchEvent(new CustomEvent('userDataUpdated'));
         onAuthSuccess();
       } else {
         setErrors({ general: data.message || 'Login failed. Please try again.' });
@@ -122,7 +124,7 @@ const LoginPage = ({ onAuthSuccess }) => {
 
   const handleForgotPassword = async (e) => {
     e.preventDefault();
-    
+
     if (!forgotEmail.trim()) {
       setModalError('Email is required');
       return;
@@ -138,7 +140,7 @@ const LoginPage = ({ onAuthSuccess }) => {
 
     try {
       let csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || null;
-      
+
       if (!csrfToken) {
         const tokenResponse = await fetch('/csrf-token', {
           credentials: 'same-origin'
@@ -175,7 +177,7 @@ const LoginPage = ({ onAuthSuccess }) => {
   };
 
   return (
-    <div 
+    <div
       className="min-h-screen flex items-center justify-end bg-cover bg-center bg-no-repeat"
       style={{ backgroundImage: "url('/images/New BG.jpg')" }}
     >
@@ -202,7 +204,7 @@ const LoginPage = ({ onAuthSuccess }) => {
             required
             className="w-full h-14 rounded-full px-5 mb-5 border-none bg-[#f1f6ff] text-base shadow-md outline-none focus:shadow-lg transition-shadow disabled:opacity-60 disabled:cursor-not-allowed"
           />
-          
+
           {/* Password Input */}
           <div className="relative mb-5">
             <input
@@ -228,7 +230,7 @@ const LoginPage = ({ onAuthSuccess }) => {
 
           {/* Forgot Password Link */}
           <div className="text-right mt-2.5 mb-5">
-            <a 
+            <a
               onClick={openForgotPasswordModal}
               className="text-[#1E437B] no-underline text-sm font-medium cursor-pointer hover:underline"
             >
@@ -263,9 +265,9 @@ const LoginPage = ({ onAuthSuccess }) => {
                 <h2 className="text-center text-gray-800 mb-8 font-semibold text-3xl">
                   Forgot Password
                 </h2>
-                
+
                 <form onSubmit={handleForgotPassword}>
-                  <label 
+                  <label
                     htmlFor="reset-email"
                     className="block text-gray-800 font-semibold mb-2.5 text-base text-left"
                   >
@@ -280,14 +282,14 @@ const LoginPage = ({ onAuthSuccess }) => {
                     className="w-full p-4 px-5 rounded-xl border border-gray-300 text-base mb-5 box-border font-sans placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#5b4cff]"
                     disabled={modalLoading}
                   />
-                  
+
                   {modalError && (
                     <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-5 text-red-700 text-sm">
                       {modalError}
                     </div>
                   )}
 
-                  <button 
+                  <button
                     type="submit"
                     disabled={modalLoading}
                     className="w-full py-3 px-5 rounded-xl font-bold text-base border-none cursor-pointer transition-all bg-[#5b4cff] text-white hover:bg-[#4a3dd6] disabled:opacity-60 disabled:cursor-not-allowed"
@@ -295,7 +297,7 @@ const LoginPage = ({ onAuthSuccess }) => {
                     {modalLoading ? 'Sending...' : 'Send Reset Link'}
                   </button>
                 </form>
-                
+
                 <div className="text-center mt-4">
                   <button
                     onClick={closeForgotPasswordModal}
@@ -320,7 +322,7 @@ const LoginPage = ({ onAuthSuccess }) => {
                     We've sent a password reset link to <span className="font-semibold">{forgotEmail}</span>
                   </p>
                 </div>
-                
+
                 <button
                   onClick={closeForgotPasswordModal}
                   className="w-full py-3 px-5 rounded-xl font-bold text-base border-none cursor-pointer transition-all bg-[#5b4cff] text-white hover:bg-[#4a3dd6]"

@@ -16,7 +16,7 @@ const HomeSidebar = ({ onSelect }) => {
   const [openEquipment, setOpenEquipment] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [permissions, setPermissions] = useState([]);
-  
+
   const transactionRef = useRef(null);
   const equipmentRef = useRef(null);
 
@@ -73,22 +73,20 @@ const HomeSidebar = ({ onSelect }) => {
   };
 
   const linkClass = (path) =>
-    `inline-flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-300 ease-out text-base font-semibold min-w-[140px] transform hover:scale-105 active:scale-95 cursor-pointer ${
-      isActive(path)
-        ? "bg-white text-[#2262C6] shadow-sm scale-105"
-        : "text-white hover:bg-white hover:text-[#2262C6] hover:shadow-sm"
+    `inline-flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-300 ease-out text-base font-semibold min-w-[140px] transform hover:scale-105 active:scale-95 cursor-pointer ${isActive(path)
+      ? "bg-white text-[#2262C6] shadow-sm scale-105"
+      : "text-white hover:bg-white hover:text-[#2262C6] hover:shadow-sm"
     }`;
 
   const sectionButtonClass = (active) =>
-    `inline-flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-300 ease-out text-base font-semibold min-w-[140px] transform hover:scale-105 active:scale-95 cursor-pointer ${
-      active
-        ? "bg-white text-[#2262C6] shadow-sm scale-105"
-        : "text-white hover:bg-white hover:text-[#2262C6] hover:shadow-sm"
+    `inline-flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-300 ease-out text-base font-semibold min-w-[140px] transform hover:scale-105 active:scale-95 cursor-pointer ${active
+      ? "bg-white text-[#2262C6] shadow-sm scale-105"
+      : "text-white hover:bg-white hover:text-[#2262C6] hover:shadow-sm"
     }`;
 
   const normalizePermissions = (user) => {
     if (!user) return [];
-    
+
     if (user.user_permissions?.use_custom_permissions) {
       const customPerms = user.user_permissions.permissions;
       if (Array.isArray(customPerms)) return customPerms;
@@ -97,7 +95,7 @@ const HomeSidebar = ({ onSelect }) => {
       }
       return [];
     }
-    
+
     if (typeof user.role === 'object' && user.role) {
       if (Array.isArray(user.role.permissions)) return user.role.permissions;
       if (typeof user.role.permissions === 'string') {
@@ -115,14 +113,6 @@ const HomeSidebar = ({ onSelect }) => {
   };
 
   const checkUserRole = async () => {
-    const localUser = apiUtils.getCurrentUser();
-    if (localUser && localUser.role) {
-      const isSA = computeIsSuperAdmin(localUser);
-      const perms = normalizePermissions(localUser);
-      setIsSuperAdmin(isSA);
-      setPermissions(perms || []);
-    }
-
     try {
       const response = await fetch('/check-auth', { credentials: 'include' });
       if (response.ok) {
@@ -130,10 +120,10 @@ const HomeSidebar = ({ onSelect }) => {
         if (data?.authenticated && data.user) {
           const normalized = {
             ...data.user,
-            role: { 
-              name: data.user.role, 
-              display_name: data.user.role_display, 
-              permissions: data.user.permissions 
+            role: {
+              name: data.user.role,
+              display_name: data.user.role_display,
+              permissions: data.user.permissions
             },
             user_permissions: data.user.user_permissions
           };
@@ -143,17 +133,50 @@ const HomeSidebar = ({ onSelect }) => {
           setIsSuperAdmin(isSA);
           setPermissions(perms);
         } else {
+          // If not authenticated, clear local user data
+          localStorage.removeItem('user');
+          setIsSuperAdmin(false);
+          setPermissions([]);
+        }
+      } else {
+        // If check-auth fails, try to use local user as fallback
+        const localUser = apiUtils.getCurrentUser();
+        if (localUser && localUser.role) {
+          const isSA = computeIsSuperAdmin(localUser);
+          const perms = normalizePermissions(localUser);
+          setIsSuperAdmin(isSA);
+          setPermissions(perms || []);
+        } else {
           setIsSuperAdmin(false);
           setPermissions([]);
         }
       }
     } catch (error) {
       console.error('Error checking user role:', error);
+      // On error, try to use local user as fallback
+      const localUser = apiUtils.getCurrentUser();
+      if (localUser && localUser.role) {
+        const isSA = computeIsSuperAdmin(localUser);
+        const perms = normalizePermissions(localUser);
+        setIsSuperAdmin(isSA);
+        setPermissions(perms || []);
+      } else {
+        setIsSuperAdmin(false);
+        setPermissions([]);
+      }
     }
   };
 
   useEffect(() => {
+    let lastPathname = window.location.pathname;
+
+    // Check user role immediately on mount
     checkUserRole();
+
+    // Also check on route changes (when pathname changes)
+    const handleLocationChange = () => {
+      checkUserRole();
+    };
 
     const handleStorageChange = (e) => {
       if (e.key === 'user') {
@@ -165,12 +188,38 @@ const HomeSidebar = ({ onSelect }) => {
       checkUserRole();
     };
 
+    // Listen for custom event when user data is updated in same tab
+    const handleUserDataUpdate = () => {
+      checkUserRole();
+    };
+
+    // Monitor pathname changes (for when user navigates after login)
+    const checkPathnameChange = () => {
+      const currentPathname = window.location.pathname;
+      if (currentPathname !== lastPathname) {
+        lastPathname = currentPathname;
+        checkUserRole();
+      }
+    };
+
+    // Check user role periodically to catch login changes (less aggressive)
+    const intervalId = setInterval(() => {
+      checkPathnameChange();
+      checkUserRole();
+    }, 3000); // Check every 3 seconds
+
+    // Listen for popstate (back/forward navigation)
+    window.addEventListener('popstate', handleLocationChange);
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('userUpdated', handleUserUpdate);
+    window.addEventListener('userDataUpdated', handleUserDataUpdate);
 
     return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('popstate', handleLocationChange);
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('userUpdated', handleUserUpdate);
+      window.removeEventListener('userDataUpdated', handleUserDataUpdate);
     };
   }, []);
 
@@ -224,11 +273,10 @@ const HomeSidebar = ({ onSelect }) => {
                     <li>
                       <div
                         onClick={() => handleDropdownItemClick("/viewrequest")}
-                        className={`inline-block px-3 py-1 rounded-full text-sm w-fit transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer ${
-                          isActive("/viewrequest")
+                        className={`inline-block px-3 py-1 rounded-full text-sm w-fit transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer ${isActive("/viewrequest")
                             ? "bg-white text-[#2262C6] shadow-sm scale-105"
                             : "text-white/90 hover:bg-white hover:text-[#2262C6]"
-                        }`}
+                          }`}
                       >
                         View Request
                       </div>
@@ -238,11 +286,10 @@ const HomeSidebar = ({ onSelect }) => {
                     <li>
                       <div
                         onClick={() => handleDropdownItemClick("/viewapproved")}
-                        className={`inline-block px-3 py-1 rounded-full text-sm w-fit transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer ${
-                          isActive("/viewapproved")
+                        className={`inline-block px-3 py-1 rounded-full text-sm w-fit transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer ${isActive("/viewapproved")
                             ? "bg-white text-[#2262C6] shadow-sm scale-105"
                             : "text-white/90 hover:bg-white hover:text-[#2262C6]"
-                        }`}
+                          }`}
                       >
                         View Approved
                       </div>
@@ -273,11 +320,10 @@ const HomeSidebar = ({ onSelect }) => {
                     <li>
                       <div
                         onClick={() => handleDropdownItemClick("/equipment")}
-                        className={`inline-block px-3 py-1 rounded-full text-sm w-fit transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer ${
-                          isActive("/equipment")
+                        className={`inline-block px-3 py-1 rounded-full text-sm w-fit transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer ${isActive("/equipment")
                             ? "bg-white text-[#2262C6] shadow-sm scale-105"
                             : "text-white/90 hover:bg-white hover:text-[#2262C6]"
-                        }`}
+                          }`}
                       >
                         Inventory
                       </div>
@@ -287,11 +333,10 @@ const HomeSidebar = ({ onSelect }) => {
                     <li>
                       <div
                         onClick={() => handleDropdownItemClick("/addstocks")}
-                        className={`inline-block px-3 py-1 rounded-full text-sm w-fit transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer ${
-                          isActive("/addstocks")
+                        className={`inline-block px-3 py-1 rounded-full text-sm w-fit transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer ${isActive("/addstocks")
                             ? "bg-white text-[#2262C6] shadow-sm scale-105"
                             : "text-white/90 hover:bg-white hover:text-[#2262C6]"
-                        }`}
+                          }`}
                       >
                         Add Stocks
                       </div>

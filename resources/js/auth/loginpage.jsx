@@ -12,9 +12,8 @@ const PasswordInput = ({ value, onChange, onKeyPress, disabled, showPassword, on
   <div className="relative mb-5">
     <input
       type={showPassword ? 'text' : 'password'}
-      className={`w-full h-14 rounded-full px-5 border-none bg-[#f1f6ff] text-base shadow-md outline-none focus:shadow-lg disabled:opacity-60 ${
-        error ? 'border-2 border-red-500 bg-red-50' : ''
-      }`}
+      className={`w-full h-14 rounded-full px-5 border-none bg-[#f1f6ff] text-base shadow-md outline-none focus:shadow-lg disabled:opacity-60 ${error ? 'border-2 border-red-500 bg-red-50' : ''
+        }`}
       id="password"
       name="password"
       placeholder="Password"
@@ -39,9 +38,9 @@ const PasswordInput = ({ value, onChange, onKeyPress, disabled, showPassword, on
 );
 
 // Forgot Password Modal Component
-const ForgotPasswordModal = ({ 
-  isOpen, 
-  onClose, 
+const ForgotPasswordModal = ({
+  isOpen,
+  onClose,
   email,
   onEmailChange,
   onSendReset,
@@ -52,7 +51,7 @@ const ForgotPasswordModal = ({
   if (!isOpen) return null;
 
   return (
-    <div 
+    <div
       className={`fixed inset-0 bg-black/60 z-[1000] ${isOpen ? 'flex' : 'hidden'} justify-center items-center`}
       onClick={(e) => {
         if (e.target === e.currentTarget) {
@@ -67,7 +66,7 @@ const ForgotPasswordModal = ({
             <p className="text-center text-white/80 mb-6 text-sm">
               Enter your email address and we'll send you a link to reset your password.
             </p>
-            
+
             <form onSubmit={onSendReset}>
               <input
                 type="email"
@@ -79,22 +78,22 @@ const ForgotPasswordModal = ({
                 disabled={isLoading}
                 required
               />
-              
+
               {error && (
                 <div className="bg-red-500/20 border border-red-400/30 rounded-full p-3 mb-5 text-red-200 text-sm backdrop-blur-sm">
                   {error}
                 </div>
               )}
 
-            <button 
+              <button
                 type="submit"
                 className="w-full h-14 rounded-full font-bold bg-[#1E437B] border-none text-base tracking-wider shadow-lg text-white cursor-pointer transition-colors hover:bg-[#15325d] disabled:opacity-60 disabled:cursor-not-allowed mb-4"
                 disabled={isLoading}
-            >
+              >
                 {isLoading ? 'SENDING...' : 'SEND RESET LINK'}
-            </button>
+              </button>
             </form>
-            
+
             <div className="text-center mt-4">
               <button onClick={onClose} className="text-white/80 no-underline text-sm cursor-pointer hover:text-white hover:underline">
                 Cancel
@@ -117,7 +116,7 @@ const ForgotPasswordModal = ({
               </p>
               <p className="text-white font-semibold mb-6">{email}</p>
             </div>
-            
+
             <button
               onClick={onClose}
               className="w-full h-14 rounded-full font-bold bg-[#1E437B] border-none text-base tracking-wider shadow-lg text-white cursor-pointer transition-colors hover:bg-[#15325d]"
@@ -145,21 +144,21 @@ const LoginPage = ({ onAuthSuccess }) => {
 
   const validateForm = () => {
     const newErrors = {};
-    
+
     // Email validation
     if (!email.trim()) {
       newErrors.email = 'Email is required';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       newErrors.email = 'Please enter a valid email address';
     }
-    
+
     // Password validation
     if (!password) {
       newErrors.password = 'Password is required';
     } else if (password.length < 6) {
       newErrors.password = 'Password must be at least 6 characters';
     }
-    
+
     setErrors(newErrors);
     return {
       isValid: Object.keys(newErrors).length === 0,
@@ -169,7 +168,7 @@ const LoginPage = ({ onAuthSuccess }) => {
 
   const validateField = (name, value) => {
     const newErrors = { ...errors };
-    
+
     if (name === 'email') {
       if (!value.trim()) {
         newErrors.email = 'Email is required';
@@ -179,7 +178,7 @@ const LoginPage = ({ onAuthSuccess }) => {
         delete newErrors.email;
       }
     }
-    
+
     if (name === 'password') {
       if (!value) {
         newErrors.password = 'Password is required';
@@ -189,13 +188,13 @@ const LoginPage = ({ onAuthSuccess }) => {
         delete newErrors.password;
       }
     }
-    
+
     setErrors(newErrors);
   };
 
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
-    
+
     // Validate form before submission
     const validation = validateForm();
     if (!validation.isValid) {
@@ -207,15 +206,15 @@ const LoginPage = ({ onAuthSuccess }) => {
       }
       return;
     }
-    
+
     setIsLoading(true);
     // Clear field errors but keep general errors if any
     setErrors(prev => ({ general: prev.general || null }));
-    
+
     try {
       // Get CSRF token from meta tag or fetch from server
       let csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || null;
-      
+
       if (!csrfToken) {
         // Fetch CSRF token from server
         const tokenResponse = await fetch('/csrf-token', {
@@ -253,16 +252,16 @@ const LoginPage = ({ onAuthSuccess }) => {
       if (response.redirected || response.status === 302) {
         // Login was successful and we were redirected
         console.log('Login successful - redirected to dashboard');
-        
+
         // Redirect to the actual redirected URL instead of hardcoding /dashboard
         window.location.href = response.url || '/dashboard';
         return;
       }
-      
+
       // Check if response is JSON
       const contentType = response.headers.get('content-type');
       let data;
-      
+
       if (contentType && contentType.includes('application/json')) {
         try {
           data = await response.json();
@@ -278,7 +277,7 @@ const LoginPage = ({ onAuthSuccess }) => {
           setErrors({ general: 'Wrong email or password. Please try again.' });
           return;
         }
-        
+
         // For other non-JSON responses, show generic error
         setErrors({ general: 'Wrong email or password. Please try again.' });
         return;
@@ -289,8 +288,10 @@ const LoginPage = ({ onAuthSuccess }) => {
         // Store user data in localStorage for frontend use
         if (data.user) {
           localStorage.setItem('user', JSON.stringify(data.user));
+          // Dispatch custom event to notify sidebar and other components
+          window.dispatchEvent(new CustomEvent('userDataUpdated'));
         }
-        
+
         onAuthSuccess();
       } else {
         // Show appropriate error message
@@ -299,7 +300,7 @@ const LoginPage = ({ onAuthSuccess }) => {
       }
     } catch (error) {
       console.error('Login error:', error);
-      
+
       // Check if it's a JSON parse error (likely means server returned HTML error page)
       if (error instanceof SyntaxError && error.message.includes('JSON')) {
         setErrors({ general: 'Wrong email or password. Please try again.' });
@@ -345,7 +346,7 @@ const LoginPage = ({ onAuthSuccess }) => {
 
   const handleForgotPassword = async (e) => {
     if (e) e.preventDefault();
-    
+
     if (!forgotEmail.trim()) {
       setModalError('Email is required');
       return;
@@ -361,7 +362,7 @@ const LoginPage = ({ onAuthSuccess }) => {
 
     try {
       let csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || null;
-      
+
       if (!csrfToken) {
         const tokenResponse = await fetch('/csrf-token', {
           credentials: 'same-origin'
@@ -403,8 +404,8 @@ const LoginPage = ({ onAuthSuccess }) => {
   return (
     <>
       <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-      
-      <div 
+
+      <div
         className="min-h-screen flex justify-end items-center m-0 p-0"
         style={{
           backgroundImage: "url('/images/New BG.jpg')",
@@ -420,9 +421,8 @@ const LoginPage = ({ onAuthSuccess }) => {
             <div className="mb-5">
               <input
                 type="email"
-                className={`w-full h-14 rounded-full px-5 border-none bg-[#f1f6ff] text-base shadow-md outline-none focus:shadow-lg disabled:opacity-60 ${
-                  errors.email ? 'border-2 border-red-500 bg-red-50' : ''
-                }`}
+                className={`w-full h-14 rounded-full px-5 border-none bg-[#f1f6ff] text-base shadow-md outline-none focus:shadow-lg disabled:opacity-60 ${errors.email ? 'border-2 border-red-500 bg-red-50' : ''
+                  }`}
                 name="email"
                 placeholder="Email"
                 value={email}
@@ -444,7 +444,7 @@ const LoginPage = ({ onAuthSuccess }) => {
                 <p className="text-red-600 text-xs mt-1 ml-5">{errors.email}</p>
               )}
             </div>
-            
+
             <PasswordInput
               value={password}
               onChange={(e) => {
@@ -473,7 +473,7 @@ const LoginPage = ({ onAuthSuccess }) => {
             </button>
 
             <div className="text-center mt-4">
-              <a 
+              <a
                 onClick={openForgotPasswordModal}
                 className="text-[#1E437B] no-underline text-sm font-medium cursor-pointer hover:underline"
               >

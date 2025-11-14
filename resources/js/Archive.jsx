@@ -484,11 +484,11 @@ const Archive = () => {
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${item.type === 'equipment' ? 'bg-blue-100 text-blue-800' :
-                                                        item.type === 'request' ? 'bg-green-100 text-green-800' :
-                                                            item.type === 'transaction' ? 'bg-purple-100 text-purple-800' :
-                                                                item.type === 'employee' ? 'bg-orange-100 text-orange-800' :
-                                                                    item.type === 'user' ? 'bg-indigo-100 text-indigo-800' :
-                                                                        'bg-gray-100 text-gray-800'
+                                                    item.type === 'request' ? 'bg-green-100 text-green-800' :
+                                                        item.type === 'transaction' ? 'bg-purple-100 text-purple-800' :
+                                                            item.type === 'employee' ? 'bg-orange-100 text-orange-800' :
+                                                                item.type === 'user' ? 'bg-indigo-100 text-indigo-800' :
+                                                                    'bg-gray-100 text-gray-800'
                                                     }`}>
                                                     {item.type}
                                                 </span>
@@ -497,7 +497,7 @@ const Archive = () => {
                                                 {new Date(item.deleted_at).toLocaleDateString()}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                System
+                                                {item.deleted_by || 'System'}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                                 <div className="flex items-center justify-end space-x-2">

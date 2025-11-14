@@ -11,51 +11,69 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Str;
 
 class RequestController extends Controller
 {
     /**
-     * Generate a unique transaction number
+     * Generate a unique request number using timestamp + random suffix
      */
+    private function generateRequestNumber(): string
+    {
+        return 'REQ-' . now()->format('YmdHis') . '-' . Str::upper(Str::random(3));
+    }
+
     private function generateUniqueTransactionNumber(): string
     {
-        $maxAttempts = 10;
-        $attempt = 0;
-        
+        $attempts = 0;
         do {
-            $attempt++;
-            
-            // Get the highest existing transaction number
-            $lastTransaction = DB::table('transactions')
-                ->where('transaction_number', 'LIKE', 'TXN-%')
-                ->orderBy('transaction_number', 'desc')
-                ->first();
-            
-            if ($lastTransaction) {
-                // Extract the number part and increment
-                $lastNumber = (int) substr($lastTransaction->transaction_number, 4);
-                $nextNumber = $lastNumber + 1;
-            } else {
-                // First transaction
-                $nextNumber = 1;
-            }
-            
-            $transactionNumber = 'TXN-' . str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
-            
-            // Check if this number already exists
+            $attempts++;
+            $number = 'TXN-' . now()->format('YmdHis') . '-' . Str::upper(Str::random(3));
             $exists = DB::table('transactions')
-                ->where('transaction_number', $transactionNumber)
+                ->where('transaction_number', $number)
                 ->exists();
-            
             if (!$exists) {
-                return $transactionNumber;
+                return $number;
             }
-            
-        } while ($attempt < $maxAttempts);
-        
-        // Fallback: use timestamp-based number
-        return 'TXN-' . date('YmdHis');
+        } while ($attempts < 5);
+
+        return 'TXN-' . now()->format('YmdHis') . '-' . uniqid();
     }
+
+    private function getPendingRequest(int $employeeId, int $equipmentId)
+    {
+        return DB::table('requests')
+            ->leftJoin('employees', 'requests.employee_id', '=', 'employees.id')
+            ->leftJoin('equipment', 'requests.equipment_id', '=', 'equipment.id')
+            ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
+            ->where('requests.employee_id', $employeeId)
+            ->where('requests.equipment_id', $equipmentId)
+            ->where('requests.status', 'pending')
+            ->select(
+                'requests.*',
+                DB::raw("CONCAT(COALESCE(employees.first_name, ''), ' ', COALESCE(employees.last_name, '')) as full_name"),
+                DB::raw("COALESCE(employees.position, '') as position"),
+                DB::raw("COALESCE(equipment.name, '') as equipment_name"),
+                DB::raw("COALESCE(equipment.brand, '') as brand"),
+                DB::raw("COALESCE(equipment.model, '') as model"),
+                DB::raw("COALESCE(categories.name, '') as category_name")
+            )
+            ->first();
+    }
+
+    private function isPendingDuplicateException(QueryException $e): bool
+    {
+        return $e->getCode() === '23000'
+            && str_contains($e->getMessage(), 'requests_employee_id_equipment_id_status');
+    }
+
+    private function isRequestNumberDuplicate(QueryException $e): bool
+    {
+        return $e->getCode() === '23000'
+            && str_contains($e->getMessage(), 'requests_request_number_unique');
+    }
+
     /**
      * Display a listing of the resource.
      */
@@ -179,31 +197,14 @@ class RequestController extends Controller
             }
 
             // Check if employee already has a pending request for this equipment
-            $existingRequest = DB::table('requests')
-                ->where('employee_id', $validated['employee_id'])
-                ->where('equipment_id', $validated['equipment_id'])
-                ->where('status', 'pending')
-                ->exists();
-
-            if ($existingRequest) {
-                // Instead of failing, return the existing pending request to keep UX smooth
-                $existing = DB::table('requests')
-                    ->leftJoin('employees', 'requests.employee_id', '=', 'employees.id')
-                    ->leftJoin('equipment', 'requests.equipment_id', '=', 'equipment.id')
-                    ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
-                    ->where('requests.employee_id', $validated['employee_id'])
-                    ->where('requests.equipment_id', $validated['equipment_id'])
+            if (
+                DB::table('requests')
+                    ->where('employee_id', $validated['employee_id'])
+                    ->where('equipment_id', $validated['equipment_id'])
                     ->where('status', 'pending')
-                    ->select(
-                        'requests.*',
-                        DB::raw("CONCAT(COALESCE(employees.first_name, ''), ' ', COALESCE(employees.last_name, '')) as full_name"),
-                        DB::raw("COALESCE(employees.employee_type, '') as position"),
-                        DB::raw("COALESCE(equipment.name, '') as equipment_name"),
-                        DB::raw("COALESCE(equipment.brand, '') as brand"),
-                        DB::raw("COALESCE(equipment.model, '') as model"),
-                        DB::raw("COALESCE(categories.name, '') as category_name")
-                    )
-                    ->first();
+                    ->exists()
+            ) {
+                $existing = $this->getPendingRequest($validated['employee_id'], $validated['equipment_id']);
 
                 return response()->json([
                     'success' => true,
@@ -227,7 +228,7 @@ class RequestController extends Controller
             }
 
             // Generate request number
-            $requestNumber = 'REQ-' . str_pad(DB::table('requests')->count() + 1, 6, '0', STR_PAD_LEFT);
+            $requestNumber = $this->generateRequestNumber();
 
             $requestData = [
                 'request_number' => $requestNumber,
@@ -246,7 +247,26 @@ class RequestController extends Controller
                 'updated_at' => now(),
             ];
 
-            $requestId = DB::table('requests')->insertGetId($requestData);
+            try {
+                $requestId = DB::table('requests')->insertGetId($requestData);
+            } catch (QueryException $e) {
+                if ($this->isPendingDuplicateException($e)) {
+                    $existing = $this->getPendingRequest($validated['employee_id'], $validated['equipment_id']);
+
+                    return response()->json([
+                        'success' => true,
+                        'data' => $existing,
+                        'message' => 'A pending request for this equipment already exists. Returning existing record.'
+                    ]);
+                }
+
+                if ($this->isRequestNumberDuplicate($e)) {
+                    $requestData['request_number'] = $this->generateRequestNumber();
+                    $requestId = DB::table('requests')->insertGetId($requestData);
+                } else {
+                    throw $e;
+                }
+            }
 
             // Fetch the created request with related data
             $createdRequest = DB::table('requests')
@@ -257,7 +277,7 @@ class RequestController extends Controller
                 ->select(
                     'requests.*',
                     DB::raw("CONCAT(COALESCE(employees.first_name, ''), ' ', COALESCE(employees.last_name, '')) as full_name"),
-                    DB::raw("COALESCE(employees.employee_type, '') as position"),
+                    DB::raw("COALESCE(employees.position, '') as position"),
                     DB::raw("COALESCE(equipment.name, '') as equipment_name"),
                     DB::raw("COALESCE(equipment.brand, '') as brand"),
                     DB::raw("COALESCE(equipment.model, '') as model"),
@@ -313,7 +333,7 @@ class RequestController extends Controller
                 ->select(
                     'requests.*',
                     DB::raw("CONCAT(COALESCE(employees.first_name, ''), ' ', COALESCE(employees.last_name, '')) as full_name"),
-                    DB::raw("COALESCE(employees.employee_type, '') as position"),
+                    DB::raw("COALESCE(employees.position, '') as position"),
                     DB::raw("COALESCE(equipment.name, '') as equipment_name"),
                     DB::raw("COALESCE(equipment.brand, '') as brand"),
                     DB::raw("COALESCE(equipment.model, '') as model"),
@@ -385,7 +405,7 @@ class RequestController extends Controller
                 ->select(
                     'requests.*',
                     DB::raw("CONCAT(COALESCE(employees.first_name, ''), ' ', COALESCE(employees.last_name, '')) as full_name"),
-                    DB::raw("COALESCE(employees.employee_type, '') as position"),
+                    DB::raw("COALESCE(employees.position, '') as position"),
                     DB::raw("COALESCE(equipment.name, '') as equipment_name"),
                     DB::raw("COALESCE(equipment.brand, '') as brand"),
                     DB::raw("COALESCE(equipment.model, '') as model"),
@@ -528,7 +548,7 @@ class RequestController extends Controller
                 ->select(
                     'requests.*',
                     DB::raw("CONCAT(COALESCE(employees.first_name, ''), ' ', COALESCE(employees.last_name, '')) as full_name"),
-                    DB::raw("COALESCE(employees.employee_type, '') as position"),
+                    DB::raw("COALESCE(employees.position, '') as position"),
                     DB::raw("COALESCE(equipment.name, '') as equipment_name"),
                     DB::raw("COALESCE(equipment.brand, '') as brand"),
                     DB::raw("COALESCE(equipment.model, '') as model"),
@@ -606,7 +626,7 @@ class RequestController extends Controller
                 ->select(
                     'requests.*',
                     DB::raw("CONCAT(COALESCE(employees.first_name, ''), ' ', COALESCE(employees.last_name, '')) as full_name"),
-                    DB::raw("COALESCE(employees.employee_type, '') as position"),
+                    DB::raw("COALESCE(employees.position, '') as position"),
                     DB::raw("COALESCE(equipment.name, '') as equipment_name"),
                     DB::raw("COALESCE(equipment.brand, '') as brand"),
                     DB::raw("COALESCE(equipment.model, '') as model"),
@@ -699,7 +719,7 @@ class RequestController extends Controller
                 ->select(
                     'requests.*',
                     DB::raw("CONCAT(COALESCE(employees.first_name, ''), ' ', COALESCE(employees.last_name, '')) as full_name"),
-                    DB::raw("COALESCE(employees.employee_type, '') as position"),
+                    DB::raw("COALESCE(employees.position, '') as position"),
                     DB::raw("COALESCE(equipment.name, '') as equipment_name"),
                     DB::raw("COALESCE(equipment.brand, '') as brand"),
                     DB::raw("COALESCE(equipment.model, '') as model"),
@@ -764,7 +784,7 @@ class RequestController extends Controller
                 ->select(
                     'requests.*',
                     DB::raw("CONCAT(COALESCE(employees.first_name, ''), ' ', COALESCE(employees.last_name, '')) as full_name"),
-                    DB::raw("COALESCE(employees.employee_type, '') as position"),
+                    DB::raw("COALESCE(employees.position, '') as position"),
                     DB::raw("COALESCE(equipment.name, '') as equipment_name"),
                     DB::raw("COALESCE(equipment.brand, '') as brand"),
                     DB::raw("COALESCE(equipment.model, '') as model"),

@@ -25,13 +25,17 @@ class EmployeeTypeController extends Controller
         try {
             $request->validate([
                 'name' => 'required|string|max:255|unique:employee_types,name',
+                'code' => 'required|integer|min:0|unique:employee_types,code',
             ]);
 
-            $employeeType = EmployeeType::create(['name' => $request->name]);
+            $employeeType = EmployeeType::create([
+                'name' => $request->name,
+                'code' => $request->code,
+            ]);
 
             ActivityLogService::logSystemActivity(
                 'Created employee type',
-                "Created new employee type: {$employeeType->name}"
+                "Created new employee type: {$employeeType->name} (Code: {$employeeType->code})"
             );
 
             return response()->json([
@@ -68,13 +72,17 @@ class EmployeeTypeController extends Controller
         try {
             $request->validate([
                 'name' => 'required|string|max:255|unique:employee_types,name,' . $employeeType->id,
+                'code' => 'required|integer|min:0|unique:employee_types,code,' . $employeeType->id,
             ]);
 
-            $employeeType->update(['name' => $request->name]);
+            $employeeType->update([
+                'name' => $request->name,
+                'code' => $request->code,
+            ]);
 
             ActivityLogService::logSystemActivity(
                 'Updated employee type',
-                "Updated employee type: {$employeeType->name}"
+                "Updated employee type: {$employeeType->name} (Code: {$employeeType->code})"
             );
 
             return response()->json([

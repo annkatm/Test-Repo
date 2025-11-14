@@ -100,20 +100,20 @@ const AddStocks = () => {
   useEffect(() => {
     fetchEquipment();
     fetchCategories();
-    
+
     // Listen for equipment updates from other pages (e.g., EmployeePage, Equipment)
     const handleEquipmentUpdate = () => {
       fetchEquipment(); // Refresh equipment list when changes occur
     };
-    
+
     // Listen for equipment restore from ViewRequest (when equipment is returned)
     const handleEquipmentRestore = () => {
       fetchEquipment(); // Refresh equipment list when equipment is returned
     };
-    
+
     window.addEventListener('equipment:updated', handleEquipmentUpdate);
     window.addEventListener('ireply:equipment:restore', handleEquipmentRestore);
-    
+
     // Cleanup event listeners on component unmount
     return () => {
       window.removeEventListener('equipment:updated', handleEquipmentUpdate);
@@ -128,7 +128,7 @@ const AddStocks = () => {
           'Accept': 'application/json',
         },
       });
-      
+
       const contentType = response.headers.get('content-type');
       let data;
       if (contentType && contentType.includes('application/json')) {
@@ -136,7 +136,7 @@ const AddStocks = () => {
       } else {
         throw new Error('Server returned non-JSON response');
       }
-      
+
       if (data.success) {
         setCategories(data.data);
       } else {
@@ -156,7 +156,7 @@ const AddStocks = () => {
           'Accept': 'application/json',
         },
       });
-      
+
       const contentType = response.headers.get('content-type');
       let data;
       if (contentType && contentType.includes('application/json')) {
@@ -164,7 +164,7 @@ const AddStocks = () => {
       } else {
         throw new Error('Server returned non-JSON response');
       }
-      
+
       if (data.success) {
         const equipmentWithCategories = data.data.data.map(item => ({
           ...item,
@@ -219,16 +219,16 @@ const AddStocks = () => {
         item => {
           // Search in product name (item name)
           const nameMatch = item.name?.toLowerCase().includes(searchLower);
-          
+
           // Search in brand
           const brandMatch = item.brand?.toLowerCase().includes(searchLower);
-          
+
           // Search in category
           const categoryMatch = item.category?.name?.toLowerCase().includes(searchLower);
-          
+
           // Search in price (convert to string for searching)
           const priceMatch = item.purchase_price?.toString().includes(searchTerm);
-          
+
           return nameMatch || brandMatch || categoryMatch || priceMatch;
         }
       );
@@ -288,38 +288,38 @@ const AddStocks = () => {
       if (item.status === 'issued') acc[key].issued_count += 1;
       return acc;
     }, {});
-    
+
     return Object.values(grouped);
   };
 
   // Build display rows: one row per product, with count of recently added items
   const getDisplayRows = () => {
     let products = getFilteredAndSortedEquipment();
-    
+
     // If searching, also check individual items and include products with matching items
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
-      
+
       // Find all unique product keys that have matching items
       const matchingProductKeys = new Set();
-      
+
       // First, add products that match at product level (already filtered in getFilteredAndSortedEquipment)
       products.forEach(p => {
         matchingProductKeys.add(p.key);
       });
-      
+
       // Then, find products with matching individual items
       equipment.forEach(item => {
         // Search in serial number
         const serialMatch = item.serial_number?.toLowerCase().includes(searchLower);
-        
+
         // Search in specs/description
         const specsMatch = item.specifications?.toLowerCase().includes(searchLower) ||
-                          item.description?.toLowerCase().includes(searchLower);
-        
+          item.description?.toLowerCase().includes(searchLower);
+
         // Search in price (convert to string for searching)
         const priceMatch = item.purchase_price?.toString().includes(searchTerm);
-        
+
         // Search in date (format date and search)
         let dateMatch = false;
         if (item.created_at) {
@@ -330,55 +330,55 @@ const AddStocks = () => {
           }).toLowerCase();
           dateMatch = dateStr.includes(searchLower);
         }
-        
+
         if (serialMatch || specsMatch || priceMatch || dateMatch) {
           const eqKey = `${item.name || 'Unknown'}_${item.brand || 'Unknown'}`;
           matchingProductKeys.add(eqKey);
         }
       });
-      
+
       // Get all products (without search filter) to find products with matching items
       const allProducts = getAllProducts();
-      
+
       // Combine products that match at product level OR have matching items
       const finalProducts = new Map();
-      
+
       // Add products that match at product level
       products.forEach(p => {
         finalProducts.set(p.key, p);
       });
-      
+
       // Add products that have matching items
       allProducts.forEach(p => {
         if (matchingProductKeys.has(p.key) && !finalProducts.has(p.key)) {
           finalProducts.set(p.key, p);
         }
       });
-      
+
       products = Array.from(finalProducts.values());
     }
-    
+
     return products.map((p) => {
       // Get all equipment items for this product
       let allItems = equipment.filter(eq => {
         const eqKey = `${eq.name || 'Unknown'}_${eq.brand || 'Unknown'}`;
         return eqKey === p.key;
       });
-      
+
       // If search term exists, filter items by search criteria
       if (searchTerm) {
         const searchLower = searchTerm.toLowerCase();
         allItems = allItems.filter(item => {
           // Search in serial number
           const serialMatch = item.serial_number?.toLowerCase().includes(searchLower);
-          
+
           // Search in specs/description
           const specsMatch = item.specifications?.toLowerCase().includes(searchLower) ||
-                            item.description?.toLowerCase().includes(searchLower);
-          
+            item.description?.toLowerCase().includes(searchLower);
+
           // Search in price (convert to string for searching)
           const priceMatch = item.purchase_price?.toString().includes(searchTerm);
-          
+
           // Search in date (format date and search)
           let dateMatch = false;
           if (item.created_at) {
@@ -389,21 +389,21 @@ const AddStocks = () => {
             }).toLowerCase();
             dateMatch = dateStr.includes(searchLower);
           }
-          
+
           return serialMatch || specsMatch || priceMatch || dateMatch;
         });
       }
-      
+
       // Get the most recent batch for this product (batches are ordered newest first)
       const batches = addedBatchesByProduct[p.key] || [];
       const mostRecentBatch = batches.length > 0 ? batches[0] : null;
-      
+
       // Determine which items are from the most recent batch only
       const recentlyAddedItems = mostRecentBatch ? allItems.filter(item => {
         // Check if this item's serial is in the most recent batch
         return mostRecentBatch.serials && mostRecentBatch.serials.includes(item.serial_number);
       }) : [];
-      
+
       return {
         ...p,
         allItems: allItems, // All items for dropdown (filtered by search if search term exists)
@@ -491,7 +491,7 @@ const AddStocks = () => {
 
       // Trigger equipment update event for dynamic refresh
       window.dispatchEvent(new Event('equipment:updated'));
-      
+
       // Refresh equipment list
       await fetchEquipment();
 
@@ -554,14 +554,14 @@ const AddStocks = () => {
 
             </div>
             <div className="space-x-3">
-              <button 
-                onClick={() => setIsAddStocksOpen(true)} 
+              <button
+                onClick={() => setIsAddStocksOpen(true)}
                 className="px-4 py-2 rounded-md bg-blue-100 text-blue-700 text-sm hover:bg-blue-600 hover:text-white"
               >
                 Add Stocks
               </button>
-              <button 
-                onClick={() => setIsAddItemOpen(true)} 
+              <button
+                onClick={() => setIsAddItemOpen(true)}
                 className="px-4 py-2 rounded-md bg-blue-100 text-blue-700 text-sm hover:bg-blue-600 hover:text-white"
               >
                 Add Item
@@ -583,7 +583,7 @@ const AddStocks = () => {
                 <table className="w-full">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200">
-                      <th 
+                      <th
                         onClick={() => {
                           const direction = sortConfig.key === 'name' && sortConfig.direction === 'asc' ? 'desc' : 'asc';
                           setSortConfig({ key: 'name', direction });
@@ -592,7 +592,7 @@ const AddStocks = () => {
                       >
                         <div className="flex items-center">Items{sortConfig.key === 'name' && (<span className="ml-2">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>)}</div>
                       </th>
-                      <th 
+                      <th
                         onClick={() => {
                           const direction = sortConfig.key === 'category' && sortConfig.direction === 'asc' ? 'desc' : 'asc';
                           setSortConfig({ key: 'category', direction });
@@ -601,7 +601,7 @@ const AddStocks = () => {
                       >
                         <div className="flex items-center">Category{sortConfig.key === 'category' && (<span className="ml-2">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>)}</div>
                       </th>
-                      <th className="text-right py-4 px-6 font-semibold text-gray-700">Added</th>
+                      <th className="text-right py-4 px-6 font-semibold text-gray-700">Total</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -609,171 +609,173 @@ const AddStocks = () => {
                       const rowId = `${item.key}`;
                       const isOpen = !!expandedRows[rowId];
                       return (
-                      <React.Fragment key={rowId}>
-                      <tr 
-                        className={`
+                        <React.Fragment key={rowId}>
+                          <tr
+                            className={`
                           ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'} 
                           hover:bg-blue-50 transition-colors duration-150 border-b border-gray-100 last:border-b-0 cursor-pointer
                         `}
-                        onClick={() => toggleExpanded(rowId)}
-                      >
-                        <td className="py-4 px-6">
-                          <div className="flex items-center">
-                            {item.image ? (
-                              <img 
-                                src={`/storage/${item.image}`} 
-                                alt={item.name}
-                                className="w-10 h-10 rounded-lg object-cover mr-3"
-                              />
-                            ) : (
-                              <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center mr-3">
-                                <span className="text-gray-400 text-xs">No img</span>
-                              </div>
-                            )}
-                            <div>
-                              <div className="font-medium text-gray-900">{item.name}</div>
-                              <div className="text-sm text-gray-500">{item.brand}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="py-4 px-6 text-gray-700">
-                          {item.category?.name || 'Uncategorized'}
-                        </td>
-                        <td className="py-4 px-6 text-gray-700 font-semibold text-right">
-                          {item.recentlyAddedCount > 0 ? `+${item.recentlyAddedCount}` : '+0'}
-                        </td>
-                      </tr>
-                      {isOpen && (
-                        <tr className="bg-white border-b border-gray-100">
-                          <td colSpan={3} className="px-6 py-4">
-                            <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
-                              <div className="bg-gray-100 px-4 py-3 border-b border-gray-200">
-                                <div className="grid grid-cols-5 gap-4 text-xs font-semibold text-gray-700">
-                                  <div>Serial</div>
-                                  <div>Specs</div>
-                                  <div className="text-right">Price</div>
-                                  <div>Date Added</div>
-                                  <div>Receipt</div>
+                            onClick={() => toggleExpanded(rowId)}
+                          >
+                            <td className="py-4 px-6">
+                              <div className="flex items-center">
+                                {item.image ? (
+                                  <img
+                                    src={`/storage/${item.image}`}
+                                    alt={item.name}
+                                    className="w-10 h-10 rounded-lg object-cover mr-3"
+                                  />
+                                ) : (
+                                  <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center mr-3">
+                                    <span className="text-gray-400 text-xs">No img</span>
+                                  </div>
+                                )}
+                                <div>
+                                  <div className="font-medium text-gray-900">{item.name}</div>
+                                  <div className="text-sm text-gray-500">{item.brand}</div>
                                 </div>
                               </div>
-                              <div className="divide-y divide-gray-200 max-h-64 overflow-y-auto">
-                                {(item.allItems || []).map((equipmentItem, i) => {
-                                  const isRecentlyAdded = item.recentlyAddedItems.some(rai => rai.id === equipmentItem.id);
-                                  const addedDate = equipmentItem.created_at 
-                                    ? new Date(equipmentItem.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                                    : 'N/A';
-                                  
-                                  return (
-                                    <div 
-                                      key={`${rowId}-item-${equipmentItem.id}`} 
-                                      className={`px-4 py-3 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'} ${isRecentlyAdded ? 'bg-blue-50 border-l-4 border-blue-500' : ''}`}
-                                    >
-                                      <div className="grid grid-cols-5 gap-4 items-center text-sm">
-                                        <div className="font-medium text-gray-900">
-                                          {equipmentItem.serial_number || 'N/A'}
-                                          {isRecentlyAdded && (
-                                            <span className="ml-2 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-xs font-semibold">
-                                              NEW
-                                            </span>
-                                          )}
-                                        </div>
-                                        <div className="text-gray-700 truncate">
-                                          {equipmentItem.specifications || equipmentItem.description || '—'}
-                                        </div>
-                                        <div className="text-right text-gray-800">
-                                          ₱{Number(equipmentItem.purchase_price || 0).toLocaleString(undefined, { 
-                                            minimumFractionDigits: 2, 
-                                            maximumFractionDigits: 2 
-                                          })}
-                                        </div>
-                                        <div className="text-gray-700">
-                                          {addedDate}
-                                          {isRecentlyAdded && (
-                                            <span className="ml-1 text-blue-600 text-xs font-medium">(New)</span>
-                                          )}
-                                        </div>
-                                        <div>
-                                          {(() => {
-                                            const receiptUrl = equipmentItem.receipt_image_url || 
-                                                              (equipmentItem.receipt_image ? `/storage/${equipmentItem.receipt_image}` : null);
-                                            return receiptUrl ? (
-                                              <img 
-                                                src={receiptUrl} 
-                                                alt="Receipt" 
-                                                className="h-10 w-auto object-contain bg-white rounded border cursor-pointer hover:opacity-80 transition-opacity"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  setReceiptPreview({ src: receiptUrl, alt: `Receipt - ${equipmentItem.serial_number || 'Item'}` });
-                                                }}
-                                                onError={(e) => { e.currentTarget.style.display = 'none'; }} 
-                                              />
-                                            ) : (
-                                              <span className="text-gray-400 text-xs">No receipt</span>
-                                            );
-                                          })()}
-                                        </div>
-                                      </div>
+                            </td>
+                            <td className="py-4 px-6 text-gray-700">
+                              {item.category?.name || 'Uncategorized'}
+                            </td>
+                            <td className="py-4 px-6 text-gray-700 font-semibold text-right">
+                              {item.total_count || 0}
+                            </td>
+                          </tr>
+                          {isOpen && (
+                            <tr className="bg-white border-b border-gray-100">
+                              <td colSpan={3} className="px-6 py-4">
+                                <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+                                  <div className="bg-gray-100 px-4 py-3 border-b border-gray-200">
+                                    <div className="grid grid-cols-5 gap-4 text-xs font-semibold text-gray-700">
+                                      <div>Serial</div>
+                                      <div>Specs</div>
+                                      <div className="text-right">Price</div>
+                                      <div>Date Added</div>
+                                      <div>Receipt</div>
                                     </div>
-                                  );
-                                })}
-                                {(!item.allItems || item.allItems.length === 0) && (
-                                  <div className="px-4 py-3 bg-white text-sm text-gray-500">No items found for this product.</div>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                      </React.Fragment>
+                                  </div>
+                                  <div className="divide-y divide-gray-200 max-h-64 overflow-y-auto">
+                                    {(item.allItems || []).map((equipmentItem, i) => {
+                                      const isRecentlyAdded = item.recentlyAddedItems.some(rai => rai.id === equipmentItem.id);
+                                      const addedDate = equipmentItem.created_at
+                                        ? new Date(equipmentItem.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                                        : 'N/A';
+
+                                      return (
+                                        <div
+                                          key={`${rowId}-item-${equipmentItem.id}`}
+                                          className={`px-4 py-3 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'} ${isRecentlyAdded ? 'bg-blue-50 border-l-4 border-blue-500' : ''}`}
+                                        >
+                                          <div className="grid grid-cols-5 gap-4 items-center text-sm">
+                                            <div className="font-medium text-gray-900">
+                                              {equipmentItem.serial_number || 'N/A'}
+                                              {isRecentlyAdded && (
+                                                <span className="ml-2 px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-xs font-semibold">
+                                                  NEW
+                                                </span>
+                                              )}
+                                            </div>
+                                            <div className="text-gray-700 truncate">
+                                              {equipmentItem.specifications || equipmentItem.description || '—'}
+                                            </div>
+                                            <div className="text-right text-gray-800">
+                                              ₱{Number(equipmentItem.purchase_price || 0).toLocaleString(undefined, {
+                                                minimumFractionDigits: 2,
+                                                maximumFractionDigits: 2
+                                              })}
+                                            </div>
+                                            <div className="text-gray-700">
+                                              {addedDate}
+                                              {isRecentlyAdded && (
+                                                <span className="ml-1 text-blue-600 text-xs font-medium">(New)</span>
+                                              )}
+                                            </div>
+                                            <div>
+                                              {(() => {
+                                                const receiptUrl = equipmentItem.receipt_image_url ||
+                                                  (equipmentItem.receipt_image ? `/storage/${equipmentItem.receipt_image}` : null);
+                                                return receiptUrl ? (
+                                                  <img
+                                                    src={receiptUrl}
+                                                    alt="Receipt"
+                                                    className="h-10 w-auto object-contain bg-white rounded border cursor-pointer hover:opacity-80 transition-opacity"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      setReceiptPreview({ src: receiptUrl, alt: `Receipt - ${equipmentItem.serial_number || 'Item'}` });
+                                                    }}
+                                                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                                  />
+                                                ) : (
+                                                  <span className="text-gray-400 text-xs">No receipt</span>
+                                                );
+                                              })()}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                    {(!item.allItems || item.allItems.length === 0) && (
+                                      <div className="px-4 py-3 bg-white text-sm text-gray-500">No items found for this product.</div>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
                       );
                     })}
                   </tbody>
                 </table>
               )}
             </div>
-            {equipment.length > 0 && (
-              <div className="flex items-center justify-between p-4 border-t border-gray-200">
+            <div className="flex items-center justify-between p-4 border-t border-gray-200 bg-white">
               <div className="flex items-center space-x-4">
-                  <span className="text-sm text-gray-600 font-medium">
-                    Total: {getDisplayRows().length} {getDisplayRows().length === 1 ? 'item' : 'items'}
-                  </span>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                      disabled={currentPage === 1}
-                      className="p-1 rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => setCurrentPage(prev => prev + 1)}
-                      disabled={currentPage * itemsPerPage >= getDisplayRows().length}
-                      className="p-1 rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
+                <span className="text-sm text-gray-600 font-medium">
+                  Total: {(() => {
+                    const rows = getDisplayRows();
+                    const totalItems = rows.reduce((sum, row) => sum + (row.total_count || 0), 0);
+                    return `${totalItems} ${totalItems === 1 ? 'item' : 'items'}`;
+                  })()}
+                </span>
                 <div className="flex items-center space-x-2">
-                  <span className="text-sm text-gray-600">Items per page:</span>
-                  <select
-                    value={itemsPerPage}
-                    onChange={(e) => setItemsPerPage(Number(e.target.value))}
-                    className="p-1 border rounded-md text-sm bg-white"
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                    className="p-1 rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50"
                   >
-                    <option value={5}>5</option>
-                    <option value={10}>10</option>
-                    <option value={20}>20</option>
-                    <option value={50}>50</option>
-                    <option value={1000}>All</option>
-                  </select>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(prev => prev + 1)}
+                    disabled={currentPage * itemsPerPage >= getDisplayRows().length}
+                    className="p-1 rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </button>
                 </div>
               </div>
-            )}
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-gray-600">Items per page:</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                  className="p-1 border rounded-md text-sm bg-white"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={1000}>All</option>
+                </select>
+              </div>
+            </div>
           </div>
         </main>
 
@@ -792,15 +794,15 @@ const AddStocks = () => {
                   ...(prev[productKey] || []),
                 ],
               }));
-              
+
               // Refresh equipment to get the newly added items
               fetchEquipment();
             }}
           />
         )}
         {isAddItemOpen && (
-          <AddItemModal 
-            onClose={() => setIsAddItemOpen(false)} 
+          <AddItemModal
+            onClose={() => setIsAddItemOpen(false)}
             categories={categories}
             onSuccess={fetchEquipment}
           />
@@ -869,7 +871,7 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
           'Accept': 'application/json',
         },
       });
-      
+
       const contentType = response.headers.get('content-type');
       let data;
       if (contentType && contentType.includes('application/json')) {
@@ -877,7 +879,7 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
       } else {
         throw new Error('Server returned non-JSON response');
       }
-      
+
       if (data.success) {
         // Group equipment by name/brand to show only item types, not individual units
         const equipmentItems = data.data.data || [];
@@ -916,7 +918,7 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
           }
           return acc;
         }, {});
-        
+
         setProducts(Object.values(groupedItems));
       } else {
         setErrors({ products: 'Failed to fetch products' });
@@ -950,7 +952,7 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
   const handleSerialKeyDown = (index, e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      
+
       // If this is the last field and it has content, add a new field
       if (index === serialNumbers.length - 1 && serialNumbers[index].trim()) {
         addSerialField();
@@ -1046,7 +1048,7 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
 
       // Trigger equipment update event for dynamic refresh
       window.dispatchEvent(new Event('equipment:updated'));
-      
+
       // Inform parent how many were added and include batch meta for dropdown (before closing)
       if (onAdded && selectedProduct) {
         const productKey = `${selectedProduct.name || 'Unknown'}_${selectedProduct.brand || 'Unknown'}`;
@@ -1057,7 +1059,7 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
           receiptUrl: receiptPreview || null,
         });
       }
-      
+
       // Refresh the products list to show updated counts
       if (selectedCategory) {
         await fetchProducts(selectedCategory.id);
@@ -1209,7 +1211,7 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
               <div className="bg-blue-50 rounded-lg p-4 mb-6">
                 <div className="flex items-start space-x-4">
                   {selectedProduct?.item_image ? (
-                    <img 
+                    <img
                       src={`/storage/${selectedProduct.item_image}`}
                       alt={selectedProduct.name}
                       className="w-16 h-16 rounded-lg object-cover"
@@ -1244,15 +1246,15 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
                 {serialNumbers.map((serial, idx) => (
                   <div key={idx} className="flex items-center space-x-3">
                     <label className="text-sm text-gray-500 w-20">Serial No.</label>
-                    <input 
+                    <input
                       ref={(el) => (serialInputRefs.current[idx] = el)}
                       value={serial}
                       onChange={(e) => handleSerialChange(idx, e.target.value)}
                       onKeyDown={(e) => handleSerialKeyDown(idx, e)}
                       placeholder="4354354"
-                      className="flex-1 px-3 py-2 rounded-md bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                      className="flex-1 px-3 py-2 rounded-md bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
-                    <button 
+                    <button
                       type="button"
                       onClick={addSerialField}
                       className="p-1.5 rounded-md bg-blue-100 text-blue-700 hover:bg-blue-600 hover:text-white"
@@ -1260,7 +1262,7 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
                       <Plus className="h-4 w-4" />
                     </button>
                     {serialNumbers.length > 1 && (
-                      <button 
+                      <button
                         type="button"
                         onClick={() => removeSerialField(idx)}
                         className="p-1.5 rounded-md bg-red-100 text-red-600 hover:bg-red-600 hover:text-white"
@@ -1279,12 +1281,10 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
             {/* Receipt Upload */}
             <div className="mb-6">
               <label className="text-sm text-gray-600 mb-2 block">Receipt</label>
-              <div 
-                className={`h-36 w-full border-2 border-dashed rounded-lg ${
-                  receipt ? 'border-blue-300' : 'border-gray-300'
-                } ${
-                  errors.receipt ? 'border-red-500' : ''
-                } hover:border-blue-400 transition-colors relative overflow-hidden`}
+              <div
+                className={`h-36 w-full border-2 border-dashed rounded-lg ${receipt ? 'border-blue-300' : 'border-gray-300'
+                  } ${errors.receipt ? 'border-red-500' : ''
+                  } hover:border-blue-400 transition-colors relative overflow-hidden`}
                 onDragOver={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -1304,9 +1304,9 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
                 />
                 {receiptPreview ? (
                   <div className="relative w-full h-full">
-                    <img 
-                      src={receiptPreview} 
-                      alt="Receipt preview" 
+                    <img
+                      src={receiptPreview}
+                      alt="Receipt preview"
                       className="w-full h-full object-contain"
                     />
                     <button
@@ -1347,12 +1347,11 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
 
             {/* Actions */}
             <div className="flex justify-end">
-              <button 
+              <button
                 type="submit"
                 disabled={loading}
-                className={`inline-flex items-center px-5 py-2 rounded-full ${
-                  loading ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'
-                } text-white transition-colors`}
+                className={`inline-flex items-center px-5 py-2 rounded-full ${loading ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'
+                  } text-white transition-colors`}
               >
                 <span>{loading ? 'Saving...' : 'Save'}</span>
                 <ChevronRight className="ml-2 h-5 w-5" />
@@ -1401,14 +1400,14 @@ const AddItemModal = ({ onClose, categories = [], onSuccess }) => {
     // Convert to string and remove all non-digit characters except decimal point
     const numericValue = value.toString().replace(/[^\d.]/g, '');
     if (numericValue === '' || numericValue === '.') return '';
-    
+
     // Split by decimal point
     const parts = numericValue.split('.');
     // Format the integer part with commas
     const integerPart = parts[0] ? parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '0';
     // Keep decimal part if exists (max 2 decimal places)
     const decimalPart = parts[1] ? '.' + parts[1].slice(0, 2) : '';
-    
+
     return integerPart + decimalPart;
   };
 
@@ -1422,7 +1421,7 @@ const AddItemModal = ({ onClose, categories = [], onSuccess }) => {
     const value = e.target.value;
     // Parse the input to get raw numeric value
     const rawValue = parsePrice(value);
-    
+
     // Allow empty string, numbers, and decimal points
     if (rawValue === '' || /^\d*\.?\d*$/.test(rawValue)) {
       // Store raw value in formData
@@ -1589,10 +1588,10 @@ const AddItemModal = ({ onClose, categories = [], onSuccess }) => {
 
       // Trigger equipment update event for dynamic refresh
       window.dispatchEvent(new Event('equipment:updated'));
-      
+
       // Show success message
       setShowSuccess(true);
-      
+
       // Reset form and refresh after a short delay
       setTimeout(() => {
         handleReset();
@@ -1634,8 +1633,8 @@ const AddItemModal = ({ onClose, categories = [], onSuccess }) => {
       <div className="fixed inset-0 z-50 flex items-center justify-center">
         <div className="absolute inset-0 bg-black/30" onClick={onClose} />
         <div className="relative bg-white rounded-2xl shadow-xl w-[880px] max-w-[95vw] p-8">
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             className="absolute right-4 top-4 text-gray-500 hover:text-blue-600"
             type="button"
           >
@@ -1643,309 +1642,298 @@ const AddItemModal = ({ onClose, categories = [], onSuccess }) => {
           </button>
           <h3 className="text-xl font-bold text-blue-600 text-center">Add Equipment</h3>
 
-        <form onSubmit={handleSubmit} className="mt-6">
-          <div className="grid grid-cols-2 gap-8">
-            <div>
-              <label className="text-sm text-gray-600">Category*</label>
-              <div className="mt-2">
-                <div className="relative">
-                  {/* Dropdown trigger button */}
-                  <div 
-                    onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                    className={`w-full px-3 py-2 rounded-md bg-gray-100 cursor-pointer ${
-                      errors.category ? 'border-red-500' : 'border-transparent'
-                    } border hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500`}
-                  >
-                    <span className={!formData.category ? 'text-gray-500' : ''}>
-                      {formData.category ? 
-                        categories.find(c => c.id === formData.category)?.name 
-                        : 'Select a category'}
-                    </span>
+          <form onSubmit={handleSubmit} className="mt-6">
+            <div className="grid grid-cols-2 gap-8">
+              <div>
+                <label className="text-sm text-gray-600">Category*</label>
+                <div className="mt-2">
+                  <div className="relative">
+                    {/* Dropdown trigger button */}
+                    <div
+                      onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                      className={`w-full px-3 py-2 rounded-md bg-gray-100 cursor-pointer ${errors.category ? 'border-red-500' : 'border-transparent'
+                        } border hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                    >
+                      <span className={!formData.category ? 'text-gray-500' : ''}>
+                        {formData.category ?
+                          categories.find(c => c.id === formData.category)?.name
+                          : 'Select a category'}
+                      </span>
+                    </div>
+
+                    {/* Dropdown menu */}
+                    {isDropdownOpen && (
+                      <div className="absolute z-50 w-full mt-1 bg-white rounded-md shadow-lg border border-gray-200">
+                        <div
+                          className="max-h-48 overflow-y-auto select-scrollbar"
+                        >
+                          {categories && categories.map(category => (
+                            <div
+                              key={category.id}
+                              className={`px-3 py-2 cursor-pointer hover:bg-blue-50 ${formData.category === category.id ? 'bg-blue-50 text-blue-600' : ''
+                                }`}
+                              onClick={() => {
+                                handleInputChange({
+                                  target: { name: 'category', value: category.id }
+                                });
+                                setIsDropdownOpen(false);
+                              }}
+                            >
+                              {category.name || 'Unknown Category'}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
-
-                  {/* Dropdown menu */}
-                  {isDropdownOpen && (
-                    <div className="absolute z-50 w-full mt-1 bg-white rounded-md shadow-lg border border-gray-200">
-                      <div 
-                        className="max-h-48 overflow-y-auto select-scrollbar"
-                      >
-                        {categories && categories.map(category => (
-                          <div
-                            key={category.id}
-                            className={`px-3 py-2 cursor-pointer hover:bg-blue-50 ${
-                              formData.category === category.id ? 'bg-blue-50 text-blue-600' : ''
-                            }`}
-                            onClick={() => {
-                              handleInputChange({
-                                target: { name: 'category', value: category.id }
-                              });
-                              setIsDropdownOpen(false);
-                            }}
-                          >
-                            {category.name || 'Unknown Category'}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  {errors.category && <p className="mt-1 text-sm text-red-500">{errors.category}</p>}
                 </div>
-                {errors.category && <p className="mt-1 text-sm text-red-500">{errors.category}</p>}
               </div>
-            </div>
-            
-            <div>
-              <label className="text-sm text-gray-600">Serial Number*</label>
-              <input 
-                name="serial_number"
-                value={formData.serial_number}
-                onChange={handleInputChange}
-                className={`mt-2 w-full px-3 py-2 rounded-md bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  errors.serial_number ? 'border-red-500' : ''
-                }`}
-                placeholder="4354354"
-              />
-              {errors.serial_number && <p className="mt-1 text-sm text-red-500">{errors.serial_number}</p>}
-            </div>
 
-            <div>
-              <label className="text-sm text-gray-600">Brand*</label>
-              <input 
-                name="brand"
-                value={formData.brand}
-                onChange={handleInputChange}
-                className={`mt-2 w-full px-3 py-2 rounded-md bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  errors.brand ? 'border-red-500' : ''
-                }`}
-                placeholder="Brand name"
-              />
-              {errors.brand && <p className="mt-1 text-sm text-red-500">{errors.brand}</p>}
-            </div>
-            
-            <div>
-              <label className="text-sm text-gray-600">Supplier*</label>
-              <input 
-                name="supplier"
-                value={formData.supplier}
-                onChange={handleInputChange}
-                className={`mt-2 w-full px-3 py-2 rounded-md bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  errors.supplier ? 'border-red-500' : ''
-                }`}
-                placeholder="Supplier name"
-              />
-              {errors.supplier && <p className="mt-1 text-sm text-red-500">{errors.supplier}</p>}
-            </div>
-
-            <div>
-              <label className="text-sm text-gray-600">Description*</label>
-              <textarea 
-                name="description"
-                value={formData.description}
-                onChange={handleInputChange}
-                className={`mt-2 w-full px-3 py-2 rounded-md bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  errors.description ? 'border-red-500' : ''
-                }`}
-                placeholder="Item description"
-                rows={3}
-              />
-              {errors.description && <p className="mt-1 text-sm text-red-500">{errors.description}</p>}
-            </div>
-            
-            <div>
-              <label className="text-sm text-gray-600">Price</label>
-              <div className="mt-2 relative">
-                <input 
-                  name="price"
-                  type="text"
-                  value={formatPrice(formData.price)}
-                  onChange={handlePriceChange}
-                  onBlur={handlePriceBlur}
-                  className="w-full px-3 py-2 pr-10 rounded-md bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="0.00"
-                  inputMode="decimal"
+              <div>
+                <label className="text-sm text-gray-600">Serial Number*</label>
+                <input
+                  name="serial_number"
+                  value={formData.serial_number}
+                  onChange={handleInputChange}
+                  className={`mt-2 w-full px-3 py-2 rounded-md bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.serial_number ? 'border-red-500' : ''
+                    }`}
+                  placeholder="4354354"
                 />
-                <div className="absolute right-0 top-0 bottom-0 flex flex-col border-l border-gray-300">
-                  <button
-                    type="button"
-                    onClick={handlePriceIncrement}
-                    className="flex-1 px-2 flex items-center justify-center text-gray-600 hover:text-blue-600 hover:bg-blue-50 transition-colors border-b border-gray-200"
-                    aria-label="Increase price"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handlePriceDecrement}
-                    className="flex-1 px-2 flex items-center justify-center text-gray-600 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                    aria-label="Decrease price"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
+                {errors.serial_number && <p className="mt-1 text-sm text-red-500">{errors.serial_number}</p>}
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-600">Brand*</label>
+                <input
+                  name="brand"
+                  value={formData.brand}
+                  onChange={handleInputChange}
+                  className={`mt-2 w-full px-3 py-2 rounded-md bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.brand ? 'border-red-500' : ''
+                    }`}
+                  placeholder="Brand name"
+                />
+                {errors.brand && <p className="mt-1 text-sm text-red-500">{errors.brand}</p>}
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-600">Supplier*</label>
+                <input
+                  name="supplier"
+                  value={formData.supplier}
+                  onChange={handleInputChange}
+                  className={`mt-2 w-full px-3 py-2 rounded-md bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.supplier ? 'border-red-500' : ''
+                    }`}
+                  placeholder="Supplier name"
+                />
+                {errors.supplier && <p className="mt-1 text-sm text-red-500">{errors.supplier}</p>}
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-600">Description*</label>
+                <textarea
+                  name="description"
+                  value={formData.description}
+                  onChange={handleInputChange}
+                  className={`mt-2 w-full px-3 py-2 rounded-md bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.description ? 'border-red-500' : ''
+                    }`}
+                  placeholder="Item description"
+                  rows={3}
+                />
+                {errors.description && <p className="mt-1 text-sm text-red-500">{errors.description}</p>}
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-600">Price</label>
+                <div className="mt-2 relative">
+                  <input
+                    name="price"
+                    type="text"
+                    value={formatPrice(formData.price)}
+                    onChange={handlePriceChange}
+                    onBlur={handlePriceBlur}
+                    className="w-full px-3 py-2 pr-10 rounded-md bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="0.00"
+                    inputMode="decimal"
+                  />
+                  <div className="absolute right-0 top-0 bottom-0 flex flex-col border-l border-gray-300">
+                    <button
+                      type="button"
+                      onClick={handlePriceIncrement}
+                      className="flex-1 px-2 flex items-center justify-center text-gray-600 hover:text-blue-600 hover:bg-blue-50 transition-colors border-b border-gray-200"
+                      aria-label="Increase price"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handlePriceDecrement}
+                      className="flex-1 px-2 flex items-center justify-center text-gray-600 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                      aria-label="Decrease price"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div>
-              <label className="text-sm text-gray-600">Item image</label>
-              <div className="mt-2">
-                <div 
-                  className={`h-36 w-full border-2 border-dashed rounded-lg ${
-                    formData.item_image ? 'border-blue-300' : 'border-gray-300'
-                  } ${
-                    errors.item_image ? 'border-red-500' : ''
-                  } hover:border-blue-400 transition-colors relative overflow-hidden`}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const file = e.dataTransfer.files[0];
-                    if (file) handleFileChange({ target: { name: 'item_image', files: [file] }});
-                  }}
-                >
-                  <input
-                    type="file"
-                    name="item_image"
-                    onChange={handleFileChange}
-                    accept="image/jpeg,image/png,image/gif,image/webp"
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                  />
-                  {formData.item_image ? (
-                    <div className="relative w-full h-full">
-                      <img 
-                        src={preview.item_image} 
-                        alt="Item preview" 
-                        className="w-full h-full object-contain"
-                      />
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setFormData(prev => ({ ...prev, item_image: null }));
-                          setPreview(prev => ({ ...prev, item_image: null }));
-                        }}
-                        className="absolute top-2 right-2 p-1 rounded-full bg-red-500 text-white hover:bg-red-600"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center h-full">
-                      <div className="p-2 rounded-full bg-blue-50 mb-2">
-                        <Plus className="h-6 w-6 text-blue-500" />
+              <div>
+                <label className="text-sm text-gray-600">Item image</label>
+                <div className="mt-2">
+                  <div
+                    className={`h-36 w-full border-2 border-dashed rounded-lg ${formData.item_image ? 'border-blue-300' : 'border-gray-300'
+                      } ${errors.item_image ? 'border-red-500' : ''
+                      } hover:border-blue-400 transition-colors relative overflow-hidden`}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const file = e.dataTransfer.files[0];
+                      if (file) handleFileChange({ target: { name: 'item_image', files: [file] } });
+                    }}
+                  >
+                    <input
+                      type="file"
+                      name="item_image"
+                      onChange={handleFileChange}
+                      accept="image/jpeg,image/png,image/gif,image/webp"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    />
+                    {formData.item_image ? (
+                      <div className="relative w-full h-full">
+                        <img
+                          src={preview.item_image}
+                          alt="Item preview"
+                          className="w-full h-full object-contain"
+                        />
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFormData(prev => ({ ...prev, item_image: null }));
+                            setPreview(prev => ({ ...prev, item_image: null }));
+                          }}
+                          className="absolute top-2 right-2 p-1 rounded-full bg-red-500 text-white hover:bg-red-600"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
                       </div>
-                      <div className="text-sm font-medium text-gray-700">Click to upload</div>
-                      <div className="text-xs text-gray-500 mt-1">or drag and drop</div>
-                      <div className="text-xs text-gray-400 mt-2">
-                        JPEG, PNG, GIF, WebP up to 5MB
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-full">
+                        <div className="p-2 rounded-full bg-blue-50 mb-2">
+                          <Plus className="h-6 w-6 text-blue-500" />
+                        </div>
+                        <div className="text-sm font-medium text-gray-700">Click to upload</div>
+                        <div className="text-xs text-gray-500 mt-1">or drag and drop</div>
+                        <div className="text-xs text-gray-400 mt-2">
+                          JPEG, PNG, GIF, WebP up to 5MB
+                        </div>
                       </div>
-                    </div>
+                    )}
+                  </div>
+                  {errors.item_image && (
+                    <p className="mt-1 text-sm text-red-500">{errors.item_image}</p>
                   )}
                 </div>
-                {errors.item_image && (
-                  <p className="mt-1 text-sm text-red-500">{errors.item_image}</p>
-                )}
               </div>
-            </div>
 
-            <div>
-              <label className="text-sm text-gray-600">Receipt image</label>
-              <div className="mt-2">
-                <div 
-                  className={`h-36 w-full border-2 border-dashed rounded-lg ${
-                    formData.receipt_image ? 'border-blue-300' : 'border-gray-300'
-                  } ${
-                    errors.receipt_image ? 'border-red-500' : ''
-                  } hover:border-blue-400 transition-colors relative overflow-hidden`}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const file = e.dataTransfer.files[0];
-                    if (file) handleFileChange({ target: { name: 'receipt_image', files: [file] }});
-                  }}
-                >
-                  <input
-                    type="file"
-                    name="receipt_image"
-                    onChange={handleFileChange}
-                    accept="image/jpeg,image/png,image/gif,image/webp"
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                  />
-                  {formData.receipt_image ? (
-                    <div className="relative w-full h-full">
-                      <img 
-                        src={preview.receipt_image} 
-                        alt="Receipt preview" 
-                        className="w-full h-full object-contain"
-                      />
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setFormData(prev => ({ ...prev, receipt_image: null }));
-                          setPreview(prev => ({ ...prev, receipt_image: null }));
-                        }}
-                        className="absolute top-2 right-2 p-1 rounded-full bg-red-500 text-white hover:bg-red-600"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center h-full">
-                      <div className="p-2 rounded-full bg-blue-50 mb-2">
-                        <Plus className="h-6 w-6 text-blue-500" />
+              <div>
+                <label className="text-sm text-gray-600">Receipt image</label>
+                <div className="mt-2">
+                  <div
+                    className={`h-36 w-full border-2 border-dashed rounded-lg ${formData.receipt_image ? 'border-blue-300' : 'border-gray-300'
+                      } ${errors.receipt_image ? 'border-red-500' : ''
+                      } hover:border-blue-400 transition-colors relative overflow-hidden`}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const file = e.dataTransfer.files[0];
+                      if (file) handleFileChange({ target: { name: 'receipt_image', files: [file] } });
+                    }}
+                  >
+                    <input
+                      type="file"
+                      name="receipt_image"
+                      onChange={handleFileChange}
+                      accept="image/jpeg,image/png,image/gif,image/webp"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    />
+                    {formData.receipt_image ? (
+                      <div className="relative w-full h-full">
+                        <img
+                          src={preview.receipt_image}
+                          alt="Receipt preview"
+                          className="w-full h-full object-contain"
+                        />
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFormData(prev => ({ ...prev, receipt_image: null }));
+                            setPreview(prev => ({ ...prev, receipt_image: null }));
+                          }}
+                          className="absolute top-2 right-2 p-1 rounded-full bg-red-500 text-white hover:bg-red-600"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
                       </div>
-                      <div className="text-sm font-medium text-gray-700">Click to upload</div>
-                      <div className="text-xs text-gray-500 mt-1">or drag and drop</div>
-                      <div className="text-xs text-gray-400 mt-2">
-                        JPEG, PNG, GIF, WebP up to 5MB
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-full">
+                        <div className="p-2 rounded-full bg-blue-50 mb-2">
+                          <Plus className="h-6 w-6 text-blue-500" />
+                        </div>
+                        <div className="text-sm font-medium text-gray-700">Click to upload</div>
+                        <div className="text-xs text-gray-500 mt-1">or drag and drop</div>
+                        <div className="text-xs text-gray-400 mt-2">
+                          JPEG, PNG, GIF, WebP up to 5MB
+                        </div>
                       </div>
-                    </div>
+                    )}
+                  </div>
+                  {errors.receipt_image && (
+                    <p className="mt-1 text-sm text-red-500">{errors.receipt_image}</p>
                   )}
                 </div>
-                {errors.receipt_image && (
-                  <p className="mt-1 text-sm text-red-500">{errors.receipt_image}</p>
-                )}
               </div>
             </div>
-          </div>
 
-          {errors.submit && (
-            <div className="mt-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg">
-              {errors.submit}
+            {errors.submit && (
+              <div className="mt-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg">
+                {errors.submit}
+              </div>
+            )}
+
+            <div className="mt-6 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={handleReset}
+                className="text-blue-600 hover:underline"
+                disabled={loading}
+              >
+                Reset all
+              </button>
+              <button
+                type="submit"
+                className={`inline-flex items-center px-5 py-2 rounded-full ${loading ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'
+                  } text-white transition-colors`}
+                disabled={loading}
+              >
+                <span>{loading ? 'Saving...' : 'Save'}</span>
+                <ChevronRight className="ml-2 h-5 w-5" />
+              </button>
             </div>
-          )}
-
-          <div className="mt-6 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={handleReset}
-              className="text-blue-600 hover:underline"
-              disabled={loading}
-            >
-              Reset all
-            </button>
-            <button
-              type="submit"
-              className={`inline-flex items-center px-5 py-2 rounded-full ${
-                loading ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'
-              } text-white transition-colors`}
-              disabled={loading}
-            >
-              <span>{loading ? 'Saving...' : 'Save'}</span>
-              <ChevronRight className="ml-2 h-5 w-5" />
-            </button>
-          </div>
-        </form>
+          </form>
         </div>
       </div>
 

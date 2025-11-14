@@ -84,9 +84,27 @@ const ValidatedSelect = ({ label, value, onChange, options, required = false, er
       }`}
       tabIndex={tabIndex}
     >
-      {options.map((option, index) => (
-        <option key={index} value={option.value}>{option.label}</option>
-      ))}
+      {Array.isArray(options) ? options.map((option, index) => {
+        if (!option || typeof option !== 'object') return null;
+        
+        // Extra safety: ensure value and label are primitives, not objects
+        let optValue = '';
+        let optLabel = 'Unknown';
+        
+        if (option.value !== undefined && option.value !== null) {
+          optValue = typeof option.value === 'object' ? JSON.stringify(option.value) : String(option.value);
+        }
+        
+        if (option.label !== undefined && option.label !== null) {
+          optLabel = typeof option.label === 'object' ? JSON.stringify(option.label) : String(option.label);
+        }
+        
+        return (
+          <option key={index} value={optValue}>{optLabel}</option>
+        );
+      }).filter(Boolean) : (
+        <option value="">No options available</option>
+      )}
     </select>
     {error && (
       <div className="flex items-center mt-1 text-red-500 text-xs">
@@ -331,8 +349,55 @@ const EmployeePage = () => {
           } else {
             throw new Error('Server returned non-JSON response');
           }
-          return [key, data.success && Array.isArray(data.data) ? data.data.map(item => ({ value: item.name, label: item.name })) : []];
+          return [key, data.success && Array.isArray(data.data) ? data.data.map(item => {
+            // Handle case where item might be an object or have nested objects
+            let itemName = 'Unknown';
+            let itemValue = '';
+            
+            if (item) {
+              if (typeof item === 'string') {
+                itemName = item;
+                itemValue = item;
+              } else if (typeof item === 'object') {
+                // Try to extract a string value from the object
+                // Prefer name, then code, then id (but ensure they're primitives)
+                const nameVal = item.name;
+                const codeVal = item.code;
+                const idVal = item.id;
+                
+                // Ensure we get a primitive value, not an object
+                if (nameVal !== undefined && nameVal !== null && typeof nameVal !== 'object') {
+                  itemName = String(nameVal);
+                  itemValue = String(idVal !== undefined && idVal !== null && typeof idVal !== 'object' ? idVal : nameVal);
+                } else if (codeVal !== undefined && codeVal !== null && typeof codeVal !== 'object') {
+                  itemName = String(codeVal);
+                  itemValue = String(idVal !== undefined && idVal !== null && typeof idVal !== 'object' ? idVal : codeVal);
+                } else if (idVal !== undefined && idVal !== null && typeof idVal !== 'object') {
+                  itemName = String(idVal);
+                  itemValue = String(idVal);
+                } else {
+                  // Last resort: use value if it's a primitive
+                  const valueVal = item.value;
+                  if (valueVal !== undefined && valueVal !== null && typeof valueVal !== 'object') {
+                    itemName = String(valueVal);
+                    itemValue = String(valueVal);
+                  } else {
+                    // If all else fails, use a safe default
+                    itemName = 'Unknown';
+                    itemValue = '';
+                  }
+                }
+              }
+            }
+            
+            // Ensure both value and label are strings
+            return { 
+              value: String(itemValue || itemName), 
+              label: String(itemName) 
+            };
+          }) : []];
         } catch (e) {
+          console.error(`Error loading ${key}:`, e);
           return [key, []];
         }
       });
@@ -340,8 +405,19 @@ const EmployeePage = () => {
       const results = await Promise.all(promises);
       const newOptions = {};
       results.forEach(([key, options]) => {
-        newOptions[key] = options;
+        const validOptions = Array.isArray(options) ? options.filter(opt => 
+          opt && 
+          typeof opt === 'object' && 
+          opt.value !== undefined && 
+          opt.value !== null &&
+          opt.label !== undefined && 
+          opt.label !== null
+        ) : [];
+        newOptions[key] = validOptions;
       });
+
+      // No fallback - employee types are fully dynamic now
+      // Users must add employee types through Control Panel
 
       setDropdownOptions(newOptions);
     } catch (e) {
@@ -380,24 +456,37 @@ const EmployeePage = () => {
       }
 
       if (data.success && Array.isArray(data.data)) {
-        const list = data.data.map(e => ({
-          id: e.id,
-          name: `${e.first_name} ${e.last_name}`.trim(),
-          firstName: e.first_name || '',
-          lastName: e.last_name || '',
-          position: e.position || '',
-          client: e.client || '',
-          department: e.department || '',
-          employeeType: e.employee_type || 'Regular',
-          email: e.email || '',
-          phone: e.phone || '',
-          address: e.address || '',
-          issuedItem: e.issued_item || '',
-          issuedEquipment: e.issued_equipment || [],
-          user: e.user || null,
-          badge: (e.first_name?.[0] || '').toUpperCase(),
-          color: getBadgeColor(e.first_name)
-        }));
+        const list = data.data.map(e => {
+          // Helper function to safely convert to string
+          const safeString = (val) => {
+            if (val === null || val === undefined) return '';
+            if (typeof val === 'string') return val;
+            if (typeof val === 'object') {
+              // If it's an object, try to extract a string value
+              return String(val.name || val.code || val.id || val.value || '');
+            }
+            return String(val);
+          };
+          
+          return {
+            id: e.id,
+            name: `${e.first_name} ${e.last_name}`.trim(),
+            firstName: e.first_name || '',
+            lastName: e.last_name || '',
+            position: safeString(e.position),
+            client: safeString(e.client),
+            department: safeString(e.department),
+            employeeType: safeString(e.employee_type || 'Regular'),
+            email: e.email || '',
+            phone: e.phone || '',
+            address: e.address || '',
+            issuedItem: e.issued_item || '',
+            issuedEquipment: e.issued_equipment || [],
+            user: e.user || null,
+            badge: (e.first_name?.[0] || '').toUpperCase(),
+            color: getBadgeColor(e.first_name)
+          };
+        });
         setEmployees(list);
       }
     } catch (error) {
