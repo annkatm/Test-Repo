@@ -4,9 +4,6 @@ import { X, RefreshCcw, ClipboardList, Mouse, FilePlus2 } from 'lucide-react';
 import OnProcessTransactions from './OnProcessTransactions';
 import ApprovedTransactions from './ApprovedTransactions';
 import StatsCards from './StatsCards';
-import RecentActivities from './RecentActivities';
-import HistoryView from './HistoryView';
-
 const EmployeeHome = () => {
   const [, setShowExchangeConfirmModal] = useState(false);
   const [transactions, setTransactions] = useState([]);
@@ -22,7 +19,6 @@ const EmployeeHome = () => {
   const [showPendings, setShowPendings] = useState(false);
   const [, setSelectedRow] = useState(1);
   const [currentView, setCurrentView] = useState('transactions');
-  const [showHistory, setShowHistory] = useState(false);
   const [, setShowReasonModal] = useState(false);
   const [exchangeReason, setExchangeReason] = useState('');
   const [uploadedFile, setUploadedFile] = useState(null);
@@ -31,7 +27,6 @@ const EmployeeHome = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [itemsPerPage, setItemsPerPage] = useState(5);
   const [actionLoading, setActionLoading] = useState(false);
-  const [activities, setActivities] = useState([]);
   // Denied requests will be fetched from API
   const [deniedRequests, setDeniedRequests] = useState([]);
   // Toasts for upper-right popup notifications
@@ -146,53 +141,9 @@ const EmployeeHome = () => {
         });
       });
       if (derived.length === 0) return;
-      setActivities((prev) => {
-        const base = Array.isArray(prev) ? prev : [];
-        const map = new Map(base.map((x) => [String(x.id || x.message + String(x.time || x.date || '')), x]));
-        derived.forEach((d) => {
-          const k = String(d.id || d.message + String(d.time || d.date || ''));
-          if (!map.has(k)) map.set(k, d);
-        });
-        const merged = Array.from(map.values())
-          .sort((a, b) => new Date(b.time || b.date || 0) - new Date(a.time || a.date || 0))
-          .slice(0, 50);
-        try { localStorage.setItem('employee_activities', JSON.stringify(merged)); } catch (_) { }
-        return merged;
-      });
     } catch (_) { }
   }, [pendingTransactions, transactions, deniedRequests]);
 
-  // Also compute a derived recent list on the fly for immediate rendering
-  const recentCombined = useMemo(() => {
-    try {
-      const now = Date.now();
-      const within24h = (iso) => {
-        const ts = new Date(iso || Date.now()).getTime();
-        return Number.isFinite(ts) ? (now - ts <= 24 * 60 * 60 * 1000) : false;
-      };
-      const list = [];
-      (Array.isArray(pendingTransactions) ? pendingTransactions : []).forEach((t) => {
-        const when = t.created_at || t.expected_start_date || t.date || t.time || new Date().toISOString();
-        if (within24h(when)) list.push({ id: `req:${t.id || t.equipment_id || when}`, item: t.equipment_name || t.item || 'Request', message: 'Item requested', variant: 'request', date: when, time: when });
-      });
-      (Array.isArray(transactions) ? transactions : []).forEach((t) => {
-        const s = String(t.status || '').toLowerCase();
-        const when = t.created_at || t.expected_start_date || t.start_date || t.date || t.time || new Date().toISOString();
-        if (/(approved|released|borrowed|active)/.test(s) && within24h(when)) list.push({ id: `appr:${t.id || t.equipment_id || when}`, item: t.equipment_name || t.item || 'Approved', message: 'Item approved', variant: 'approved', date: when, time: when });
-        if (/(return|returned)/.test(s) && within24h(when)) list.push({ id: `ret:${t.id || t.equipment_id || when}`, item: t.equipment_name || t.item || 'Return', message: 'Item returned', variant: 'return', date: when, time: when });
-        if (/(exchange|exchanged)/.test(s) && within24h(when)) list.push({ id: `ex:${t.id || t.equipment_id || when}`, item: t.equipment_name || t.item || 'Exchange', message: 'Item exchanged', variant: 'exchange', date: when, time: when });
-      });
-      (Array.isArray(deniedRequests) ? deniedRequests : []).forEach((r) => {
-        const when = r.date || r.time || new Date().toISOString();
-        list.push({ id: `deny:${r.id || when}`, item: r.item || 'Request', message: r.reason || 'Request denied', variant: 'denied', date: when, time: when });
-      });
-      const base = Array.isArray(activities) ? activities : [];
-      const map = new Map([...base, ...list].map((x) => [String(x.id || x.message + String(x.time || x.date || '')), x]));
-      return Array.from(map.values()).sort((a, b) => new Date(b.time || b.date || 0) - new Date(a.time || a.date || 0));
-    } catch (_) {
-      return activities || [];
-    }
-  }, [activities, pendingTransactions, transactions, deniedRequests]);
   const [notificationCount, setNotificationCount] = useState(() => {
     try {
       const v = Number(localStorage.getItem('employee_history_unseen') || '0');
@@ -201,14 +152,7 @@ const EmployeeHome = () => {
       return 0;
     }
   });
-  const prevHistoryLenRef = useRef(0);
 
-  useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('employee_activities') || '[]');
-      if (Array.isArray(saved)) setActivities(saved);
-    } catch (_) { }
-  }, []);
 
   // On mount, process any created-requests queued by EmployeeHome (in case this view wasn't mounted during submission)
   useEffect(() => {
@@ -274,28 +218,6 @@ const EmployeeHome = () => {
       
       try { showToast('Request cancelled successfully', 'success'); } catch (_) {}
       
-      // Add a cancel activity for Recent panel
-      try {
-        const when = new Date().toISOString();
-        const entry = {
-          id: `cancel:${reqId || equipId || when}`,
-          item: e?.detail?.equipment_name || e?.detail?.item || 'Request',
-          message: 'Request cancelled successfully',
-          variant: 'cancel',
-          date: when,
-          time: when,
-        };
-        setActivities((prev) => {
-          const base = Array.isArray(prev) ? prev : [];
-          const map = new Map(base.map((x) => [String(x.id || x.message + String(x.time || x.date || '')), x]));
-          const k = String(entry.id || entry.message + String(entry.time || entry.date || ''));
-          if (!map.has(k)) map.set(k, entry);
-          const merged = Array.from(map.values()).sort((a, b) => new Date(b.time || b.date || 0) - new Date(a.time || a.date || 0)).slice(0, 50);
-          try { localStorage.setItem('employee_activities', JSON.stringify(merged)); } catch (_) {}
-          return merged;
-        });
-      } catch (_) {}
-      
       // Refresh pending from server to ensure consistency
       setTimeout(() => { try { fetchPendingTransactions(); } catch (_) {} }, 500);
     };
@@ -334,27 +256,6 @@ const EmployeeHome = () => {
         }, ...list];
       });
       try { showToast('Request created', 'success'); } catch (_) {}
-      // Add a request activity for Recent panel
-      try {
-        const when = d.created_at || new Date().toISOString();
-        const entry = {
-          id: `req:${d.id || d.equipment_id || when}`,
-          item: d.equipment_name || d.item || 'Request',
-          message: 'Item successfully requested',
-          variant: 'request',
-          date: when,
-          time: when,
-        };
-        setActivities((prev) => {
-          const base = Array.isArray(prev) ? prev : [];
-          const map = new Map(base.map((x) => [String(x.id || x.message + String(x.time || x.date || '')), x]));
-          const k = String(entry.id || entry.message + String(entry.time || entry.date || ''));
-          if (!map.has(k)) map.set(k, entry);
-          const merged = Array.from(map.values()).sort((a, b) => new Date(b.time || b.date || 0) - new Date(a.time || a.date || 0)).slice(0, 50);
-          try { localStorage.setItem('employee_activities', JSON.stringify(merged)); } catch (_) {}
-          return merged;
-        });
-      } catch (_) {}
     };
     
     const onApproved = (e) => {
@@ -376,29 +277,7 @@ const EmployeeHome = () => {
         // Move to approved transactions
         try { 
           fetchApprovedTransactions(); 
-          showToast('Request approved!', 'success'); 
-        } catch (_) {}
-        
-        // Add approved activity
-        try {
-          const when = new Date().toISOString();
-          const entry = {
-            id: `appr:${reqId || equipId || when}`,
-            item: e?.detail?.equipment_name || e?.detail?.item || 'Request',
-            message: 'Request has been approved',
-            variant: 'approved',
-            date: when,
-            time: when,
-          };
-          setActivities((prev) => {
-            const base = Array.isArray(prev) ? prev : [];
-            const map = new Map(base.map((x) => [String(x.id || x.message + String(x.time || x.date || '')), x]));
-            const k = String(entry.id || entry.message + String(entry.time || entry.date || ''));
-            if (!map.has(k)) map.set(k, entry);
-            const merged = Array.from(map.values()).sort((a, b) => new Date(b.time || b.date || 0) - new Date(a.time || a.date || 0)).slice(0, 50);
-            try { localStorage.setItem('employee_activities', JSON.stringify(merged)); } catch (_) {}
-            return merged;
-          });
+          try { showToast('Request approved', 'success'); } catch (_) {}
         } catch (_) {}
       }
     };
@@ -420,28 +299,6 @@ const EmployeeHome = () => {
         ));
         
         try { showToast('Request was rejected by admin', 'error'); } catch (_) {}
-        
-        // Add rejected activity
-        try {
-          const when = new Date().toISOString();
-          const entry = {
-            id: `rej:${reqId || equipId || when}`,
-            item: e?.detail?.equipment_name || e?.detail?.item || 'Request',
-            message: 'Request rejected',
-            variant: 'denied',
-            date: when,
-            time: when,
-          };
-          setActivities((prev) => {
-            const base = Array.isArray(prev) ? prev : [];
-            const map = new Map(base.map((x) => [String(x.id || x.message + String(x.time || x.date || '')), x]));
-            const k = String(entry.id || entry.message + String(entry.time || entry.date || ''));
-            if (!map.has(k)) map.set(k, entry);
-            const merged = Array.from(map.values()).sort((a, b) => new Date(b.time || b.date || 0) - new Date(a.time || a.date || 0)).slice(0, 50);
-            try { localStorage.setItem('employee_activities', JSON.stringify(merged)); } catch (_) {}
-            return merged;
-          });
-        } catch (_) {}
       }
     };
     
@@ -457,14 +314,6 @@ const EmployeeHome = () => {
     };
   }, []);
 
-  const logActivity = (message, variant = 'info') => {
-    const entry = { id: Date.now(), message, variant, time: new Date().toISOString() };
-    setActivities((prev) => {
-      const next = [entry, ...prev].slice(0, 50);
-      try { localStorage.setItem('employee_activities', JSON.stringify(next)); } catch (_) { }
-      return next;
-    });
-  };
 
   // Increment the unseen history/notification counter and optionally append a local history/activity entry
   const incrementNotification = (count = 1, entry = null) => {
@@ -473,16 +322,6 @@ const EmployeeHome = () => {
       try { localStorage.setItem('employee_history_unseen', String(next)); } catch (_) { }
       return next;
     });
-
-    if (entry) {
-      // Prepend to activities and historyData locally so UI reflects it immediately
-      setActivities((prev) => {
-        const next = [entry, ...prev].slice(0, 50);
-        try { localStorage.setItem('employee_activities', JSON.stringify(next)); } catch (_) { }
-        return next;
-      });
-      setHistoryData((prev) => [entry, ...prev]);
-    }
   };
 
   const fetchBorrowedItems = async () => {
@@ -530,12 +369,6 @@ const EmployeeHome = () => {
       } else {
         incrementNotification(1, null);
       }
-      // keep a log in activities
-      setActivities((prev) => {
-        const next = [entry, ...prev].slice(0, 50);
-        try { localStorage.setItem('employee_activities', JSON.stringify(next)); } catch (_) { }
-        return next;
-      });
       // show toast popup for the notification
       try { showToast(typeof message === 'string' ? message : (entry.message || 'Notification'), variant); } catch (_) { }
     };
@@ -549,30 +382,12 @@ const EmployeeHome = () => {
       showToast(message, variant);
     };
 
-    const historyHandler = (e) => {
-      const detail = e?.detail || {};
-      if (!detail) return;
-      const entry = {
-        id: detail.id || Date.now(),
-        item: detail.item || detail.message || detail.msg || 'History item',
-        message: detail.message || detail.msg || detail.item || 'History item',
-        variant: detail.variant || 'info',
-        date: detail.date || new Date().toISOString(),
-        time: detail.time || detail.date || new Date().toISOString(),
-        local: true
-      };
-      // Append to local history and increment unseen
-      incrementNotification(1, entry);
-      showToast(entry.message || entry.item, entry.variant || 'info');
-    };
 
     window.addEventListener('ireply:notify', notifyHandler);
-    window.addEventListener('ireply:history', historyHandler);
 
     return () => {
       try { delete window.IReplyNotify; } catch (_) { }
       window.removeEventListener('ireply:notify', notifyHandler);
-      window.removeEventListener('ireply:history', historyHandler);
     };
   }, []);
 
@@ -584,62 +399,9 @@ const EmployeeHome = () => {
     const d = Math.floor(h / 24); return `${d}d ago`;
   };
 
-  // Helper to fetch recent activity entries
-  const getRecentActivities = (limit = 10, filterVariant = null) => {
-    const list = filterVariant ? activities.filter((a) => a.variant === filterVariant) : activities;
-    return list.slice(0, Math.max(0, limit));
-  };
 
-  // History data will be fetched from API
-  const [historyData, setHistoryData] = useState([]);
 
-  // Ensure activities are persisted to the shared History store for HistoryView
-  useEffect(() => {
-    try {
-      const key = 'ireply_history';
-      const raw = localStorage.getItem(key);
-      const existing = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
-      const byKey = new Map(
-        existing.map((x) => [String(x.id || (x.message || x.item || '') + String(x.time || x.date || '')), x])
-      );
-      for (const a of (activities || [])) {
-        const k = String(a.id || (a.message || a.item || '') + String(a.time || a.date || ''));
-        if (!byKey.has(k)) byKey.set(k, a);
-      }
-      const merged = Array.from(byKey.values());
-      localStorage.setItem(key, JSON.stringify(merged));
-      localStorage.setItem('ireply_history_count', String(merged.length));
-    } catch (_) { /* ignore */ }
-  }, [activities]);
 
-  // Also persist normalized recentCombined feed
-  useEffect(() => {
-    try {
-      const key = 'ireply_history';
-      const raw = localStorage.getItem(key);
-      const existing = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
-      const byKey = new Map(
-        existing.map((x) => [String(x.id || (x.message || x.item || '') + String(x.time || x.date || '')), x])
-      );
-      const list = Array.isArray(recentCombined) ? recentCombined : [];
-      for (const a of list) {
-        const normalized = {
-          id: a.id || Date.now() + Math.random(),
-          item: a.item || a.message || 'Activity',
-          message: a.message || a.item || 'Activity',
-          status: a.status || a.variant || 'info',
-          variant: a.variant || a.status || 'info',
-          date: a.date || a.time || new Date().toISOString(),
-          time: a.time || a.date || new Date().toISOString(),
-        };
-        const k = String(normalized.id || (normalized.message || normalized.item || '') + String(normalized.time || normalized.date || ''));
-        if (!byKey.has(k)) byKey.set(k, normalized);
-      }
-      const merged = Array.from(byKey.values());
-      localStorage.setItem(key, JSON.stringify(merged));
-      localStorage.setItem('ireply_history_count', String(merged.length));
-    } catch (_) { /* ignore */ }
-  }, [recentCombined]);
 
   // Fetch denied requests
   const fetchDeniedRequests = async () => {
@@ -716,31 +478,6 @@ const EmployeeHome = () => {
     return { Icon: ClipboardList, bg: 'bg-gray-50', text: 'text-gray-700' };
   };
 
-  // 🔍 Filter by search term
-  const filteredData = useMemo(() => {
-    return historyData.filter((item) =>
-      (item?.item || '').toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [historyData, searchTerm]);
-
-  // 🔃 Sort the data
-  const sortedData = useMemo(() => {
-    return [...filteredData].sort((a, b) => {
-      if (sortOption === "date-asc") return new Date(a.date) - new Date(b.date);
-      if (sortOption === "date-desc") return new Date(b.date) - new Date(a.date);
-      if (sortOption === "item-asc") return (a?.item || '').localeCompare(b?.item || '');
-      if (sortOption === "item-desc") return (b?.item || '').localeCompare(a?.item || '');
-      return 0;
-    });
-  }, [filteredData, sortOption]);
-
-  // 📄 Pagination
-  const totalPages = Math.ceil(sortedData.length / itemsPerPage);
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = sortedData.slice(indexOfFirstItem, indexOfLastItem);
-
-  const handleChangePage = (page) => setCurrentPage(page);
 
 
 
@@ -966,84 +703,13 @@ const EmployeeHome = () => {
     }
   };
 
-  const fetchTransactionHistory = async () => {
-    try {
-      const response = await fetch('/api/transactions/history');
-      const data = await response.json();
 
-      if (data.success && Array.isArray(data.data)) {
-        // Merge server history with any local-only entries we have in historyData and persist to localStorage
-        let mergedOut = [];
-        setHistoryData((prevLocal) => {
-          const server = data.data || [];
-          // Keep local entries that are marked as local or have ids not found in server
-          const localOnly = (prevLocal || []).filter((h) => {
-            const id = String(h?.id || h?.time || '');
-            const inServer = (server || []).some((s) => String(s?.id || s?.time || '') === id);
-            return !inServer;
-          });
-
-          const merged = [...localOnly, ...server];
-          mergedOut = merged;
-          try {
-            prevHistoryLenRef.current = Array.isArray(merged) ? merged.length : 0;
-            localStorage.setItem('ireply_history', JSON.stringify(merged));
-            localStorage.setItem('ireply_history_count', String(merged.length));
-          } catch (_) { }
-          return merged;
-        });
-        return mergedOut;
-      } else {
-        // keep local entries if server returns no data
-        setHistoryData((prev) => prev || []);
-        return [];
-      }
-    } catch (error) {
-      console.error('Failed to fetch transaction history:', error);
-      // keep local entries on error
-      setHistoryData((prev) => prev || []);
-      return [];
-    }
-  };
-
-  // Poll history endpoint periodically to detect new history entries
-  useEffect(() => {
-    let stopped = false;
-    const check = async () => {
-      try {
-        const data = await fetchTransactionHistory();
-        if (stopped) return;
-        const prevLen = prevHistoryLenRef.current || 0;
-        const newLen = Array.isArray(data) ? data.length : 0;
-        // If more items than previous length, increment notification by difference
-        if (newLen > prevLen) {
-          const diff = newLen - prevLen;
-          incrementNotification(diff, null);
-        }
-        prevHistoryLenRef.current = newLen;
-      } catch (e) {
-        // ignore polling errors
-      }
-    };
-
-    // initial check
-    check();
-    const iv = setInterval(check, 30000); // every 30s
-
-    return () => {
-      stopped = true;
-      clearInterval(iv);
-    };
-  }, []);
 
   useEffect(() => {
     const loadTransactionData = async () => {
       await fetchTransactionStats();
       await fetchPendingTransactions();
       await fetchApprovedTransactions();
-      const initialHistory = await fetchTransactionHistory();
-      // Set the previous history length so the polling doesn't treat existing items as new
-      prevHistoryLenRef.current = Array.isArray(initialHistory) ? initialHistory.length : 0;
       await fetchDeniedRequests(); // Fetch denied requests on load
 
       try {
@@ -1179,23 +845,6 @@ const EmployeeHome = () => {
     );
   }
 
-
-  // ===== HISTORY VIEW =====
-  if (showHistory) {
-    return (
-      <HistoryView
-        onBack={() => setShowHistory(false)}
-        searchTerm={searchTerm}
-        setSearchTerm={setSearchTerm}
-        itemsPerPage={itemsPerPage}
-        setItemsPerPage={setItemsPerPage}
-        currentPage={currentPage}
-        setCurrentPage={setCurrentPage}
-        totalPages={totalPages}
-        logActivity={logActivity}
-      />
-    );
-  }
 
 
   // Main transaction view
@@ -1491,55 +1140,13 @@ const EmployeeHome = () => {
       </div>
 
       <div className="col-span-12 md:col-span-4 space-y-6">
-        <div className="flex justify-end">
-          <button
-            onClick={() => {
-              logActivity('Opened History', 'info');
-              // Reset unseen counter when user opens history
-              try { localStorage.setItem('employee_history_unseen', '0'); } catch (_) { }
-              setNotificationCount(0);
-              // Force refetch history to show latest
-              fetchTransactionHistory();
-              // Also flush current activities into local history immediately
-              try {
-                const key = 'ireply_history';
-                const raw = localStorage.getItem(key);
-                const existing = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
-                const byKey = new Map(
-                  existing.map((x) => [String(x.id || (x.message || x.item || '') + String(x.time || x.date || '')), x])
-                );
-                const list = Array.isArray(activities) ? activities : [];
-                for (const a of list) {
-                  const normalized = {
-                    id: a.id || Date.now() + Math.random(),
-                    item: a.item || a.message || 'Activity',
-                    message: a.message || a.item || 'Activity',
-                    status: a.status || a.variant || 'info',
-                    variant: a.variant || a.status || 'info',
-                    date: a.date || a.time || new Date().toISOString(),
-                    time: a.time || a.date || new Date().toISOString(),
-                  };
-                  const k = String(normalized.id || (normalized.message || normalized.item || '') + String(normalized.time || normalized.date || ''));
-                  if (!byKey.has(k)) byKey.set(k, normalized);
-                }
-                const merged = Array.from(byKey.values());
-                localStorage.setItem(key, JSON.stringify(merged));
-                localStorage.setItem('ireply_history_count', String(merged.length));
-              } catch (_) { }
-              setShowHistory(true);
-            }}
-            className="relative flex items-center justify-center bg-white border border-gray-300 rounded-lg px-4 py-2 text-sm font-semibold text-gray-700 shadow-md shadow-gray-400/60 hover:shadow-lg hover:shadow-gray-500/70 hover:-translate-y-1 transition-all duration-300 active:translate-y-0 active:shadow-sm w-full sm:w-auto"
-          >
-            History
-
-            {/* Notification Badge */}
-            <div className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center shadow-md shadow-red-700/70">
-              <span className="text-white text-xs font-bold">{notificationCount > 99 ? '99+' : notificationCount}</span>
-            </div>
-          </button>
+        <div className="space-y-3 max-h-96 overflow-y-auto">
+                {(borrowedItems || []).map((it, i) => (
+                  <div key={it.id || i} className="border border-gray-200 rounded-lg p-3">
+                    <div className="font-semibold text-gray-900">{it.equipment_name || it.item || '-'}</div>
+                  </div>
+                ))}
         </div>
-
-        <RecentActivities activities={recentCombined} iconFor={iconFor} timeAgo={timeAgo} />
       </div>
       {isBorrowedOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm">
