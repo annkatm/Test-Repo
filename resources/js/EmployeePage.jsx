@@ -1436,100 +1436,98 @@ const EmployeePage = () => {
                 </div>
               </div>
 
-              {/* Issued Item Section - Full Width - Only show for New hire and Probationary */}
-              {form.employeeType !== 'Regular' && (
-                <div className="mt-6 mb-6">
-                  <div className="space-y-4">
-                    <label className="block text-sm text-gray-700 font-medium mb-2">
-                      Issued Item
-                    </label>
-                    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                      <div className="bg-gray-100 px-4 py-3 border-b border-gray-300">
-                        <div className="grid grid-cols-2 gap-4 text-sm font-bold text-gray-800">
-                          <div>Equipment</div>
-                          <div>Serial Number</div>
-                        </div>
+              {/* Issued Item Section - Full Width */}
+              <div className="mt-6 mb-6">
+                <div className="space-y-4">
+                  <label className="block text-sm text-gray-700 font-medium mb-2">
+                    Issued Item
+                  </label>
+                  <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="bg-gray-100 px-4 py-3 border-b border-gray-300">
+                      <div className="grid grid-cols-2 gap-4 text-sm font-bold text-gray-800">
+                        <div>Equipment</div>
+                        <div>Serial Number</div>
                       </div>
-                      <div className="max-h-60 overflow-y-auto">
-                        <div className="divide-y divide-gray-200">
-                          {issuedEquipment.length === 0 ? (
-                            <div className="px-4 py-6 text-center text-gray-400 text-sm">
-                              No equipment issued yet. Click "Add New" to assign equipment.
-                            </div>
-                          ) : (
-                            issuedEquipment.map((equipment, index) => (
-                              <div key={equipment.specKey || equipment.id || index} className="px-4 py-3 hover:bg-gray-50 transition-colors">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center space-x-3 flex-1">
-                                    {/* Equipment Image */}
-                                    {equipment.item_image ? (
-                                      <img
-                                        src={`/storage/${equipment.item_image}`}
-                                        alt={equipment.name}
-                                        className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
-                                      />
-                                    ) : (
-                                      <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-                                        <span className="text-gray-400 text-xs">No img</span>
-                                      </div>
-                                    )}
-                                    <div className="min-w-0 flex-1">
-                                      <h5 className="text-blue-600 font-medium text-sm truncate">
-                                        {equipment.name || equipment.brand}
-                                      </h5>
-                                      <p className="text-gray-600 text-xs mt-1">
-                                        <span className="font-mono font-medium">{equipment.serial_number || 'N/A'}</span>
-                                      </p>
-                                      {equipment.specifications && (
-                                        <p className="text-gray-500 text-xs leading-tight mt-0.5">
-                                          {equipment.specifications}
-                                        </p>
-                                      )}
+                    </div>
+                    <div className="max-h-60 overflow-y-auto">
+                      <div className="divide-y divide-gray-200">
+                        {issuedEquipment.length === 0 ? (
+                          <div className="px-4 py-6 text-center text-gray-400 text-sm">
+                            No equipment issued yet. Click "Add New" to assign equipment.
+                          </div>
+                        ) : (
+                          issuedEquipment.map((equipment, index) => (
+                            <div key={equipment.specKey || equipment.id || index} className="px-4 py-3 hover:bg-gray-50 transition-colors">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-3 flex-1">
+                                  {/* Equipment Image */}
+                                  {equipment.item_image ? (
+                                    <img
+                                      src={`/storage/${equipment.item_image}`}
+                                      alt={equipment.name}
+                                      className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
+                                    />
+                                  ) : (
+                                    <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                      <span className="text-gray-400 text-xs">No img</span>
                                     </div>
+                                  )}
+                                  <div className="min-w-0 flex-1">
+                                    <h5 className="text-blue-600 font-medium text-sm truncate">
+                                      {equipment.name || equipment.brand}
+                                    </h5>
+                                    <p className="text-gray-600 text-xs mt-1">
+                                      <span className="font-mono font-medium">{equipment.serial_number || 'N/A'}</span>
+                                    </p>
+                                    {equipment.specifications && (
+                                      <p className="text-gray-500 text-xs leading-tight mt-0.5">
+                                        {equipment.specifications}
+                                      </p>
+                                    )}
                                   </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => removeEquipmentFromIssued(equipment)}
-                                    className="ml-4 text-red-500 hover:text-red-700 text-xs font-medium flex-shrink-0 px-2 py-1 rounded hover:bg-red-50"
-                                  >
-                                    Remove
-                                  </button>
                                 </div>
+                                <button
+                                  type="button"
+                                  onClick={() => removeEquipmentFromIssued(equipment)}
+                                  className="ml-4 text-red-500 hover:text-red-700 text-xs font-medium flex-shrink-0 px-2 py-1 rounded hover:bg-red-50"
+                                >
+                                  Remove
+                                </button>
                               </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                      <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
-                        {(form.employeeType === 'New hire' || form.employeeType === 'Probationary') && (
-                          <button
-                            type="button"
-                            onClick={openEquipmentModal}
-                            className="px-4 py-2 bg-blue-500 border border-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
-                            tabIndex={10}
-                          >
-                            Add New
-                          </button>
-                        )}
-                        {(form.employeeType === 'New hire' || form.employeeType === 'Probationary') && (
-                          <button
-                            type="button"
-                            onClick={openPrintModal}
-                            disabled={issuedEquipment.length === 0}
-                            className={`p-2 rounded transition-colors ${issuedEquipment.length === 0
-                                ? 'text-gray-300 cursor-not-allowed'
-                                : 'text-gray-600 hover:text-gray-800'
-                              }`}
-                            title={issuedEquipment.length === 0 ? 'No equipment selected' : 'Print'}
-                          >
-                            <Printer className="h-4 w-4" />
-                          </button>
+                            </div>
+                          ))
                         )}
                       </div>
                     </div>
+                    <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
+                      {(form.employeeType === 'New hire' || form.employeeType === 'Probationary') && (
+                        <button
+                          type="button"
+                          onClick={openEquipmentModal}
+                          className="px-4 py-2 bg-blue-500 border border-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
+                          tabIndex={10}
+                        >
+                          Add New
+                        </button>
+                      )}
+                      {(form.employeeType === 'New hire' || form.employeeType === 'Probationary') && (
+                        <button
+                          type="button"
+                          onClick={openPrintModal}
+                          disabled={issuedEquipment.length === 0}
+                          className={`p-2 rounded transition-colors ${issuedEquipment.length === 0
+                              ? 'text-gray-300 cursor-not-allowed'
+                              : 'text-gray-600 hover:text-gray-800'
+                            }`}
+                          title={issuedEquipment.length === 0 ? 'No equipment selected' : 'Print'}
+                        >
+                          <Printer className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
-              )}
+              </div>
 
               <div className="mt-8 flex items-center justify-between">
                 <button onClick={resetAll} className="text-blue-500 hover:text-blue-600 font-medium" tabIndex={12}>Reset all</button>
@@ -1797,8 +1795,8 @@ const EmployeePage = () => {
                     <button
                       onClick={() => setViewMode('grid')}
                       className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${viewMode === 'grid'
-                          ? 'bg-blue-500 text-white'
-                          : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
                         }`}
                     >
                       Grid View
@@ -1806,8 +1804,8 @@ const EmployeePage = () => {
                     <button
                       onClick={() => setViewMode('list')}
                       className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${viewMode === 'list'
-                          ? 'bg-blue-500 text-white'
-                          : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
                         }`}
                     >
                       List View
@@ -1833,8 +1831,8 @@ const EmployeePage = () => {
                   <button
                     onClick={() => setSelectedCategory('all')}
                     className={`px-4 py-2 rounded-full text-sm font-medium transition-colors mb-2 ${selectedCategory === 'all'
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }`}
                   >
                     All
@@ -1844,8 +1842,8 @@ const EmployeePage = () => {
                       key={category}
                       onClick={() => setSelectedCategory(category)}
                       className={`px-4 py-2 rounded-full text-sm font-medium transition-colors mb-2 ${selectedCategory === category
-                          ? 'bg-blue-500 text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                         }`}
                     >
                       {category}
@@ -1968,8 +1966,8 @@ const EmployeePage = () => {
                                             : addEquipmentToIssued(equipment, serial)
                                           }
                                           className={`px-3 py-1 rounded text-xs font-medium ${isSelected
-                                              ? 'bg-red-500 text-white hover:bg-red-600'
-                                              : 'bg-green-500 text-white hover:bg-green-600'
+                                            ? 'bg-red-500 text-white hover:bg-red-600'
+                                            : 'bg-green-500 text-white hover:bg-green-600'
                                             }`}
                                         >
                                           {isSelected ? 'Remove' : 'Add'}
@@ -2032,8 +2030,8 @@ const EmployeePage = () => {
                                   <div className="flex items-center space-x-2 mb-1">
                                     <h4 className="font-semibold text-gray-900 truncate">{equipment.name || equipment.brand}</h4>
                                     <span className={`px-2 py-0.5 text-xs rounded-full flex-shrink-0 ${availability > 0
-                                        ? 'bg-green-100 text-green-700'
-                                        : 'bg-red-100 text-red-700'
+                                      ? 'bg-green-100 text-green-700'
+                                      : 'bg-red-100 text-red-700'
                                       }`}>
                                       {availability > 0 ? `Available: ${availability}` : 'Out of Stock'}
                                     </span>
@@ -2065,10 +2063,10 @@ const EmployeePage = () => {
                                 onClick={() => isAdded ? removeEquipmentFromIssued(equipment) : addEquipmentToIssued(equipment)}
                                 disabled={availability === 0 && !isAdded}
                                 className={`px-4 py-2 rounded-lg font-medium transition-colors flex-shrink-0 ${isAdded
-                                    ? 'bg-red-100 text-red-600 hover:bg-red-200'
-                                    : availability === 0
-                                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                      : 'bg-blue-500 text-white hover:bg-blue-600'
+                                  ? 'bg-red-100 text-red-600 hover:bg-red-200'
+                                  : availability === 0
+                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                    : 'bg-blue-500 text-white hover:bg-blue-600'
                                   }`}
                               >
                                 {isAdded ? 'Remove' : availability === 0 ? 'Out of Stock' : 'Add'}

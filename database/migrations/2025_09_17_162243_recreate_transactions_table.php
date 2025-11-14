@@ -29,7 +29,7 @@ return new class extends Migration
             $table->foreignId('released_by')->nullable()->constrained('users')->nullOnDelete();
 
             // Return information
-            $table->enum('return_condition', ['good_condition', 'brand_new', 'damaged'])->nullable();
+            $table->enum('return_condition', ['good_condition', 'damaged', 'has_defect', 'lost'])->nullable();
             $table->date('return_date')->nullable();
             $table->date('expected_return_date')->nullable();
             $table->foreignId('received_by')->nullable()->constrained('users')->nullOnDelete();

@@ -236,10 +236,14 @@ const ViewApproved = () => {
       grouped[employeeName].items.push({
         id: returnItem.equipment_id || returnItem.id,
         equipment_name: returnItem.equipment_name || 'Unknown Item',
+        category_name: returnItem.category_name || returnItem.category || 'Uncategorized',
         // pass through serial number from multiple possible fields
         serial_number: returnItem.serial_number || returnItem.equipment_serial_number || returnItem.asset_tag || null,
         // pass through specifications/specs
-        specifications: returnItem.specifications || returnItem.specs || [returnItem.brand, returnItem.model].filter(Boolean).join(' ')
+        specifications: returnItem.specifications || returnItem.specs || [returnItem.brand, returnItem.model].filter(Boolean).join(' '),
+        // pass through return condition and notes
+        return_condition: returnItem.return_condition || null,
+        return_notes: returnItem.return_notes || null
       });
     });
     return Object.values(grouped);
@@ -1102,7 +1106,7 @@ const ViewApproved = () => {
 
         // Now verify the return to complete the transaction
         const verifyResponse = await api.post(`/transactions/${transactionId}/verify-return`, {
-          verification_notes: 'Return verified and completed'
+          verification_notes: returnData.verificationNotes || 'Return verified and completed'
         });
 
         if (!verifyResponse.data.success) {

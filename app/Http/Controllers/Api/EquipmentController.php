@@ -365,6 +365,62 @@ class EquipmentController extends Controller
     }
 
     /**
+     * Mark equipment as repaired and make it available
+     */
+    public function markAsRepaired(Request $request, string $id): JsonResponse
+    {
+        try {
+            $equipment = Equipment::findOrFail($id);
+
+            $validated = $request->validate([
+                'repair_notes' => 'nullable|string|max:1000',
+                'condition' => 'required|in:excellent,good,fair'
+            ]);
+
+            // Store old values for logging
+            $oldStatus = $equipment->status;
+            $oldCondition = $equipment->condition;
+
+            // Update equipment to available status with new condition
+            $equipment->update([
+                'status' => 'available',
+                'condition' => $validated['condition'],
+                'notes' => $equipment->notes 
+                    ? $equipment->notes . "\n\n[Repaired on " . now()->format('Y-m-d') . "] " . ($validated['repair_notes'] ?? 'Equipment repaired and returned to service')
+                    : "[Repaired on " . now()->format('Y-m-d') . "] " . ($validated['repair_notes'] ?? 'Equipment repaired and returned to service')
+            ]);
+
+            // Log the activity
+            ActivityLogService::logEquipmentActivity(
+                'Equipment Repaired',
+                "Equipment repaired and made available: {$equipment->brand} ({$equipment->serial_number}) - Condition: {$validated['condition']}" . 
+                ($validated['repair_notes'] ? " | Notes: {$validated['repair_notes']}" : ''),
+                $equipment,
+                ['status' => $oldStatus, 'condition' => $oldCondition],
+                ['status' => 'available', 'condition' => $validated['condition']]
+            );
+
+            return response()->json([
+                'success' => true,
+                'data' => $equipment,
+                'message' => 'Equipment marked as repaired and is now available'
+            ]);
+
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error marking equipment as repaired: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Get equipment statistics
      */
     public function statistics(): JsonResponse
