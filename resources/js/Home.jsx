@@ -48,27 +48,10 @@ const HomePage = () => {
           const currentHoldersData = holdersRes?.success ? holdersRes.data : [];
           const employeesData = employeesRes?.data?.success ? employeesRes.data.data : [];
 
-          // Calculate statistics
-          const totalEquipment = equipment.length;
-          const availableStock = equipment.filter(eq => eq.status === 'available').length;
-          const borrowedCount = equipment.filter(eq => eq.status === 'borrowed').length;
-          const issuedCount = equipment.filter(eq => eq.status === 'issued').length;
-          
-          // Debug: Log equipment status breakdown
-          console.log('Equipment Status Breakdown:', {
-            total: totalEquipment,
-            available: availableStock,
-            borrowed: borrowedCount,
-            issued: issuedCount,
-            statusCounts: equipment.reduce((acc, eq) => {
-              acc[eq.status] = (acc[eq.status] || 0) + 1;
-              return acc;
-            }, {})
-          });
-          
           // Count unique employees who are holding equipment (dynamic)
           // Build a map of employees and their equipment (borrowed + issued)
           const holdersMap = new Map();
+          const issuedEquipmentIds = new Set(); // Track all issued equipment IDs
           
           // Process borrowed equipment from transactions
           equipment.forEach(eq => {
@@ -120,11 +103,14 @@ const HomePage = () => {
                   console.log('Employee', employee.first_name, 'has issued_item:', parsedIssued);
                   
                   // Get equipment IDs from issued_item
-                  const issuedEquipmentIds = parsedIssued.map(item => item.id);
+                  const equipmentIds = parsedIssued.map(item => item.id);
+                  
+                  // Track these IDs as issued equipment
+                  equipmentIds.forEach(id => issuedEquipmentIds.add(id));
                   
                   // Find matching equipment from the main equipment list
                   // Match by ID regardless of status, since being in issued_item means it's issued
-                  const matchedEquipment = equipment.filter(eq => issuedEquipmentIds.includes(eq.id));
+                  const matchedEquipment = equipment.filter(eq => equipmentIds.includes(eq.id));
                   
                   console.log('Matched equipment for', employee.first_name, ':', matchedEquipment);
                   
@@ -155,6 +141,9 @@ const HomePage = () => {
               const existingIds = issuedEquipmentData.map(eq => eq.id);
               const additionalEquipment = employee.issued_equipment.filter(eq => !existingIds.includes(eq.id));
               issuedEquipmentData = [...issuedEquipmentData, ...additionalEquipment];
+              
+              // Track these IDs as issued equipment
+              additionalEquipment.forEach(eq => issuedEquipmentIds.add(eq.id));
             }
             
             // Process if employee has any issued equipment
@@ -192,6 +181,25 @@ const HomePage = () => {
               
               console.log('Final holder data for', employeeName, ':', holderData);
             }
+          });
+          
+          // Calculate statistics - use actual issued equipment count from employees
+          const totalEquipment = equipment.length;
+          const availableStock = equipment.filter(eq => eq.status === 'available' && !issuedEquipmentIds.has(eq.id)).length;
+          const borrowedCount = equipment.filter(eq => eq.status === 'borrowed').length;
+          const issuedCount = issuedEquipmentIds.size; // Count all equipment that's actually issued to employees
+          
+          // Debug: Log equipment status breakdown
+          console.log('Equipment Status Breakdown:', {
+            total: totalEquipment,
+            available: availableStock,
+            borrowed: borrowedCount,
+            issued: issuedCount,
+            issuedEquipmentIds: Array.from(issuedEquipmentIds),
+            statusCounts: equipment.reduce((acc, eq) => {
+              acc[eq.status] = (acc[eq.status] || 0) + 1;
+              return acc;
+            }, {})
           });
           
           const currentHolder = holdersMap.size;

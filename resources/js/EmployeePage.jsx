@@ -264,8 +264,8 @@ const EmployeePage = () => {
 
   const loadAvailableEquipment = async () => {
     try {
-      // Get paginated equipment list with category info
-      const res = await fetch('/api/equipment?per_page=100&status=available', {
+      // Get paginated equipment list with category info - get all available equipment
+      const res = await fetch('/api/equipment?per_page=1000&status=available', {
         headers: {
           'Accept': 'application/json',
         },
@@ -569,15 +569,30 @@ const EmployeePage = () => {
         return;
       }
 
-      // Add single unit with one serial number
+      // Find the actual equipment item with this serial number from all_items
+      let actualEquipment = null;
+      if (equipment.all_items && Array.isArray(equipment.all_items)) {
+        actualEquipment = equipment.all_items.find(item => item.serial_number === serialNumber);
+      }
+      
+      // If not found in all_items, search in availableEquipment
+      if (!actualEquipment) {
+        actualEquipment = availableEquipment.find(eq => 
+          eq.serial_number === serialNumber &&
+          eq.brand === equipment.brand &&
+          eq.specifications === equipment.specifications
+        );
+      }
+
+      // Use the actual equipment item if found, otherwise use the grouped equipment data
       const equipmentToAdd = {
-        id: equipment.id,
-        name: equipment.name,
-        brand: equipment.brand,
-        specifications: equipment.specifications,
-        item_image: equipment.item_image,
-        category: equipment.category,
-        status: equipment.status,
+        id: actualEquipment?.id || equipment.id,
+        name: actualEquipment?.name || equipment.name,
+        brand: actualEquipment?.brand || equipment.brand,
+        specifications: actualEquipment?.specifications || equipment.specifications,
+        item_image: actualEquipment?.item_image || equipment.item_image,
+        category: actualEquipment?.category || equipment.category,
+        status: actualEquipment?.status || equipment.status,
         unitKey: unitKey,
         serial_number: serialNumber,
         serial_numbers: [serialNumber],
@@ -720,20 +735,23 @@ const EmployeePage = () => {
 
     availableEquipment.forEach(eq => {
       // Create a unique key combining brand and specifications
-      const specKey = `${eq.brand}-${eq.specifications}`;
+      // Normalize the key to handle variations in spacing/casing
+      const normalizedBrand = (eq.brand || eq.name || 'Unknown').trim();
+      const normalizedSpecs = (eq.specifications || 'No specifications').trim();
+      const specKey = `${normalizedBrand}-${normalizedSpecs}`;
 
       if (!groupedMap.has(specKey)) {
         // First time seeing this specification, create the group
         groupedMap.set(specKey, {
-          id: eq.id,
-          name: eq.name,
+          id: eq.id, // Use first item's ID as reference
+          name: eq.name || eq.brand,
           brand: eq.brand,
           specifications: eq.specifications,
           item_image: eq.item_image,
           receipt_image: eq.receipt_image,
           category: eq.category,
           status: eq.status,
-          serial_numbers: [eq.serial_number],
+          serial_numbers: eq.serial_number ? [eq.serial_number] : [],
           available_count: 1,
           price: eq.purchase_price,
           condition: eq.condition,
@@ -744,15 +762,29 @@ const EmployeePage = () => {
       } else {
         // Add to existing group
         const existing = groupedMap.get(specKey);
-        if (!existing.serial_numbers.includes(eq.serial_number)) {
+        // Only add if serial number is unique and not already in the list
+        if (eq.serial_number && !existing.serial_numbers.includes(eq.serial_number)) {
           existing.serial_numbers.push(eq.serial_number);
           existing.all_items.push(eq);
           existing.available_count += 1;
+        } else if (!eq.serial_number) {
+          // If no serial number, still count it as a separate unit
+          existing.all_items.push(eq);
+          existing.available_count += 1;
+          // Add a placeholder serial number for tracking
+          const placeholderSerial = `UNIT-${existing.all_items.length}`;
+          if (!existing.serial_numbers.includes(placeholderSerial)) {
+            existing.serial_numbers.push(placeholderSerial);
+          }
         }
       }
     });
 
-    return Array.from(groupedMap.values());
+    // Sort serial numbers for better display
+    return Array.from(groupedMap.values()).map(group => ({
+      ...group,
+      serial_numbers: group.serial_numbers.sort()
+    }));
   };
 
   // Calculate real availability for equipment, accounting for already selected items
