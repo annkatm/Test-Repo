@@ -681,23 +681,70 @@ const EmployeePage = () => {
     setViewMode('grid');
   };
 
-  const openPrintModal = () => {
+  const openPrintModal = async () => {
     if (issuedEquipment.length === 0) {
       alert('No equipment selected for printing');
       return;
     }
 
+    // Ensure we have the latest equipment data loaded
+    // This ensures we have all serial numbers for dropdown options
+    await loadAvailableEquipment();
+
     // Prepare print data from current form and issued equipment
+    // Convert dropdown IDs to names for display
+    const positionName = form.position ? getLabelFromValue(form.position, dropdownOptions.positions) : (form.position || 'N/A');
+    const departmentName = form.department ? getLabelFromValue(form.department, dropdownOptions.departments) : (form.department || 'N/A');
+    
     // Use flatMap to create separate items for each serial number
     const printData = {
       full_name: `${form.firstName} ${form.lastName}`.trim(),
-      position: form.position || 'N/A',
-      department: form.department || 'N/A',
+      position: positionName,
+      department: departmentName,
       items: issuedEquipment.flatMap(eq => {
         // Get all serial numbers for this equipment
         const serialNumbers = Array.isArray(eq.serial_numbers) && eq.serial_numbers.length > 0
           ? eq.serial_numbers
           : [eq.serial_number || 'N/A'];
+
+        // Find all serial numbers for this equipment type from availableEquipment
+        // Match by brand and specifications (normalize for comparison)
+        const normalizedBrand = (eq.brand || eq.name || '').trim();
+        const normalizedSpecs = (eq.specifications || '').trim();
+        
+        const equipmentType = availableEquipment.filter(availEq => {
+          const availBrand = (availEq.brand || availEq.name || '').trim();
+          const availSpecs = (availEq.specifications || '').trim();
+          return availBrand === normalizedBrand && availSpecs === normalizedSpecs;
+        });
+        
+        // Get all unique serial numbers from this equipment type
+        const allAvailableSerials = equipmentType
+          .map(availEq => availEq.serial_number)
+          .filter(serial => serial && serial.trim() !== '' && serial !== 'N/A')
+          .filter((serial, index, self) => self.indexOf(serial) === index) // Remove duplicates
+          .sort();
+
+        // Also check if we have grouped equipment data with serial_numbers array
+        // This happens when equipment is loaded from the equipment modal
+        let groupedSerials = [];
+        if (equipmentType.length > 0) {
+          // Try to find if there's a grouped equipment item with serial_numbers
+          const groupedEquipment = getUniqueEquipment().find(grouped => {
+            const groupBrand = (grouped.brand || grouped.name || '').trim();
+            const groupSpecs = (grouped.specifications || '').trim();
+            return groupBrand === normalizedBrand && groupSpecs === normalizedSpecs;
+          });
+          
+          if (groupedEquipment && groupedEquipment.serial_numbers && groupedEquipment.serial_numbers.length > 0) {
+            groupedSerials = groupedEquipment.serial_numbers.filter(serial => serial && serial.trim() !== '');
+          }
+        }
+
+        // Use grouped serials if available (more complete), otherwise use filtered available equipment
+        const availableSerialNumbers = groupedSerials.length > 0 
+          ? groupedSerials 
+          : (allAvailableSerials.length > 0 ? allAvailableSerials : serialNumbers);
 
         // Create a separate item for each serial number
         return serialNumbers.map(serial => ({
@@ -706,6 +753,7 @@ const EmployeePage = () => {
           model: eq.name || 'N/A',
           category_name: eq.category?.name || 'N/A',
           serial_number: serial,
+          serial_numbers: availableSerialNumbers, // Include all available serial numbers for editing
           specifications: eq.specifications || 'No specifications',
           date_released: new Date().toISOString(),
           date_returned: null
