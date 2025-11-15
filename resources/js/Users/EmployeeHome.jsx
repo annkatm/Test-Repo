@@ -944,7 +944,7 @@ const EmployeeHome = () => {
           .no-scrollbar::-webkit-scrollbar { display: none; }
         `}
       </style>
-      <div className="col-span-12 md:col-span-8 space-y-6">
+      <div className="col-span-12 md:col-span-10 space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-4xl font-bold text-[#2262C6] transition-all duration-300">Home</h1>
         </div>
@@ -986,9 +986,10 @@ const EmployeeHome = () => {
 
           <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
             <div className="grid grid-cols-12 gap-6 text-sm font-medium text-gray-700">
-              <div className="col-span-4">Item</div>
-              <div className="col-span-4">Start Date</div>
-              <div className="col-span-4">Status</div>
+              <div className="col-span-5">Item</div>
+              <div className="col-span-3">Start Date</div>
+              <div className="col-span-2">Brand</div>
+              <div className="col-span-2">Status</div>
             </div>
           </div>
 
@@ -1006,7 +1007,7 @@ const EmployeeHome = () => {
                 const bDate = new Date(b.created_at || b.expected_start_date || 0).getTime();
                 return bDate - aDate; // newest first
               })
-              .slice(0, 3)
+              .slice(0, 6)
               .map((transaction, index) => (
               <div
                 key={transaction.id || index}
@@ -1014,12 +1015,12 @@ const EmployeeHome = () => {
                 onClick={() => logActivity(`Clicked pending row: ${transaction.equipment_name || transaction.item || 'Item'} (${transaction.id || index})`, 'info')}
               >
                 <div className="grid grid-cols-12 gap-6 items-center">
-                  <div className="col-span-4">
+                  <div className="col-span-5">
                     <span className="text-sm text-gray-900">
                       {transaction.type || transaction.category || transaction.category_name || transaction.equipment_type || transaction.item_type || transaction?.equipment?.type || transaction?.equipment?.category || transaction?.equipment?.category_name || transaction.item || transaction.equipment_name || transaction?.equipment?.name || '-'}
                     </span>
                   </div>
-                  <div className="col-span-4">
+                  <div className="col-span-3">
                     <span className="text-sm text-gray-900">
                       {transaction.expected_start_date
                         ? new Date(transaction.expected_start_date).toLocaleDateString("en-US", {
@@ -1030,7 +1031,12 @@ const EmployeeHome = () => {
                         : '-'}
                     </span>
                   </div>
-                  <div className="col-span-4">
+                  <div className="col-span-2">
+                    <span className="text-sm text-gray-600">
+                      {transaction.brand || transaction.equipment_brand || transaction?.equipment?.brand || '-'}
+                    </span>
+                  </div>
+                  <div className="col-span-2">
                     {(() => {
                       const s = String(transaction.status || 'pending').toLowerCase();
                       const isApproved = /approved|released|borrowed|active/.test(s);
@@ -1073,9 +1079,10 @@ const EmployeeHome = () => {
 
           <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
             <div className="grid grid-cols-12 gap-6 text-sm font-medium text-gray-700">
-              <div className="col-span-4">Item</div>
-              <div className="col-span-4">Start Date</div>
-              <div className="col-span-4">Status</div>
+              <div className="col-span-5">Item</div>
+              <div className="col-span-3">Start Date</div>
+              <div className="col-span-2">Brand</div>
+              <div className="col-span-2">Status</div>
             </div>
           </div>
 
@@ -1090,7 +1097,7 @@ const EmployeeHome = () => {
                 const s = String(t.status || '').toLowerCase();
                 return ['approved', 'released', 'borrowed', 'active'].includes(s);
               });
-              const useList = (filtered.length > 0 ? filtered : sorted).slice(0, 3);
+              const useList = (filtered.length > 0 ? filtered : sorted).slice(0, 8);
               return useList.map((transaction, index) => (
                 <div
                   key={transaction.id || index}
@@ -1098,12 +1105,12 @@ const EmployeeHome = () => {
                   onClick={() => logActivity(`Clicked approved row: ${transaction.equipment_name || transaction.item || 'Item'} (${transaction.id || index})`, 'info')}
                 >
                   <div className="grid grid-cols-12 gap-6 items-center">
-                    <div className="col-span-4">
+                    <div className="col-span-5">
                       <span className="text-sm text-gray-900">
                         {transaction.type || transaction.category || transaction.category_name || transaction.equipment_type || transaction.item_type || transaction?.equipment?.type || transaction?.equipment?.category || transaction?.equipment?.category_name || transaction.item || transaction.equipment_name || transaction?.equipment?.name || '-'}
                       </span>
                     </div>
-                    <div className="col-span-4">
+                    <div className="col-span-3">
                       <span className="text-sm text-gray-900">
                         {(transaction.expected_start_date || transaction.start_date || transaction.created_at || transaction.borrow_date || transaction.borrowed_at || transaction.release_date || transaction.start || transaction.expected_start || transaction.startDate)
                           ? new Date(
@@ -1114,7 +1121,12 @@ const EmployeeHome = () => {
                           : '-'}
                       </span>
                     </div>
-                    <div className="col-span-4">
+                    <div className="col-span-2">
+                      <span className="text-sm text-gray-600">
+                        {transaction.brand || transaction.equipment_brand || transaction?.equipment?.brand || '-'}
+                      </span>
+                    </div>
+                    <div className="col-span-2">
                       {(() => {
                         const s = String(transaction.status || 'approved').toLowerCase();
                         const isApproved = /approved|released|borrowed|active/.test(s);
@@ -1139,7 +1151,7 @@ const EmployeeHome = () => {
         </div>
       </div>
 
-      <div className="col-span-12 md:col-span-4 space-y-6">
+      <div className="col-span-12 md:col-span-2 space-y-6">
         <div className="space-y-3 max-h-96 overflow-y-auto">
                 {(borrowedItems || []).map((it, i) => (
                   <div key={it.id || i} className="border border-gray-200 rounded-lg p-3">
