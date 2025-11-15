@@ -252,16 +252,20 @@ const EmployeePage = () => {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
 
-    // Clear issued equipment when employee type is changed to 'Regular' in Add Modal
-    if (field === 'employeeType' && value === 'Regular' && isAddOpen) {
-      setIssuedEquipment([]);
+    // Clear issued equipment when employee type is changed to 'Regular' in Add or Edit Modal
+    if (field === 'employeeType' && (isAddOpen || editing)) {
+      // Check if the value is 'Regular' (string) or if it's an ID that maps to 'Regular'
+      const employeeTypeName = value === 'Regular' ? 'Regular' : getLabelFromValue(value, dropdownOptions.employeeTypes);
+      if (employeeTypeName === 'Regular') {
+        setIssuedEquipment([]);
+      }
     }
   };
 
   const loadAvailableEquipment = async () => {
     try {
-      // Get paginated equipment list with category info
-      const res = await fetch('/api/equipment?per_page=100&status=available', {
+      // Get paginated equipment list with category info - get all available equipment
+      const res = await fetch('/api/equipment?per_page=1000&status=available', {
         headers: {
           'Accept': 'application/json',
         },
@@ -565,15 +569,30 @@ const EmployeePage = () => {
         return;
       }
 
-      // Add single unit with one serial number
+      // Find the actual equipment item with this serial number from all_items
+      let actualEquipment = null;
+      if (equipment.all_items && Array.isArray(equipment.all_items)) {
+        actualEquipment = equipment.all_items.find(item => item.serial_number === serialNumber);
+      }
+      
+      // If not found in all_items, search in availableEquipment
+      if (!actualEquipment) {
+        actualEquipment = availableEquipment.find(eq => 
+          eq.serial_number === serialNumber &&
+          eq.brand === equipment.brand &&
+          eq.specifications === equipment.specifications
+        );
+      }
+
+      // Use the actual equipment item if found, otherwise use the grouped equipment data
       const equipmentToAdd = {
-        id: equipment.id,
-        name: equipment.name,
-        brand: equipment.brand,
-        specifications: equipment.specifications,
-        item_image: equipment.item_image,
-        category: equipment.category,
-        status: equipment.status,
+        id: actualEquipment?.id || equipment.id,
+        name: actualEquipment?.name || equipment.name,
+        brand: actualEquipment?.brand || equipment.brand,
+        specifications: actualEquipment?.specifications || equipment.specifications,
+        item_image: actualEquipment?.item_image || equipment.item_image,
+        category: actualEquipment?.category || equipment.category,
+        status: actualEquipment?.status || equipment.status,
         unitKey: unitKey,
         serial_number: serialNumber,
         serial_numbers: [serialNumber],
@@ -662,23 +681,70 @@ const EmployeePage = () => {
     setViewMode('grid');
   };
 
-  const openPrintModal = () => {
+  const openPrintModal = async () => {
     if (issuedEquipment.length === 0) {
       alert('No equipment selected for printing');
       return;
     }
 
+    // Ensure we have the latest equipment data loaded
+    // This ensures we have all serial numbers for dropdown options
+    await loadAvailableEquipment();
+
     // Prepare print data from current form and issued equipment
+    // Convert dropdown IDs to names for display
+    const positionName = form.position ? getLabelFromValue(form.position, dropdownOptions.positions) : (form.position || 'N/A');
+    const departmentName = form.department ? getLabelFromValue(form.department, dropdownOptions.departments) : (form.department || 'N/A');
+    
     // Use flatMap to create separate items for each serial number
     const printData = {
       full_name: `${form.firstName} ${form.lastName}`.trim(),
-      position: form.position || 'N/A',
-      department: form.department || 'N/A',
+      position: positionName,
+      department: departmentName,
       items: issuedEquipment.flatMap(eq => {
         // Get all serial numbers for this equipment
         const serialNumbers = Array.isArray(eq.serial_numbers) && eq.serial_numbers.length > 0
           ? eq.serial_numbers
           : [eq.serial_number || 'N/A'];
+
+        // Find all serial numbers for this equipment type from availableEquipment
+        // Match by brand and specifications (normalize for comparison)
+        const normalizedBrand = (eq.brand || eq.name || '').trim();
+        const normalizedSpecs = (eq.specifications || '').trim();
+        
+        const equipmentType = availableEquipment.filter(availEq => {
+          const availBrand = (availEq.brand || availEq.name || '').trim();
+          const availSpecs = (availEq.specifications || '').trim();
+          return availBrand === normalizedBrand && availSpecs === normalizedSpecs;
+        });
+        
+        // Get all unique serial numbers from this equipment type
+        const allAvailableSerials = equipmentType
+          .map(availEq => availEq.serial_number)
+          .filter(serial => serial && serial.trim() !== '' && serial !== 'N/A')
+          .filter((serial, index, self) => self.indexOf(serial) === index) // Remove duplicates
+          .sort();
+
+        // Also check if we have grouped equipment data with serial_numbers array
+        // This happens when equipment is loaded from the equipment modal
+        let groupedSerials = [];
+        if (equipmentType.length > 0) {
+          // Try to find if there's a grouped equipment item with serial_numbers
+          const groupedEquipment = getUniqueEquipment().find(grouped => {
+            const groupBrand = (grouped.brand || grouped.name || '').trim();
+            const groupSpecs = (grouped.specifications || '').trim();
+            return groupBrand === normalizedBrand && groupSpecs === normalizedSpecs;
+          });
+          
+          if (groupedEquipment && groupedEquipment.serial_numbers && groupedEquipment.serial_numbers.length > 0) {
+            groupedSerials = groupedEquipment.serial_numbers.filter(serial => serial && serial.trim() !== '');
+          }
+        }
+
+        // Use grouped serials if available (more complete), otherwise use filtered available equipment
+        const availableSerialNumbers = groupedSerials.length > 0 
+          ? groupedSerials 
+          : (allAvailableSerials.length > 0 ? allAvailableSerials : serialNumbers);
 
         // Create a separate item for each serial number
         return serialNumbers.map(serial => ({
@@ -687,6 +753,7 @@ const EmployeePage = () => {
           model: eq.name || 'N/A',
           category_name: eq.category?.name || 'N/A',
           serial_number: serial,
+          serial_numbers: availableSerialNumbers, // Include all available serial numbers for editing
           specifications: eq.specifications || 'No specifications',
           date_released: new Date().toISOString(),
           date_returned: null
@@ -716,20 +783,23 @@ const EmployeePage = () => {
 
     availableEquipment.forEach(eq => {
       // Create a unique key combining brand and specifications
-      const specKey = `${eq.brand}-${eq.specifications}`;
+      // Normalize the key to handle variations in spacing/casing
+      const normalizedBrand = (eq.brand || eq.name || 'Unknown').trim();
+      const normalizedSpecs = (eq.specifications || 'No specifications').trim();
+      const specKey = `${normalizedBrand}-${normalizedSpecs}`;
 
       if (!groupedMap.has(specKey)) {
         // First time seeing this specification, create the group
         groupedMap.set(specKey, {
-          id: eq.id,
-          name: eq.name,
+          id: eq.id, // Use first item's ID as reference
+          name: eq.name || eq.brand,
           brand: eq.brand,
           specifications: eq.specifications,
           item_image: eq.item_image,
           receipt_image: eq.receipt_image,
           category: eq.category,
           status: eq.status,
-          serial_numbers: [eq.serial_number],
+          serial_numbers: eq.serial_number ? [eq.serial_number] : [],
           available_count: 1,
           price: eq.purchase_price,
           condition: eq.condition,
@@ -740,15 +810,29 @@ const EmployeePage = () => {
       } else {
         // Add to existing group
         const existing = groupedMap.get(specKey);
-        if (!existing.serial_numbers.includes(eq.serial_number)) {
+        // Only add if serial number is unique and not already in the list
+        if (eq.serial_number && !existing.serial_numbers.includes(eq.serial_number)) {
           existing.serial_numbers.push(eq.serial_number);
           existing.all_items.push(eq);
           existing.available_count += 1;
+        } else if (!eq.serial_number) {
+          // If no serial number, still count it as a separate unit
+          existing.all_items.push(eq);
+          existing.available_count += 1;
+          // Add a placeholder serial number for tracking
+          const placeholderSerial = `UNIT-${existing.all_items.length}`;
+          if (!existing.serial_numbers.includes(placeholderSerial)) {
+            existing.serial_numbers.push(placeholderSerial);
+          }
         }
       }
     });
 
-    return Array.from(groupedMap.values());
+    // Sort serial numbers for better display
+    return Array.from(groupedMap.values()).map(group => ({
+      ...group,
+      serial_numbers: group.serial_numbers.sort()
+    }));
   };
 
   // Calculate real availability for equipment, accounting for already selected items
@@ -849,6 +933,7 @@ const EmployeePage = () => {
     const clientName = form.client ? getLabelFromValue(form.client, dropdownOptions.clients) : '';
     const positionName = form.position ? getLabelFromValue(form.position, dropdownOptions.positions) : '';
     const departmentName = form.department ? getLabelFromValue(form.department, dropdownOptions.departments) : '';
+    const employeeTypeName = form.employeeType ? getLabelFromValue(form.employeeType, dropdownOptions.employeeTypes) : (form.employeeType || 'Regular');
 
     // Get CSRF token
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
@@ -867,7 +952,7 @@ const EmployeePage = () => {
         email: form.email.trim(),
         phone: form.contact.trim(),
         address: form.address.trim(),
-        employee_type: form.employeeType,
+        employee_type: employeeTypeName,
         client: clientName,
         position: positionName,
         department: departmentName,
@@ -915,6 +1000,8 @@ const EmployeePage = () => {
     const clientId = emp.client ? getValueFromLabel(emp.client, dropdownOptions.clients) : '';
     const positionId = emp.position ? getValueFromLabel(emp.position, dropdownOptions.positions) : '';
     const departmentId = emp.department ? getValueFromLabel(emp.department, dropdownOptions.departments) : '';
+    // Convert employee type name to ID for the dropdown
+    const employeeTypeId = emp.employeeType ? getValueFromLabel(emp.employeeType, dropdownOptions.employeeTypes) : '';
 
     setForm({
       firstName: emp.firstName || '',
@@ -923,7 +1010,7 @@ const EmployeePage = () => {
       password: '',
       contact: emp.phone || '',
       address: emp.address || '',
-      employeeType: emp.employeeType || 'Regular',
+      employeeType: employeeTypeId || (emp.employeeType || 'Regular'), // Use ID if found, otherwise fallback to name/Regular
       client: clientId,
       position: positionId,
       department: departmentId,
@@ -979,6 +1066,7 @@ const EmployeePage = () => {
     const clientName = form.client ? getLabelFromValue(form.client, dropdownOptions.clients) : '';
     const positionName = form.position ? getLabelFromValue(form.position, dropdownOptions.positions) : '';
     const departmentName = form.department ? getLabelFromValue(form.department, dropdownOptions.departments) : '';
+    const employeeTypeName = form.employeeType ? getLabelFromValue(form.employeeType, dropdownOptions.employeeTypes) : (form.employeeType || 'Regular');
 
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
 
@@ -996,7 +1084,7 @@ const EmployeePage = () => {
         password: form.password || undefined,
         phone: form.contact.trim(),
         address: form.address.trim(),
-        employee_type: form.employeeType,
+        employee_type: employeeTypeName,
         client: clientName,
         position: positionName,
         department: departmentName,
@@ -1016,6 +1104,26 @@ const EmployeePage = () => {
       })
       .then(data => {
         if (data.success) {
+          // Update viewing state if it was open for this employee
+          if (viewing && viewing.id === editing.id) {
+            setViewing({
+              ...viewing,
+              firstName: form.firstName,
+              lastName: form.lastName,
+              name: `${form.firstName} ${form.lastName}`.trim(),
+              email: form.email,
+              phone: form.contact,
+              address: form.address,
+              employeeType: employeeTypeName, // Use the name, not the ID
+              client: clientName,
+              position: positionName,
+              department: departmentName,
+              issuedEquipment: issuedEquipment,
+              badge: (form.firstName?.[0] || '').toUpperCase(),
+              color: getBadgeColor(form.firstName)
+            });
+          }
+          
           closeEdit();
           refreshEmployees();
           // Reload available equipment to reflect issued items
@@ -1283,45 +1391,47 @@ const EmployeePage = () => {
 
               </div>
 
-              {/* Issued Item Section - Full Width */}
-              <div className="mt-6">
-                <div className="space-y-4">
-                  <label className="block text-sm text-gray-700 font-medium mb-2">
-                    Issued Equipment
-                  </label>
-                  <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                    <div className="bg-gray-100 px-4 py-3 border-b border-gray-300">
-                      <div className="grid grid-cols-2 gap-4 text-sm font-bold text-gray-800">
-                        <div>Equipment</div>
-                        <div>Serial Number</div>
+              {/* Issued Item Section - Full Width - Only show for New hire or Probationary */}
+              {(viewing.employeeType === 'New hire' || viewing.employeeType === 'Probationary') && (
+                <div className="mt-6">
+                  <div className="space-y-4">
+                    <label className="block text-sm text-gray-700 font-medium mb-2">
+                      Issued Equipment
+                    </label>
+                    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                      <div className="bg-gray-100 px-4 py-3 border-b border-gray-300">
+                        <div className="grid grid-cols-2 gap-4 text-sm font-bold text-gray-800">
+                          <div>Equipment</div>
+                          <div>Serial Number</div>
+                        </div>
                       </div>
-                    </div>
-                    <div className="max-h-60 overflow-y-auto">
-                      <div className="divide-y divide-gray-200">
-                        {viewing.issuedEquipment && viewing.issuedEquipment.length > 0 ? (
-                          viewing.issuedEquipment.map((item, index) => (
-                            <div key={index} className="px-4 py-3 hover:bg-gray-50">
-                              <div className="grid grid-cols-2 gap-4 items-center">
-                                <div className="text-blue-600 font-medium">
-                                  {item.name || item.brand || 'N/A'}
-                                </div>
-                                <div className="text-gray-700 text-sm leading-tight">
-                                  {item.specifications || item.specs || 'No specifications'}
+                      <div className="max-h-60 overflow-y-auto">
+                        <div className="divide-y divide-gray-200">
+                          {viewing.issuedEquipment && viewing.issuedEquipment.length > 0 ? (
+                            viewing.issuedEquipment.map((item, index) => (
+                              <div key={index} className="px-4 py-3 hover:bg-gray-50">
+                                <div className="grid grid-cols-2 gap-4 items-center">
+                                  <div className="text-blue-600 font-medium">
+                                    {item.name || item.brand || 'N/A'}
+                                  </div>
+                                  <div className="text-gray-700 text-sm leading-tight">
+                                    {item.specifications || item.specs || 'No specifications'}
+                                  </div>
                                 </div>
                               </div>
+                            ))
+                          ) : (
+                            <div className="px-4 py-6 text-center text-gray-500">
+                              <div className="text-lg font-medium mb-2">No equipment issued</div>
+                              <div className="text-sm">This employee has not been assigned any equipment yet.</div>
                             </div>
-                          ))
-                        ) : (
-                          <div className="px-4 py-6 text-center text-gray-500">
-                            <div className="text-lg font-medium mb-2">No equipment issued</div>
-                            <div className="text-sm">This employee has not been assigned any equipment yet.</div>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         )}
@@ -1436,71 +1546,74 @@ const EmployeePage = () => {
                 </div>
               </div>
 
-              {/* Issued Item Section - Full Width */}
-              <div className="mt-6 mb-6">
-                <div className="space-y-4">
-                  <label className="block text-sm text-gray-700 font-medium mb-2">
-                    Issued Item
-                  </label>
-                  <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                    <div className="bg-gray-100 px-4 py-3 border-b border-gray-300">
-                      <div className="grid grid-cols-2 gap-4 text-sm font-bold text-gray-800">
-                        <div>Equipment</div>
-                        <div>Serial Number</div>
+              {/* Issued Item Section - Full Width - Only show for New hire or Probationary */}
+              {(() => {
+                const employeeTypeName = getLabelFromValue(form.employeeType, dropdownOptions.employeeTypes);
+                return (employeeTypeName === 'New hire' || employeeTypeName === 'Probationary');
+              })() && (
+                <div className="mt-6 mb-6">
+                  <div className="space-y-4">
+                    <label className="block text-sm text-gray-700 font-medium mb-2">
+                      Issued Item
+                    </label>
+                    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                      <div className="bg-gray-100 px-4 py-3 border-b border-gray-300">
+                        <div className="grid grid-cols-2 gap-4 text-sm font-bold text-gray-800">
+                          <div>Equipment</div>
+                          <div>Serial Number</div>
+                        </div>
                       </div>
-                    </div>
-                    <div className="max-h-60 overflow-y-auto">
-                      <div className="divide-y divide-gray-200">
-                        {issuedEquipment.length === 0 ? (
-                          <div className="px-4 py-6 text-center text-gray-400 text-sm">
-                            No equipment issued yet. Click "Add New" to assign equipment.
-                          </div>
-                        ) : (
-                          issuedEquipment.map((equipment, index) => (
-                            <div key={equipment.specKey || equipment.id || index} className="px-4 py-3 hover:bg-gray-50 transition-colors">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center space-x-3 flex-1">
-                                  {/* Equipment Image */}
-                                  {equipment.item_image ? (
-                                    <img
-                                      src={`/storage/${equipment.item_image}`}
-                                      alt={equipment.name}
-                                      className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
-                                    />
-                                  ) : (
-                                    <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-                                      <span className="text-gray-400 text-xs">No img</span>
-                                    </div>
-                                  )}
-                                  <div className="min-w-0 flex-1">
-                                    <h5 className="text-blue-600 font-medium text-sm truncate">
-                                      {equipment.name || equipment.brand}
-                                    </h5>
-                                    <p className="text-gray-600 text-xs mt-1">
-                                      <span className="font-mono font-medium">{equipment.serial_number || 'N/A'}</span>
-                                    </p>
-                                    {equipment.specifications && (
-                                      <p className="text-gray-500 text-xs leading-tight mt-0.5">
-                                        {equipment.specifications}
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => removeEquipmentFromIssued(equipment)}
-                                  className="ml-4 text-red-500 hover:text-red-700 text-xs font-medium flex-shrink-0 px-2 py-1 rounded hover:bg-red-50"
-                                >
-                                  Remove
-                                </button>
-                              </div>
+                      <div className="max-h-60 overflow-y-auto">
+                        <div className="divide-y divide-gray-200">
+                          {issuedEquipment.length === 0 ? (
+                            <div className="px-4 py-6 text-center text-gray-400 text-sm">
+                              No equipment issued yet. Click "Add New" to assign equipment.
                             </div>
-                          ))
-                        )}
+                          ) : (
+                            issuedEquipment.map((equipment, index) => (
+                              <div key={equipment.specKey || equipment.id || index} className="px-4 py-3 hover:bg-gray-50 transition-colors">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center space-x-3 flex-1">
+                                    {/* Equipment Image */}
+                                    {equipment.item_image ? (
+                                      <img
+                                        src={`/storage/${equipment.item_image}`}
+                                        alt={equipment.name}
+                                        className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
+                                      />
+                                    ) : (
+                                      <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                        <span className="text-gray-400 text-xs">No img</span>
+                                      </div>
+                                    )}
+                                    <div className="min-w-0 flex-1">
+                                      <h5 className="text-blue-600 font-medium text-sm truncate">
+                                        {equipment.name || equipment.brand}
+                                      </h5>
+                                      <p className="text-gray-600 text-xs mt-1">
+                                        <span className="font-mono font-medium">{equipment.serial_number || 'N/A'}</span>
+                                      </p>
+                                      {equipment.specifications && (
+                                        <p className="text-gray-500 text-xs leading-tight mt-0.5">
+                                          {equipment.specifications}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeEquipmentFromIssued(equipment)}
+                                    className="ml-4 text-red-500 hover:text-red-700 text-xs font-medium flex-shrink-0 px-2 py-1 rounded hover:bg-red-50"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
-                      {(form.employeeType === 'New hire' || form.employeeType === 'Probationary') && (
+                      <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
                         <button
                           type="button"
                           onClick={openEquipmentModal}
@@ -1509,8 +1622,6 @@ const EmployeePage = () => {
                         >
                           Add New
                         </button>
-                      )}
-                      {(form.employeeType === 'New hire' || form.employeeType === 'Probationary') && (
                         <button
                           type="button"
                           onClick={openPrintModal}
@@ -1523,11 +1634,11 @@ const EmployeePage = () => {
                         >
                           <Printer className="h-4 w-4" />
                         </button>
-                      )}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               <div className="mt-8 flex items-center justify-between">
                 <button onClick={resetAll} className="text-blue-500 hover:text-blue-600 font-medium" tabIndex={12}>Reset all</button>
@@ -1646,71 +1757,74 @@ const EmployeePage = () => {
                 </div>
               </div>
 
-              {/* Issued Item Section - Full Width */}
-              <div className="mt-6">
-                <div className="space-y-4">
-                  <label className="block text-sm text-gray-700 font-medium mb-2">
-                    Issued Item
-                  </label>
-                  <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                    <div className="bg-gray-100 px-4 py-3 border-b border-gray-300">
-                      <div className="grid grid-cols-2 gap-4 text-sm font-bold text-gray-800">
-                        <div>Equipment</div>
-                        <div>Serial Number</div>
+              {/* Issued Item Section - Full Width - Only show for New hire or Probationary */}
+              {(() => {
+                const employeeTypeName = getLabelFromValue(form.employeeType, dropdownOptions.employeeTypes);
+                return (employeeTypeName === 'New hire' || employeeTypeName === 'Probationary');
+              })() && (
+                <div className="mt-6">
+                  <div className="space-y-4">
+                    <label className="block text-sm text-gray-700 font-medium mb-2">
+                      Issued Item
+                    </label>
+                    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                      <div className="bg-gray-100 px-4 py-3 border-b border-gray-300">
+                        <div className="grid grid-cols-2 gap-4 text-sm font-bold text-gray-800">
+                          <div>Equipment</div>
+                          <div>Serial Number</div>
+                        </div>
                       </div>
-                    </div>
-                    <div className="max-h-60 overflow-y-auto">
-                      <div className="divide-y divide-gray-200">
-                        {issuedEquipment.length === 0 ? (
-                          <div className="px-4 py-6 text-center text-gray-400 text-sm">
-                            No equipment issued yet. Click "Add New" to assign equipment.
-                          </div>
-                        ) : (
-                          issuedEquipment.map((equipment, index) => (
-                            <div key={equipment.specKey || equipment.id || index} className="px-4 py-3 hover:bg-gray-50 transition-colors">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center space-x-3 flex-1">
-                                  {/* Equipment Image */}
-                                  {equipment.item_image ? (
-                                    <img
-                                      src={`/storage/${equipment.item_image}`}
-                                      alt={equipment.name}
-                                      className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
-                                    />
-                                  ) : (
-                                    <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-                                      <span className="text-gray-400 text-xs">No img</span>
-                                    </div>
-                                  )}
-                                  <div className="min-w-0 flex-1">
-                                    <h5 className="text-blue-600 font-medium text-sm truncate">
-                                      {equipment.name || equipment.brand}
-                                    </h5>
-                                    <p className="text-gray-600 text-xs mt-1">
-                                      <span className="font-mono font-medium">{equipment.serial_number || 'N/A'}</span>
-                                    </p>
-                                    {equipment.specifications && (
-                                      <p className="text-gray-500 text-xs leading-tight mt-0.5">
-                                        {equipment.specifications}
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => removeEquipmentFromIssued(equipment)}
-                                  className="ml-4 text-red-500 hover:text-red-700 text-xs font-medium flex-shrink-0 px-2 py-1 rounded hover:bg-red-50"
-                                >
-                                  Remove
-                                </button>
-                              </div>
+                      <div className="max-h-60 overflow-y-auto">
+                        <div className="divide-y divide-gray-200">
+                          {issuedEquipment.length === 0 ? (
+                            <div className="px-4 py-6 text-center text-gray-400 text-sm">
+                              No equipment issued yet. Click "Add New" to assign equipment.
                             </div>
-                          ))
-                        )}
+                          ) : (
+                            issuedEquipment.map((equipment, index) => (
+                              <div key={equipment.specKey || equipment.id || index} className="px-4 py-3 hover:bg-gray-50 transition-colors">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center space-x-3 flex-1">
+                                    {/* Equipment Image */}
+                                    {equipment.item_image ? (
+                                      <img
+                                        src={`/storage/${equipment.item_image}`}
+                                        alt={equipment.name}
+                                        className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
+                                      />
+                                    ) : (
+                                      <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                        <span className="text-gray-400 text-xs">No img</span>
+                                      </div>
+                                    )}
+                                    <div className="min-w-0 flex-1">
+                                      <h5 className="text-blue-600 font-medium text-sm truncate">
+                                        {equipment.name || equipment.brand}
+                                      </h5>
+                                      <p className="text-gray-600 text-xs mt-1">
+                                        <span className="font-mono font-medium">{equipment.serial_number || 'N/A'}</span>
+                                      </p>
+                                      {equipment.specifications && (
+                                        <p className="text-gray-500 text-xs leading-tight mt-0.5">
+                                          {equipment.specifications}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeEquipmentFromIssued(equipment)}
+                                    className="ml-4 text-red-500 hover:text-red-700 text-xs font-medium flex-shrink-0 px-2 py-1 rounded hover:bg-red-50"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
-                      {(form.employeeType === 'New hire' || form.employeeType === 'Probationary') && (
+                      <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
                         <button
                           type="button"
                           onClick={openEquipmentModal}
@@ -1719,8 +1833,6 @@ const EmployeePage = () => {
                         >
                           Add New
                         </button>
-                      )}
-                      {(form.employeeType === 'New hire' || form.employeeType === 'Probationary') && (
                         <button
                           type="button"
                           onClick={openPrintModal}
@@ -1733,11 +1845,11 @@ const EmployeePage = () => {
                         >
                           <Printer className="h-4 w-4" />
                         </button>
-                      )}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               <div className="mt-8 flex items-center justify-between">
                 <button onClick={resetAll} className="text-blue-500 hover:text-blue-600 font-medium" tabIndex={12}>Reset</button>
