@@ -853,6 +853,7 @@ const EmployeePage = () => {
     const clientName = form.client ? getLabelFromValue(form.client, dropdownOptions.clients) : '';
     const positionName = form.position ? getLabelFromValue(form.position, dropdownOptions.positions) : '';
     const departmentName = form.department ? getLabelFromValue(form.department, dropdownOptions.departments) : '';
+    const employeeTypeName = form.employeeType ? getLabelFromValue(form.employeeType, dropdownOptions.employeeTypes) : (form.employeeType || 'Regular');
 
     // Get CSRF token
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
@@ -871,7 +872,7 @@ const EmployeePage = () => {
         email: form.email.trim(),
         phone: form.contact.trim(),
         address: form.address.trim(),
-        employee_type: form.employeeType,
+        employee_type: employeeTypeName,
         client: clientName,
         position: positionName,
         department: departmentName,
@@ -919,6 +920,8 @@ const EmployeePage = () => {
     const clientId = emp.client ? getValueFromLabel(emp.client, dropdownOptions.clients) : '';
     const positionId = emp.position ? getValueFromLabel(emp.position, dropdownOptions.positions) : '';
     const departmentId = emp.department ? getValueFromLabel(emp.department, dropdownOptions.departments) : '';
+    // Convert employee type name to ID for the dropdown
+    const employeeTypeId = emp.employeeType ? getValueFromLabel(emp.employeeType, dropdownOptions.employeeTypes) : '';
 
     setForm({
       firstName: emp.firstName || '',
@@ -927,7 +930,7 @@ const EmployeePage = () => {
       password: '',
       contact: emp.phone || '',
       address: emp.address || '',
-      employeeType: emp.employeeType || 'Regular',
+      employeeType: employeeTypeId || (emp.employeeType || 'Regular'), // Use ID if found, otherwise fallback to name/Regular
       client: clientId,
       position: positionId,
       department: departmentId,
@@ -983,6 +986,7 @@ const EmployeePage = () => {
     const clientName = form.client ? getLabelFromValue(form.client, dropdownOptions.clients) : '';
     const positionName = form.position ? getLabelFromValue(form.position, dropdownOptions.positions) : '';
     const departmentName = form.department ? getLabelFromValue(form.department, dropdownOptions.departments) : '';
+    const employeeTypeName = form.employeeType ? getLabelFromValue(form.employeeType, dropdownOptions.employeeTypes) : (form.employeeType || 'Regular');
 
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
 
@@ -1000,7 +1004,7 @@ const EmployeePage = () => {
         password: form.password || undefined,
         phone: form.contact.trim(),
         address: form.address.trim(),
-        employee_type: form.employeeType,
+        employee_type: employeeTypeName,
         client: clientName,
         position: positionName,
         department: departmentName,
@@ -1020,6 +1024,26 @@ const EmployeePage = () => {
       })
       .then(data => {
         if (data.success) {
+          // Update viewing state if it was open for this employee
+          if (viewing && viewing.id === editing.id) {
+            setViewing({
+              ...viewing,
+              firstName: form.firstName,
+              lastName: form.lastName,
+              name: `${form.firstName} ${form.lastName}`.trim(),
+              email: form.email,
+              phone: form.contact,
+              address: form.address,
+              employeeType: employeeTypeName, // Use the name, not the ID
+              client: clientName,
+              position: positionName,
+              department: departmentName,
+              issuedEquipment: issuedEquipment,
+              badge: (form.firstName?.[0] || '').toUpperCase(),
+              color: getBadgeColor(form.firstName)
+            });
+          }
+          
           closeEdit();
           refreshEmployees();
           // Reload available equipment to reflect issued items
