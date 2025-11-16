@@ -202,6 +202,8 @@ const ViewApproved = () => {
           position: holder.position || 'N/A',
           request_mode: holder.request_mode,
           expected_return_date: holder.expected_return_date,
+          request_date: holder.request_date || holder.created_at,
+          created_at: holder.created_at,
           holders: [],
           items: []
         };
@@ -209,7 +211,17 @@ const ViewApproved = () => {
       grouped[employeeName].holders.push(holder);
       grouped[employeeName].items.push({
         id: holder.equipment_id || holder.id,
-        equipment_name: holder.equipment_name || 'Unknown Item'
+        equipment_id: holder.equipment_id,
+        equipment_name: holder.equipment_name || 'Unknown Item',
+        name: holder.equipment_name || 'Unknown Item',
+        brand: holder.brand || '',
+        model: holder.model || '',
+        category_id: holder.category_id || null,
+        category_name: holder.category_name || holder.category || '',
+        category: holder.category_name || holder.category || '',
+        serial_number: holder.serial_number || holder.equipment_serial_number || holder.asset_tag || 'N/A',
+        specifications: holder.specifications || holder.specs || [holder.brand, holder.model].filter(Boolean).join(' ') || holder.category_name || '',
+        specs: holder.specifications || holder.specs || [holder.brand, holder.model].filter(Boolean).join(' ') || holder.category_name || ''
       });
     });
     return Object.values(grouped);
@@ -830,29 +842,27 @@ const ViewApproved = () => {
                     <thead className="bg-gray-50 text-gray-600">
                       <tr className="border-b">
                         <th className="py-2 px-3">Name</th>
-                        <th className="py-2 px-3">Position</th>
                         <th className="py-2 px-3">Item</th>
                         <th className="py-2 px-3">Request mode</th>
-                        <th className="py-2 px-3">End Date</th>
                         <th className="py-2 px-3 text-right">Actions</th>
                       </tr>
                     </thead>
                   <tbody className="divide-y divide-gray-100">
                     {loading ? (
                       <tr>
-                        <td colSpan="6" className="py-8 text-center text-gray-500">
+                        <td colSpan="4" className="py-8 text-center text-gray-500">
                           Loading current holders...
                         </td>
                       </tr>
                     ) : error ? (
                       <tr>
-                        <td colSpan="6" className="py-8 text-center text-red-500">
+                        <td colSpan="4" className="py-8 text-center text-red-500">
                           Error: {error}
                         </td>
                       </tr>
                     ) : groupedCurrentHolders.length === 0 ? (
                       <tr>
-                        <td colSpan="6" className="py-8 text-center text-gray-500">
+                        <td colSpan="4" className="py-8 text-center text-gray-500">
                           No current holders found
                         </td>
                       </tr>
@@ -864,7 +874,6 @@ const ViewApproved = () => {
                           className="border-b last:border-0 cursor-pointer transition-colors duration-200 hover:bg-blue-50"
                         >
                           <td className="py-3 px-3">{group.full_name}</td>
-                          <td className="py-3 px-3">{group.position}</td>
                           <td className="py-3 px-3">
                             <span>
                               {group.items.length === 1 
@@ -873,7 +882,6 @@ const ViewApproved = () => {
                             </span>
                           </td>
                           <td className="py-3 px-3">{formatRequestMode(group.request_mode)}</td>
-                          <td className="py-3 px-3 text-red-600">{group.expected_return_date || 'N/A'}</td>
                           <td className="py-3 px-3">
                             <div className="flex items-center justify-end space-x-4 text-gray-700">
                               <span className="px-3 py-1 rounded-full text-xs bg-green-600 text-white">Released</span>

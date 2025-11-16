@@ -49,9 +49,80 @@ const ViewTransactionModal = ({ isOpen, onClose, transactionData, hideCancel = f
   const avatarUrl = getAvatarUrl(transactionData);
   const employeeName = transactionData?.full_name || transactionData?.name || 'N/A';
 
+  // Get icon URL based on category name
+  const getItemIconUrl = (categoryName) => {
+    if (!categoryName) return 'https://api.iconify.design/mdi:package-variant.svg';
+    
+    const category = categoryName.toLowerCase().trim();
+    
+    // Map categories to icon URLs using Iconify API
+    const iconMap = {
+      'laptop': 'https://api.iconify.design/mdi:laptop.svg',
+      'computer': 'https://api.iconify.design/mdi:laptop.svg',
+      'mouse': 'https://api.iconify.design/mdi:mouse.svg',
+      'keyboard': 'https://api.iconify.design/mdi:keyboard.svg',
+      'monitor': 'https://api.iconify.design/mdi:monitor.svg',
+      'display': 'https://api.iconify.design/mdi:monitor.svg',
+      'headphone': 'https://api.iconify.design/mdi:headphones.svg',
+      'headphones': 'https://api.iconify.design/mdi:headphones.svg',
+      'webcam': 'https://api.iconify.design/mdi:webcam.svg',
+      'camera': 'https://api.iconify.design/mdi:camera.svg',
+      'printer': 'https://api.iconify.design/mdi:printer.svg',
+      'scanner': 'https://api.iconify.design/mdi:scanner.svg',
+      'tablet': 'https://api.iconify.design/mdi:tablet.svg',
+      'phone': 'https://api.iconify.design/mdi:phone.svg',
+      'telephone': 'https://api.iconify.design/mdi:phone.svg',
+      'mobile': 'https://api.iconify.design/mdi:cellphone.svg',
+      'router': 'https://api.iconify.design/mdi:router-wireless.svg',
+      'switch': 'https://api.iconify.design/mdi:network-switch.svg',
+      'server': 'https://api.iconify.design/mdi:server.svg',
+      'desktop': 'https://api.iconify.design/mdi:desktop-classic.svg',
+      'projector': 'https://api.iconify.design/mdi:projector.svg',
+      'speaker': 'https://api.iconify.design/mdi:speaker.svg',
+      'microphone': 'https://api.iconify.design/mdi:microphone.svg',
+      'usb': 'https://api.iconify.design/mdi:usb.svg',
+      'cable': 'https://api.iconify.design/mdi:cable-data.svg',
+      'adapter': 'https://api.iconify.design/mdi:power-plug.svg',
+      'charger': 'https://api.iconify.design/mdi:power-plug.svg',
+      'dock': 'https://api.iconify.design/mdi:dock-window.svg',
+      'stand': 'https://api.iconify.design/mdi:monitor-stand.svg',
+    };
+    
+    // Check for exact match first
+    if (iconMap[category]) {
+      return iconMap[category];
+    }
+    
+    // Check for partial matches
+    for (const [key, url] of Object.entries(iconMap)) {
+      if (category.includes(key) || key.includes(category)) {
+        return url;
+      }
+    }
+    
+    // Default icon
+    return 'https://api.iconify.design/mdi:package-variant.svg';
+  };
+
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-      <div className="relative bg-white rounded-2xl shadow-2xl w-[460px] max-w-[95vw] border border-blue-100" style={{ boxShadow: '0 8px 32px rgba(29, 78, 216, 0.35)' }}>
+      <style jsx>{`
+        div::-webkit-scrollbar {
+          width: 8px;
+        }
+        div::-webkit-scrollbar-track {
+          background: #f7fafc;
+          border-radius: 4px;
+        }
+        div::-webkit-scrollbar-thumb {
+          background: #cbd5e0;
+          border-radius: 4px;
+        }
+        div::-webkit-scrollbar-thumb:hover {
+          background: #a0aec0;
+        }
+      `}</style>
+      <div className="relative bg-white rounded-2xl shadow-2xl w-[520px] max-w-[95vw] border border-blue-100" style={{ boxShadow: '0 8px 32px rgba(29, 78, 216, 0.35)' }}>
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div className="flex items-center space-x-3">
@@ -122,24 +193,105 @@ const ViewTransactionModal = ({ isOpen, onClose, transactionData, hideCancel = f
           {/* Items Section */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Items</label>
-            <div className="space-y-2">
+            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc' }}>
               {transactionData.items && transactionData.items.length > 0 ? (
-                transactionData.items.map((item, index) => (
-                  <div key={index} className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg bg-gray-50">
-                    <Package className="h-5 w-5 text-blue-600" />
-                    <div className="flex-1">
-                      <p className="font-medium text-gray-900">{item.equipment_name || item.name}</p>
-                      <p className="text-sm text-gray-600">{item.specifications || item.specs || 'Equipment'}</p>
-                    </div>
-                  </div>
-                ))
+                (() => {
+                  // Group items by category_id/category_name first, then by equipment_id
+                  const groupedItems = {};
+                  transactionData.items.forEach((item) => {
+                    // Use category_id if available, otherwise use category_name as unique identifier
+                    const categoryId = item.category_id || item.category_name || 'Uncategorized';
+                    const equipmentId = item.id || item.equipment_id || 'unknown';
+                    // Create unique group key: category_id + equipment_id
+                    const groupKey = `${categoryId}|${equipmentId}`;
+                    
+                    if (!groupedItems[groupKey]) {
+                      groupedItems[groupKey] = {
+                        categoryId: categoryId,
+                        categoryName: item.category_name || item.category || 'Uncategorized',
+                        equipmentId: equipmentId,
+                        items: []
+                      };
+                    }
+                    groupedItems[groupKey].items.push(item);
+                  });
+
+                  return Object.entries(groupedItems).map(([groupKey, group], groupIndex) => {
+                    const iconUrl = getItemIconUrl(group.categoryName);
+                    
+                    return (
+                      <div key={groupIndex} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                        {/* Item Header Section */}
+                        <div className="px-3 py-2.5 bg-white">
+                          <div className="flex items-center space-x-3">
+                            <img 
+                              src={iconUrl} 
+                              alt={group.categoryName}
+                              className="h-5 w-5 flex-shrink-0"
+                              onError={(e) => {
+                                // Fallback to default icon if image fails to load
+                                e.target.src = 'https://api.iconify.design/mdi:package-variant.svg';
+                              }}
+                            />
+                            <h5 className="text-sm font-semibold text-gray-900">
+                              {group.categoryName}
+                            </h5>
+                          </div>
+                        </div>
+                        
+                        {/* Divider */}
+                        <div className="border-t border-gray-200"></div>
+                        
+                        {/* Table Section */}
+                        <div className="overflow-hidden">
+                          {/* Table Header */}
+                          <div className="bg-gray-100 border-b border-gray-200">
+                            <div className="flex">
+                              <div className="px-3 py-1.5 border-r border-gray-200" style={{ width: '25%' }}>
+                                <span className="text-xs font-medium text-gray-700">Serial</span>
+                              </div>
+                              <div className="px-3 py-1.5 border-r border-gray-200" style={{ width: '25%' }}>
+                                <span className="text-xs font-medium text-gray-700">Brand</span>
+                              </div>
+                              <div className="px-3 py-1.5" style={{ width: '50%' }}>
+                                <span className="text-xs font-medium text-gray-700">Specs</span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Table Rows */}
+                          <div className="bg-white">
+                            {group.items.map((item, itemIndex) => {
+                              const specs = item.specifications || item.specs || '';
+                              const brand = item.brand || 'N/A';
+                              const serialNumber = item.serial_number || 'N/A';
+                              
+                              return (
+                                <div 
+                                  key={item.id || itemIndex} 
+                                  className={`flex ${itemIndex < group.items.length - 1 ? 'border-b border-gray-200' : ''}`}
+                                >
+                                  <div className="px-3 py-2 border-r border-gray-200" style={{ width: '25%' }}>
+                                    <span className="text-xs text-gray-700">{serialNumber}</span>
+                                  </div>
+                                  <div className="px-3 py-2 border-r border-gray-200" style={{ width: '25%' }}>
+                                    <span className="text-xs text-gray-700">{brand}</span>
+                                  </div>
+                                  <div className="px-3 py-2" style={{ width: '50%' }}>
+                                    <span className="text-xs text-gray-700">{specs || 'N/A'}</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()
               ) : (
-                <div className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg bg-gray-50">
-                  <Package className="h-5 w-5 text-blue-600" />
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-900">{transactionData.equipment_name || transactionData.item || 'Equipment'}</p>
-                    <p className="text-sm text-gray-600">Equipment Item</p>
-                  </div>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
+                  <p className="text-sm text-gray-500">No items found</p>
                 </div>
               )}
             </div>
@@ -148,19 +300,11 @@ const ViewTransactionModal = ({ isOpen, onClose, transactionData, hideCancel = f
 
         {/* Footer */}
         <div className="flex justify-end p-6 border-t border-gray-200 space-x-3">
-          {!hideCancel && (
-            <button
-              onClick={onClose}
-              className="px-4 py-2 rounded-md border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 transition-colors"
-            >
-              Cancel
-            </button>
-          )}
           <button
-            onClick={handleButtonClick}
+            onClick={onClose}
             className="px-6 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors"
           >
-            {buttonText}
+            Close
           </button>
         </div>
       </div>

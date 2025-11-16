@@ -86,8 +86,24 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <style jsx>{`
+        .verify-return-scroll::-webkit-scrollbar {
+          width: 8px;
+        }
+        .verify-return-scroll::-webkit-scrollbar-track {
+          background: #f7fafc;
+          border-radius: 4px;
+        }
+        .verify-return-scroll::-webkit-scrollbar-thumb {
+          background: #cbd5e0;
+          border-radius: 4px;
+        }
+        .verify-return-scroll::-webkit-scrollbar-thumb:hover {
+          background: #a0aec0;
+        }
+      `}</style>
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-5 border border-blue-100">
+      <div className="relative bg-white rounded-2xl shadow-2xl w-[520px] max-w-[95vw] p-5 border border-blue-100">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-lg font-semibold text-blue-600">Verify Return</h3>
           <button type="button" onClick={onClose} className="text-gray-500 hover:text-gray-700">✕</button>
@@ -120,7 +136,7 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
           {/* Items Section */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Items to Return</label>
-            <div className="space-y-3">
+            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 verify-return-scroll" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc' }}>
               {data.items && data.items.length > 0 ? (
                 (() => {
                   // Group items by category_id/category_name first, then by equipment_id
@@ -149,7 +165,7 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
                     return (
                       <div key={groupIndex} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
                         {/* Item Header Section */}
-                        <div className="px-3 py-2.5">
+                        <div className="px-3 py-2.5 bg-white">
                           <div className="flex items-center space-x-3">
                             <img 
                               src={iconUrl} 
@@ -173,11 +189,14 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
                         <div className="overflow-hidden">
                           {/* Table Header */}
                           <div className="bg-gray-100 border-b border-gray-200">
-                            <div className="grid grid-cols-2">
-                              <div className="px-3 py-1.5 border-r border-gray-200">
+                            <div className="flex">
+                              <div className="px-3 py-1.5 border-r border-gray-200" style={{ width: '30%' }}>
+                                <span className="text-xs font-medium text-gray-700">Model</span>
+                              </div>
+                              <div className="px-3 py-1.5 border-r border-gray-200" style={{ width: '30%' }}>
                                 <span className="text-xs font-medium text-gray-700">Serial</span>
                               </div>
-                              <div className="px-3 py-1.5">
+                              <div className="px-3 py-1.5" style={{ width: '40%' }}>
                                 <span className="text-xs font-medium text-gray-700">Specs</span>
                               </div>
                             </div>
@@ -187,17 +206,21 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
                           <div className="bg-white">
                             {group.items.map((item, itemIndex) => {
                               const specs = item.specifications || item.specs || '';
+                              const model = item.model || item.brand || 'N/A';
                               const serialNumber = item.serial_number || 'N/A';
                               
                               return (
                                 <div 
                                   key={item.id || itemIndex} 
-                                  className={`grid grid-cols-2 ${itemIndex < group.items.length - 1 ? 'border-b border-gray-200' : ''}`}
+                                  className={`flex ${itemIndex < group.items.length - 1 ? 'border-b border-gray-200' : ''}`}
                                 >
-                                  <div className="px-3 py-2 border-r border-gray-200">
+                                  <div className="px-3 py-2 border-r border-gray-200" style={{ width: '30%' }}>
+                                    <span className="text-xs text-gray-700">{model}</span>
+                                  </div>
+                                  <div className="px-3 py-2 border-r border-gray-200" style={{ width: '30%' }}>
                                     <span className="text-xs text-gray-700">{serialNumber}</span>
                                   </div>
-                                  <div className="px-3 py-2">
+                                  <div className="px-3 py-2" style={{ width: '40%' }}>
                                     <span className="text-xs text-gray-700">{specs || 'N/A'}</span>
                                   </div>
                                 </div>
