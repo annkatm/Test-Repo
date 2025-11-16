@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Printer, ChevronDown, Clock, User, CheckCircle } from 'lucide-react';
+import { Search, Printer, ChevronDown, Clock, User, CheckCircle, Calendar } from 'lucide-react';
 import GlobalHeader from './components/GlobalHeader';
 import HomeSidebar from './HomeSidebar';
 import ConfirmModal from './components/ConfirmModal.jsx';
@@ -52,6 +52,9 @@ const ViewApproved = () => {
     isOpen: false,
     transactionData: null
   });
+
+  // State to track expanded rows (to show request dates)
+  const [expandedRows, setExpandedRows] = useState(new Set());
 
   // Helper function to get avatar URL from employee/user data
   const getAvatarUrl = (data) => {
@@ -165,6 +168,7 @@ const ViewApproved = () => {
           approved_by_name: req.approved_by_name || 'N/A',
           employee_id: req.employee_id,
           avatar_url: getAvatarUrl(req),
+          request_date: req.request_date || req.created_at || req.approved_at || null,
           requests: [],
           items: []
         };
@@ -182,7 +186,8 @@ const ViewApproved = () => {
         category: req.category_name || '',
         serial_number: req.serial_number || req.equipment_serial_number || req.asset_tag || 'N/A',
         specifications: req.specifications || req.specs || [req.brand, req.model].filter(Boolean).join(' ') || req.category_name || '',
-        specs: req.specifications || req.specs || [req.brand, req.model].filter(Boolean).join(' ') || req.category_name || ''
+        specs: req.specifications || req.specs || [req.brand, req.model].filter(Boolean).join(' ') || req.category_name || '',
+        request_date: req.request_date || req.created_at || req.approved_at || null
       });
     });
     return Object.values(grouped);
@@ -1218,6 +1223,7 @@ const ViewApproved = () => {
                     <div className="flex text-xs font-medium text-gray-900 uppercase tracking-wider mb-4 px-4 mt-4">
                       <div className="flex-1">Name</div>
                       <div className="flex-1">Item</div>
+                      <div className="w-40">Request Date</div>
                       <div className="w-32 text-right">Actions</div>
                     </div>
                   </div>
@@ -1236,65 +1242,132 @@ const ViewApproved = () => {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {groupedApproved.map((group) => (
-                        <div
-                          key={group.id}
-                          onClick={() => handleViewApproved(group.id)}
-                          className="relative flex items-center py-4 px-4 rounded-xl cursor-pointer border-2 bg-white border-gray-300 hover:bg-blue-50 hover:border-blue-400 transition-all duration-200"
-                        >
-                          {/* Name with Avatar */}
-                          <div className="flex-1 flex items-center space-x-3">
-                            <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-semibold overflow-hidden flex-shrink-0">
-                              {group.avatar_url ? (
-                                <img
-                                  src={group.avatar_url}
-                                  alt={group.full_name}
-                                  className="w-full h-full object-cover"
-                                  onError={(e) => {
-                                    e.target.style.display = 'none';
-                                    e.target.parentElement.textContent = getInitials(group.full_name);
+                      {groupedApproved.map((group) => {
+                        // Format request date
+                        const formatDate = (dateString) => {
+                          if (!dateString) return 'N/A';
+                          try {
+                            const date = new Date(dateString);
+                            return date.toLocaleDateString('en-US', { 
+                              year: 'numeric', 
+                              month: 'short', 
+                              day: 'numeric' 
+                            });
+                          } catch (e) {
+                            return 'N/A';
+                          }
+                        };
+
+                        // Check if items have different request dates
+                        const uniqueDates = [...new Set(group.items.map(item => item.request_date).filter(Boolean))];
+                        const hasMultipleDates = uniqueDates.length > 1;
+                        const isExpanded = expandedRows.has(group.id);
+
+                        const toggleExpand = (e) => {
+                          e.stopPropagation();
+                          setExpandedRows(prev => {
+                            const newSet = new Set(prev);
+                            if (newSet.has(group.id)) {
+                              newSet.delete(group.id);
+                            } else {
+                              newSet.add(group.id);
+                            }
+                            return newSet;
+                          });
+                        };
+
+                        return (
+                          <div key={group.id} className="relative">
+                            <div
+                              onClick={() => handleViewApproved(group.id)}
+                              className="relative flex items-center py-4 px-4 rounded-xl cursor-pointer border-2 bg-white border-gray-300 hover:bg-blue-50 hover:border-blue-400 transition-all duration-200"
+                            >
+                              {/* Name with Avatar */}
+                              <div className="flex-1 flex items-center space-x-3">
+                                <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-semibold overflow-hidden flex-shrink-0">
+                                  {group.avatar_url ? (
+                                    <img
+                                      src={group.avatar_url}
+                                      alt={group.full_name}
+                                      className="w-full h-full object-cover"
+                                      onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        e.target.parentElement.textContent = getInitials(group.full_name);
+                                      }}
+                                    />
+                                  ) : (
+                                    getInitials(group.full_name)
+                                  )}
+                                </div>
+                                <div className="text-base font-medium text-gray-900">{group.full_name}</div>
+                              </div>
+
+                              {/* Items (plain text, aligned like Name) */}
+                              <div className="flex-1">
+                                <div className="text-base font-medium text-gray-900">
+                                  {group.items.length === 1
+                                    ? group.items[0].equipment_name
+                                    : `${group.items.length} items`}
+                                </div>
+                              </div>
+
+                              {/* Action Buttons */}
+                              <div className="w-40 flex items-center justify-end space-x-2">
+                                <button
+                                  onClick={toggleExpand}
+                                  className={`p-2 hover:bg-gray-100 rounded-lg transition-colors ${isExpanded ? 'bg-blue-100' : ''}`}
+                                  title="Show Request Date"
+                                >
+                                  <Calendar className={`h-5 w-5 ${isExpanded ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'}`} />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handlePrint(group);
                                   }}
-                                />
-                              ) : (
-                                getInitials(group.full_name)
-                              )}
+                                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                                  title="Print Receipt"
+                                >
+                                  <Printer className="h-5 w-5 text-gray-500 hover:text-gray-700" />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openConfirmModal('release', group);
+                                  }}
+                                  className="px-3 py-1 bg-green-600 text-white rounded-full text-xs hover:bg-green-700 transition-colors"
+                                >
+                                  Release
+                                </button>
+                              </div>
                             </div>
-                            <div className="text-base font-medium text-gray-900">{group.full_name}</div>
-                          </div>
 
-                          {/* Items (plain text, aligned like Name) */}
-                          <div className="flex-1">
-                            <div className="text-base font-medium text-gray-900">
-                              {group.items.length === 1
-                                ? group.items[0].equipment_name
-                                : `${group.items.length} items`}
-                            </div>
+                            {/* Expanded Request Date Section */}
+                            {isExpanded && (
+                              <div className="mt-2 ml-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                <h5 className="text-sm font-semibold text-gray-700 mb-3">Request Details</h5>
+                                {hasMultipleDates ? (
+                                  <div className="space-y-2">
+                                    {group.items.map((item, idx) => (
+                                      <div key={idx} className="flex justify-between items-center text-sm">
+                                        <span className="text-gray-600">{item.equipment_name}</span>
+                                        <span className="text-gray-900 font-medium">{formatDate(item.request_date)}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="text-sm">
+                                    <span className="text-gray-600">Request Date: </span>
+                                    <span className="text-gray-900 font-medium">
+                                      {formatDate(group.request_date || group.items[0]?.request_date)}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
-
-                          {/* Action Buttons */}
-                          <div className="w-32 flex items-center justify-end space-x-2">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handlePrint(group);
-                              }}
-                              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                              title="Print Receipt"
-                            >
-                              <Printer className="h-5 w-5 text-gray-500 hover:text-gray-700" />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openConfirmModal('release', group);
-                              }}
-                              className="px-3 py-1 bg-green-600 text-white rounded-full text-xs hover:bg-green-700 transition-colors"
-                            >
-                              Release
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
