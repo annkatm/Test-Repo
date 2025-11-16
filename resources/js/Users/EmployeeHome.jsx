@@ -42,6 +42,27 @@ const EmployeeHome = () => {
   const [cancelledEquipIds, setCancelledEquipIds] = useState(() => {
     try { return JSON.parse(sessionStorage.getItem('ireply_cancelled_equip_ids') || '[]'); } catch (_) { return []; }
   });
+  // Equipment details cache for type detection
+  const [equipmentDetails, setEquipmentDetails] = useState({});
+
+  // Fetch equipment details by ID
+  const fetchEquipmentDetails = async (equipmentId) => {
+    if (!equipmentId || equipmentDetails[equipmentId]) {
+      return equipmentDetails[equipmentId];
+    }
+    
+    try {
+      const response = await fetch(`/api/equipment/${equipmentId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setEquipmentDetails(prev => ({ ...prev, [equipmentId]: data }));
+        return data;
+      }
+    } catch (error) {
+      console.log('[EmployeeHome] Failed to fetch equipment details:', error);
+    }
+    return null;
+  };
 
   const showToast = (message, variant = 'info', ttl = 4500) => {
     const id = Date.now() + Math.random();
@@ -64,6 +85,38 @@ const EmployeeHome = () => {
     console.log('[EmployeeHome] Cleared cancelled IDs');
     // Also refresh pending transactions
     fetchPendingTransactions();
+  };
+
+  // Per-user localStorage helpers
+  const getUserTag = () => {
+    try {
+      const raw = localStorage.getItem('user');
+      if (raw) { const u = JSON.parse(raw); return u?.id || u?.email || 'guest'; }
+    } catch (_) {}
+    return 'guest';
+  };
+  const userKey = (base) => `${base}:${getUserTag()}`;
+  const migrateKeyIfNeeded = (base) => {
+    try {
+      const scoped = userKey(base);
+      const cur = localStorage.getItem(scoped);
+      if (cur) return; // already scoped
+      const legacy = localStorage.getItem(base);
+      if (legacy != null) localStorage.setItem(scoped, legacy);
+    } catch (_) {}
+  };
+
+  const logActivity = (message, variant = 'info') => {
+    try {
+      migrateKeyIfNeeded('employee_activities');
+      const prev = JSON.parse(localStorage.getItem(userKey('employee_activities')) || '[]');
+      const entry = { id: Date.now(), message, variant, time: new Date().toISOString() };
+      const next = [entry, ...(Array.isArray(prev) ? prev : [])].slice(0, 50);
+      localStorage.setItem(userKey('employee_activities'), JSON.stringify(next));
+      console.log('[EmployeeHome] Activity logged:', { message, variant });
+    } catch (error) {
+      console.error('[EmployeeHome] Failed to log activity:', error);
+    }
   };
 
   // Debug function to test API directly
@@ -944,7 +997,7 @@ const EmployeeHome = () => {
           .no-scrollbar::-webkit-scrollbar { display: none; }
         `}
       </style>
-      <div className="col-span-12 md:col-span-10 space-y-6">
+      <div className="col-span-12 md:col-span-11 space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-4xl font-bold text-[#2262C6] transition-all duration-300">Home</h1>
         </div>
@@ -956,8 +1009,8 @@ const EmployeeHome = () => {
         />
 
 
-        <div className="bg-gray-100 rounded-lg border border-gray-200 mb-8">
-          <div className="p-6 border-b border-gray-200">
+        <div className="bg-gray-100 rounded-lg border border-gray-200 mb-8 w-full">
+          <div className="p-4 border-b border-gray-200">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-[#2262C6]">On Process</h2>
               <div className="flex gap-2">
@@ -984,12 +1037,12 @@ const EmployeeHome = () => {
             </div>
           </div>
 
-          <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+          <div className="px-4 py-4 bg-gray-50 border-b border-gray-200">
             <div className="grid grid-cols-12 gap-6 text-sm font-medium text-gray-700">
-              <div className="col-span-5">Item</div>
-              <div className="col-span-3">Start Date</div>
+              <div className="col-span-7">Type</div>
+              <div className="col-span-2">Start Date</div>
               <div className="col-span-2">Brand</div>
-              <div className="col-span-2">Status</div>
+              <div className="col-span-1">Status</div>
             </div>
           </div>
 
@@ -1011,16 +1064,45 @@ const EmployeeHome = () => {
               .map((transaction, index) => (
               <div
                 key={transaction.id || index}
-                className="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer"
+                className="px-4 py-4 hover:bg-gray-50 transition-colors cursor-pointer"
                 onClick={() => logActivity(`Clicked pending row: ${transaction.equipment_name || transaction.item || 'Item'} (${transaction.id || index})`, 'info')}
               >
                 <div className="grid grid-cols-12 gap-6 items-center">
-                  <div className="col-span-5">
+                  <div className="col-span-7">
                     <span className="text-sm text-gray-900">
-                      {transaction.type || transaction.category || transaction.category_name || transaction.equipment_type || transaction.item_type || transaction?.equipment?.type || transaction?.equipment?.category || transaction?.equipment?.category_name || transaction.item || transaction.equipment_name || transaction?.equipment?.name || '-'}
+                      {(() => {
+                        const equipName = (transaction.equipment_name || transaction.item || '').toLowerCase();
+                        const reason = (transaction.reason || '').toLowerCase();
+                        const brand = (transaction.brand || transaction.equipment_brand || transaction?.equipment?.brand || '').toLowerCase();
+                        
+                        if (equipName.includes('laptop') || equipName.includes('notebook') || reason.includes('laptop') || reason.includes('notebook')) {
+                          return 'Laptop';
+                        }
+                        if (equipName.includes('monitor') || equipName.includes('display') || equipName.includes('screen') || 
+                            reason.includes('monitor') || reason.includes('display') || reason.includes('screen') ||
+                            brand.includes('asus')) {
+                          return 'Monitor';
+                        }
+                        if (equipName.includes('mouse') || reason.includes('mouse')) {
+                          return 'Mouse';
+                        }
+                        if (equipName.includes('keyboard') || reason.includes('keyboard')) {
+                          return 'Keyboard';
+                        }
+                        
+                        if (brand.includes('keyboard') || brand.includes('tuf gaming')) {
+                          return 'Keyboard';
+                        }
+                        
+                        if (brand.includes('rog') || brand.includes('msi') || brand.includes('dell') || brand.includes('hp') || brand.includes('lenovo')) {
+                          return 'Laptop';
+                        }
+                        
+                        return transaction.equipment_name || transaction.item || 'Unknown';
+                      })()}
                     </span>
                   </div>
-                  <div className="col-span-3">
+                  <div className="col-span-2">
                     <span className="text-sm text-gray-900">
                       {transaction.expected_start_date
                         ? new Date(transaction.expected_start_date).toLocaleDateString("en-US", {
@@ -1032,11 +1114,11 @@ const EmployeeHome = () => {
                     </span>
                   </div>
                   <div className="col-span-2">
-                    <span className="text-sm text-gray-600">
-                      {transaction.brand || transaction.equipment_brand || transaction?.equipment?.brand || '-'}
+                    <span className="text-sm text-gray-900">
+                      {transaction.equipment?.brand || transaction.brand || transaction.equipment_brand || '-'}
                     </span>
                   </div>
-                  <div className="col-span-2">
+                  <div className="col-span-1">
                     {(() => {
                       const s = String(transaction.status || 'pending').toLowerCase();
                       const isApproved = /approved|released|borrowed|active/.test(s);
@@ -1059,8 +1141,8 @@ const EmployeeHome = () => {
           </div>
         </div>
 
-        <div className="bg-gray-100 rounded-lg border border-gray-200">
-          <div className="p-6 border-b border-gray-200">
+        <div className="bg-gray-100 rounded-lg border border-gray-200 w-full">
+          <div className="p-4 border-b border-gray-200">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-[#2262C6]">Approved</h2>
               <button
@@ -1077,12 +1159,12 @@ const EmployeeHome = () => {
             </div>
           </div>
 
-          <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+          <div className="px-4 py-4 bg-gray-50 border-b border-gray-200">
             <div className="grid grid-cols-12 gap-6 text-sm font-medium text-gray-700">
-              <div className="col-span-5">Item</div>
-              <div className="col-span-3">Start Date</div>
+              <div className="col-span-7">Type</div>
+              <div className="col-span-2">Start Date</div>
               <div className="col-span-2">Brand</div>
-              <div className="col-span-2">Status</div>
+              <div className="col-span-1">Status</div>
             </div>
           </div>
 
@@ -1101,16 +1183,45 @@ const EmployeeHome = () => {
               return useList.map((transaction, index) => (
                 <div
                   key={transaction.id || index}
-                  className="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer"
+                  className="px-4 py-4 hover:bg-gray-50 transition-colors cursor-pointer"
                   onClick={() => logActivity(`Clicked approved row: ${transaction.equipment_name || transaction.item || 'Item'} (${transaction.id || index})`, 'info')}
                 >
                   <div className="grid grid-cols-12 gap-6 items-center">
-                    <div className="col-span-5">
+                    <div className="col-span-7">
                       <span className="text-sm text-gray-900">
-                        {transaction.type || transaction.category || transaction.category_name || transaction.equipment_type || transaction.item_type || transaction?.equipment?.type || transaction?.equipment?.category || transaction?.equipment?.category_name || transaction.item || transaction.equipment_name || transaction?.equipment?.name || '-'}
+                        {(() => {
+                          const equipName = (transaction.equipment_name || transaction.item || '').toLowerCase();
+                          const reason = (transaction.reason || '').toLowerCase();
+                          const brand = (transaction.brand || transaction.equipment_brand || transaction?.equipment?.brand || '').toLowerCase();
+                          
+                          if (equipName.includes('laptop') || equipName.includes('notebook') || reason.includes('laptop') || reason.includes('notebook')) {
+                            return 'Laptop';
+                          }
+                          if (equipName.includes('monitor') || equipName.includes('display') || equipName.includes('screen') || 
+                              reason.includes('monitor') || reason.includes('display') || reason.includes('screen') ||
+                              brand.includes('asus')) {
+                            return 'Monitor';
+                          }
+                          if (equipName.includes('mouse') || reason.includes('mouse')) {
+                            return 'Mouse';
+                          }
+                          if (equipName.includes('keyboard') || reason.includes('keyboard')) {
+                            return 'Keyboard';
+                          }
+                          
+                          if (brand.includes('keyboard') || brand.includes('tuf gaming')) {
+                            return 'Keyboard';
+                          }
+                          
+                          if (brand.includes('rog') || brand.includes('msi') || brand.includes('dell') || brand.includes('hp') || brand.includes('lenovo')) {
+                            return 'Laptop';
+                          }
+                          
+                          return transaction.equipment_name || transaction.item || 'Unknown';
+                        })()}
                       </span>
                     </div>
-                    <div className="col-span-3">
+                    <div className="col-span-2">
                       <span className="text-sm text-gray-900">
                         {(transaction.expected_start_date || transaction.start_date || transaction.created_at || transaction.borrow_date || transaction.borrowed_at || transaction.release_date || transaction.start || transaction.expected_start || transaction.startDate)
                           ? new Date(
@@ -1126,7 +1237,7 @@ const EmployeeHome = () => {
                         {transaction.brand || transaction.equipment_brand || transaction?.equipment?.brand || '-'}
                       </span>
                     </div>
-                    <div className="col-span-2">
+                    <div className="col-span-1">
                       {(() => {
                         const s = String(transaction.status || 'approved').toLowerCase();
                         const isApproved = /approved|released|borrowed|active/.test(s);
