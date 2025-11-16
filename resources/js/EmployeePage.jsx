@@ -1125,7 +1125,40 @@ const EmployeePage = () => {
             </div>
 
             <div className="divide-y divide-gray-200">
-              {filteredEmployees.length === 0 ? (
+              {employees.length === 0 && !filteredEmployees.length ? (
+                <>
+                  {[...Array(5)].map((_, index) => (
+                    <div key={index} className="px-6 py-4 animate-pulse">
+                      <div className="grid grid-cols-12 gap-4 items-center">
+                        <div className="col-span-3 flex items-center space-x-3">
+                          <div className="w-8 h-8 bg-gray-200 rounded-full"></div>
+                          <div className="flex flex-col space-y-2">
+                            <div className="h-4 bg-gray-200 rounded w-32"></div>
+                            <div className="h-3 bg-gray-200 rounded w-24"></div>
+                          </div>
+                        </div>
+                        <div className="col-span-2">
+                          <div className="h-4 bg-gray-200 rounded w-24"></div>
+                        </div>
+                        <div className="col-span-2">
+                          <div className="h-4 bg-gray-200 rounded w-28"></div>
+                        </div>
+                        <div className="col-span-2">
+                          <div className="h-4 bg-gray-200 rounded w-20"></div>
+                        </div>
+                        <div className="col-span-1">
+                          <div className="h-4 bg-gray-200 rounded w-16"></div>
+                        </div>
+                        <div className="col-span-2 flex items-center justify-center space-x-3">
+                          <div className="h-8 w-8 bg-gray-200 rounded"></div>
+                          <div className="h-8 w-8 bg-gray-200 rounded"></div>
+                          <div className="h-8 w-8 bg-gray-200 rounded"></div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              ) : filteredEmployees.length === 0 ? (
                 <div className="py-8 text-center text-gray-500">No employees found.</div>
               ) : (
                 filteredEmployees.map((e) => (
