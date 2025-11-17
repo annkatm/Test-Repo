@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Echo from '../echo';
 import { X, RefreshCcw, ClipboardList, Mouse, FilePlus2 } from 'lucide-react';
-import OnProcessTransactions from './OnProcessTransactions';
 import StatsCards from './StatsCards';
 const EmployeeHome = () => {
   const [, setShowExchangeConfirmModal] = useState(false);
@@ -12,10 +11,11 @@ const EmployeeHome = () => {
   const [transactionStats, setTransactionStats] = useState({
     borrowed: 0,
     available: 0,
-    overdue: 0
+    overdue: 0,
+    previousBorrowed: 0,
   });
   
-  const [showPendings, setShowPendings] = useState(false);
+  const [selectedPendingId, setSelectedPendingId] = useState(null);
   const [, setSelectedRow] = useState(1);
   const [, setShowReasonModal] = useState(false);
   const [exchangeReason, setExchangeReason] = useState('');
@@ -25,12 +25,14 @@ const EmployeeHome = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [itemsPerPage, setItemsPerPage] = useState(5);
   const [actionLoading, setActionLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   // Denied requests will be fetched from API
   const [deniedRequests, setDeniedRequests] = useState([]);
   // Toasts for upper-right popup notifications
   const [toasts, setToasts] = useState([]);
   const [isBorrowedOpen, setIsBorrowedOpen] = useState(false);
   const [isOverdueOpen, setIsOverdueOpen] = useState(false);
+  const [isPreviousBorrowedOpen, setIsPreviousBorrowedOpen] = useState(false);
   const [borrowedItems, setBorrowedItems] = useState([]);
   const [selectedDeniedId, setSelectedDeniedId] = useState(null);
   // Track locally-cancelled requests to immediately hide them from On Process
@@ -546,10 +548,18 @@ const EmployeeHome = () => {
       const data = await response.json();
 
       if (data.success) {
+        const stats = data.data || {};
         setTransactionStats({
-          borrowed: data.data.borrowed || 0,
-          available: data.data.available || 0,
-          overdue: data.data.overdue || 0
+          borrowed: stats.borrowed || 0,
+          available: stats.available || 0,
+          overdue: stats.overdue || 0,
+          // Try multiple possible keys for previously-borrowed/returned history
+          previousBorrowed:
+            stats.previous_borrowed ||
+            stats.previously_borrowed ||
+            stats.returned ||
+            stats.completed ||
+            0,
         });
       }
     } catch (error) {
@@ -655,7 +665,7 @@ const EmployeeHome = () => {
         status: t?.status || 'Pending',
         serial_number: t?.serial_number || t?.equipment?.serial_number || t?.serial || null,
         condition: t?.condition || t?.equipment?.condition || t?.current_condition || null,
-        admin_description: t?.approval_notes || t?.specifications || t?.equipment_notes || t?.reason || t?.description || t?.notes || null,
+        admin_description: t?.admin_description || t?.approval_notes || t?.specifications || t?.equipment_notes || t?.reason || t?.description || t?.notes || null,
       }));
 
       // Normalize: if item looks like brand or missing, try to fetch equipment category
@@ -783,7 +793,7 @@ const EmployeeHome = () => {
             const eRes = await fetch('/api/employees');
             const eData = await eRes.json();
             const list = eData.success ? eData.data : eData;
-            if (Array.isArray(list) && userData && userData.user && userData.user.email) {
+            if (Array.isArray(list) && userData && userData.user && userData.email) {
               const found = list.find(emp => emp.email && emp.email.toLowerCase() === userData.user.email.toLowerCase());
               if (found) employeeId = found.id;
             }
@@ -859,17 +869,27 @@ const EmployeeHome = () => {
     setUploadedFile(null);
   };
 
-  const handleSendExchangeRequest = () => {
-    setShowExchangeConfirmModal(false);
+  const handleRefreshHome = () => {
+    if (refreshing) return;
+    console.log('[EmployeeHome] Home refresh triggered');
+    setRefreshing(true);
+    clearCancelledIds();
+    Promise.all([
+      (async () => { try { await fetchTransactionStats(); } catch (_) {} })(),
+      (async () => { try { await fetchPendingTransactions(); } catch (_) {} })(),
+      (async () => { try { await fetchDeniedRequests(); } catch (_) {} })(),
+      (async () => { try { await fetchBorrowedItems(); } catch (_) {} })(),
+    ])
+      .then(() => {
+        try { showToast('Home data refreshed', 'success'); } catch (_) {}
+      })
+      .catch(() => {
+        // ignore refresh errors to avoid breaking UI
+      })
+      .finally(() => {
+        setRefreshing(false);
+      });
   };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Loading...</div>
-      </div>
-    );
-  }
 
   if (error) {
     return (
@@ -881,51 +901,9 @@ const EmployeeHome = () => {
 
 
 
-  // Show full On Process list when requested
-  if (showPendings) {
-    const visiblePending = (pendingTransactions || []).filter((t) => {
-      const idOk = cancelledReqIds.includes(String(t?.id)) ? false : true;
-      const eqOk = cancelledEquipIds.includes(String(t?.equipment_id || '')) ? false : true;
-      return idOk && eqOk;
-    });
-    const requestsData = visiblePending.map((t, index) => {
-      const dsrc = t?.created_at || t?.expected_start_date || null;
-      const date = dsrc ? new Date(dsrc).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '';
-      return {
-        id: t?.id || index + 1,
-        equipment_id: t?.equipment_id || t?.equipment?.id || null,
-        date: date || '-',
-        item: t?.equipment_name || t?.item || '-',
-        brand: t?.brand || t?.equipment?.brand || '-',
-        model: t?.model || t?.equipment?.model || '-',
-        serial_number: t?.serial_number || t?.equipment?.serial_number || t?.serial || '-',
-        number: t?.request_number || t?.number || '-',
-        request_number: t?.request_number || t?.number || '-',
-        reason: t?.reason || t?.description || t?.notes || '-',
-        admin_description: t?.admin_description || t?.approval_notes || t?.specifications || t?.equipment_notes || t?.reason || t?.description || t?.notes || '-',
-        condition: t?.condition || t?.equipment?.condition || t?.current_condition || '-',
-        status: t?.status || 'Pending',
-        details: [
-          {
-            name: t?.equipment_name || t?.item || '-',
-            description: t?.reason || t?.description || t?.notes || 'Equipment request',
-            icon: '/images/placeholder-equipment.png',
-          },
-        ],
-      };
-    });
-
-    return (
-      <OnProcessTransactions
-        onBack={() => setShowPendings(false)}
-        requests={requestsData}
-        deniedRequests={deniedRequests}
-        setDeniedRequests={setDeniedRequests}
-        fetchDeniedRequests={fetchDeniedRequests}
-        showToast={showToast}
-      />
-    );
-  }
+  const selectedPending = selectedPendingId
+    ? (pendingTransactions || []).find((t) => String(t.id) === String(selectedPendingId)) || null
+    : null;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
@@ -939,14 +917,19 @@ const EmployeeHome = () => {
         <div className="flex items-center justify-between">
           <h1 className="text-4xl font-bold text-[#2262C6] transition-all duration-300">Home</h1>
           <button
-            onClick={() => {
-              console.log('[DEBUG] Manual refresh clicked');
-              clearCancelledIds();
-            }}
-            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+            onClick={handleRefreshHome}
+            disabled={refreshing}
+            className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors border ${
+              refreshing
+                ? 'text-blue-700 border-blue-200 bg-blue-50 cursor-wait'
+                : 'text-gray-600 border-transparent hover:text-gray-900 hover:bg-gray-100'
+            }`}
           >
-            <RefreshCcw size={16} />
-            Refresh
+            <RefreshCcw
+              size={16}
+              className={refreshing ? 'animate-spin-slow' : ''}
+            />
+            {refreshing ? 'Refreshing…' : 'Refresh'}
           </button>
         </div>
 
@@ -954,100 +937,131 @@ const EmployeeHome = () => {
           transactionStats={transactionStats} 
           onBorrowedClick={async () => { await fetchBorrowedItems(); setIsBorrowedOpen(true); }} 
           onOverdueClick={async () => { await fetchDeniedRequests(); setSelectedDeniedId(null); setIsOverdueOpen(true); }} 
+          onPreviousBorrowedClick={() => {
+            logActivity('Opened Previously Borrowed items view', 'info');
+            setIsPreviousBorrowedOpen(true);
+          }} 
         />
 
 
         <div className="bg-gray-100 rounded-lg border border-gray-200 mb-8 w-full">
           <div className="p-4 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-[#2262C6]">On Process</h2>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    // Show the view immediately to avoid UX delay; fetch in background
-                    setShowPendings(true);
-                    try { fetchDeniedRequests(); } catch (_) {}
-                    try { fetchPendingTransactions(); } catch (_) {}
-                    logActivity('Opened On Process view', 'info');
-                  }}
-                  className="text-right text-blue-600 text-sm font-medium hover:text-blue-700"
-                >
-                  View all
-                </button>
-              </div>
-            </div>
+            <h2 className="text-xl font-bold text-[#2262C6]">On Process</h2>
           </div>
 
-          <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-            <div className="grid grid-cols-12 gap-4 text-sm font-medium text-gray-700">
-              <div className="col-span-2">Date</div>
-              <div className="col-span-6">Type</div>
-              <div className="col-span-2">Brand</div>
-              <div className="col-span-2">Status</div>
-            </div>
-          </div>
-
-          <div className="divide-y divide-gray-100">
-            {(() => {
-              console.log('[EmployeeHome] Rendering On Process - pendingTransactions:', pendingTransactions);
-              console.log('[EmployeeHome] Cancelled IDs:', cancelledReqIds, cancelledEquipIds);
-              const filtered = pendingTransactions.filter((t) => !cancelledReqIds.includes(String(t?.id)) && !cancelledEquipIds.includes(String(t?.equipment_id || '')));
-              console.log('[EmployeeHome] After filtering:', filtered);
-              return filtered.length;
-            })() > 0 ? [...pendingTransactions]
-              .filter((t) => !cancelledReqIds.includes(String(t?.id)) && !cancelledEquipIds.includes(String(t?.equipment_id || '')))
-              .sort((a, b) => {
-                const aDate = new Date(a.created_at || a.expected_start_date || 0).getTime();
-                const bDate = new Date(b.created_at || b.expected_start_date || 0).getTime();
-                return bDate - aDate; // newest first
-              })
-              .slice(0, 6)
-              .map((transaction, index) => (
-              <div
-                key={transaction.id || index}
-                className="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer"
-                onClick={() => logActivity(`Clicked pending row: ${transaction.equipment_name || transaction.item || 'Item'} (${transaction.id || index})`, 'info')}
-              >
-                <div className="grid grid-cols-12 gap-4 items-center">
-                  <div className="col-span-2">
-                    <span className="text-sm text-gray-900">
-                      {transaction.expected_start_date
-                        ? new Date(transaction.expected_start_date).toLocaleDateString("en-US", {
-                          month: "2-digit",
-                          day: "2-digit",
-                          year: "numeric",
-                        })
-                        : '-'}
-                    </span>
-                  </div>
-                  <div className="col-span-6">
-                    <span className="text-sm text-gray-900 font-medium">
-                      {transaction.equipment_name || transaction.item || 'Unknown'}
-                    </span>
-                  </div>
-                  <div className="col-span-2">
-                    <span className="text-sm text-gray-900">
-                      {transaction.equipment?.brand || transaction.brand || transaction.equipment_brand || '-'}
-                    </span>
-                  </div>
-                  <div className="col-span-2">
-                    {(() => {
-                      const s = String(transaction.status || '').toLowerCase();
-                      const isApproved = /approved|released|borrowed|active/.test(s);
-                      const cls = isApproved
-                        ? 'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200'
-                        : 'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200';
-                      const label = isApproved ? 'Approved' : (transaction.status || 'Pending');
-                      return (
-                        <span className={cls}>{label}</span>
-                      );
-                    })()}
-                  </div>
+          <div className="flex flex-col md:flex-row">
+            <div className="flex-1">
+              <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+                <div className="grid grid-cols-12 gap-4 text-[15px] font-semibold text-gray-700">
+                  <div className="col-span-3">Date</div>
+                  <div className="col-span-3">Type</div>
+                  <div className="col-span-3">Brand</div>
+                  <div className="col-span-3">Status</div>
                 </div>
               </div>
-            )) : (
-              <div className="px-6 py-6 text-sm text-gray-500">
-                No requests are currently in process.
+
+              <div className="divide-y divide-gray-100">
+                {[...pendingTransactions]
+                  .filter((t) => !cancelledReqIds.includes(String(t?.id)) && !cancelledEquipIds.includes(String(t?.equipment_id || '')))
+                  .sort((a, b) => {
+                    const aDate = new Date(a.created_at || a.expected_start_date || 0).getTime();
+                    const bDate = new Date(b.created_at || b.expected_start_date || 0).getTime();
+                    return bDate - aDate; // newest first
+                  })
+                  .slice(0, 6)
+                  .map((transaction, index) => (
+                    <div
+                      key={transaction.id || index}
+                      className="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer text-[15px]"
+                      onClick={() => {
+                        setSelectedPendingId(transaction.id || index);
+                        logActivity(`Opened pending item inspect: ${transaction.equipment_name || transaction.item || 'Item'} (${transaction.id || index})`, 'info');
+                      }}
+                    >
+                      <div className="grid grid-cols-12 gap-4 items-center">
+                        <div className="col-span-3">
+                          <span className="text-[15px] text-gray-900">
+                            {transaction.expected_start_date
+                              ? new Date(transaction.expected_start_date).toLocaleDateString("en-US", {
+                                  month: "2-digit",
+                                  day: "2-digit",
+                                  year: "numeric",
+                                })
+                              : '-'}
+                          </span>
+                        </div>
+                        <div className="col-span-3">
+                          <span className="text-[15px] text-gray-900 font-semibold">
+                            {transaction.equipment_name || transaction.item || 'Unknown'}
+                          </span>
+                        </div>
+                        <div className="col-span-3">
+                          <span className="text-sm text-gray-900">
+                            {transaction.equipment?.brand || transaction.brand || transaction.equipment_brand || '-'}
+                          </span>
+                        </div>
+                        <div className="col-span-3">
+                          {(() => {
+                            const s = String(transaction.status || '').toLowerCase();
+                            const isApproved = /approved|released|borrowed|active/.test(s);
+                            const cls = isApproved
+                              ? 'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200'
+                              : 'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200';
+                            const label = isApproved ? 'Approved' : (transaction.status || 'Pending');
+                            return <span className={cls}>{label}</span>;
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                {(!pendingTransactions || pendingTransactions.filter((t) => !cancelledReqIds.includes(String(t?.id)) && !cancelledEquipIds.includes(String(t?.equipment_id || ''))).length === 0) && (
+                  <div className="px-6 py-6 text-sm text-gray-500">No requests are currently in process.</div>
+                )}
+              </div>
+            </div>
+
+            {selectedPending && (
+              <div className="w-full md:w-80 lg:w-96 p-4 md:pl-6 md:ml-4 flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-gray-800 text-lg">Inspect</h3>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPendingId(null)}
+                    className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-200 transition-colors"
+                    aria-label="Close Inspect"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+                <div className="bg-white rounded-2xl p-5 shadow-md border border-gray-200 text-[15px] space-y-4">
+                  <div>
+                    <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">Item</p>
+                    <p className="text-base font-semibold text-gray-900">{selectedPending.equipment_name || selectedPending.item || 'Unknown'}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">Brand</p>
+                      <p className="text-[15px] text-gray-900">{selectedPending.equipment?.brand || selectedPending.brand || '-'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">Serial</p>
+                      <p className="text-[15px] text-gray-900">{selectedPending.serial_number || selectedPending.serial || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">Condition</p>
+                      <p className="text-[15px] text-gray-900">{selectedPending.condition || '-'}</p>
+                    </div>
+                  </div>
+                  <div className="border-t border-dashed border-gray-200 pt-3 mt-1">
+                    <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">Request #</p>
+                    <p className="text-[15px] text-gray-900">{selectedPending.request_number || selectedPending.number || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">Admin Description</p>
+                    <p className="text-[15px] text-gray-900 whitespace-pre-wrap">{selectedPending.admin_description || 'No admin notes yet.'}</p>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -1108,6 +1122,46 @@ const EmployeeHome = () => {
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isPreviousBorrowedOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm">
+          <div className="relative w-full max-w-4xl max-h-[90vh] bg-white rounded-xl shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-bold text-gray-900">Previously Borrowed Items</h2>
+              <button
+                onClick={() => setIsPreviousBorrowedOpen(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-100 rounded-lg"
+                aria-label="Close"
+              >
+                <X size={22} />
+              </button>
+            </div>
+            <div className="p-6 max-h-[70vh] overflow-y-auto no-scrollbar">
+              <div className="space-y-3">
+                {(borrowedItems || []).length > 0 ? (
+                  (borrowedItems || []).map((it, i) => (
+                    <div key={it.id || i} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-semibold text-gray-900">{it.equipment_name || it.item || '-'}</div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            Serial: {it.serial_number || it.serial || 'N/A'}
+                          </div>
+                        </div>
+                        <div className="text-xs text-gray-500 text-right">
+                          {/* If history dates are available, they can be shown here in the future */}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-sm text-gray-500">No previously borrowed items to display.</div>
+                )}
+              </div>
             </div>
           </div>
         </div>
