@@ -207,6 +207,8 @@ const ViewApproved = () => {
           position: holder.position || 'N/A',
           request_mode: holder.request_mode,
           expected_return_date: holder.expected_return_date,
+          request_date: holder.request_date || holder.created_at,
+          created_at: holder.created_at,
           holders: [],
           items: []
         };
@@ -214,7 +216,17 @@ const ViewApproved = () => {
       grouped[employeeName].holders.push(holder);
       grouped[employeeName].items.push({
         id: holder.equipment_id || holder.id,
-        equipment_name: holder.equipment_name || 'Unknown Item'
+        equipment_id: holder.equipment_id,
+        equipment_name: holder.equipment_name || 'Unknown Item',
+        name: holder.equipment_name || 'Unknown Item',
+        brand: holder.brand || '',
+        model: holder.model || '',
+        category_id: holder.category_id || null,
+        category_name: holder.category_name || holder.category || '',
+        category: holder.category_name || holder.category || '',
+        serial_number: holder.serial_number || holder.equipment_serial_number || holder.asset_tag || 'N/A',
+        specifications: holder.specifications || holder.specs || [holder.brand, holder.model].filter(Boolean).join(' ') || holder.category_name || '',
+        specs: holder.specifications || holder.specs || [holder.brand, holder.model].filter(Boolean).join(' ') || holder.category_name || ''
       });
     });
     return Object.values(grouped);
@@ -1374,95 +1386,95 @@ const ViewApproved = () => {
               </>
             )}
 
-            {view === 'currentHolder' && (
-              <>
-                <div className="mt-10 flex items-center justify-between">
-                  <h3 className="text-3xl font-semibold text-gray-700">Approved requests</h3>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      className="w-44 h-10 bg-gray-300 rounded-md flex items-center justify-between px-4 text-gray-700"
-                      onClick={() => setIsMenuOpen(!isMenuOpen)}
-                    >
-                      <span className="text-sm font-medium">
-                        {view === 'viewApproved' ? 'View Approved' :
-                          view === 'currentHolder' ? 'Approved requests' : 'Verify return'}
-                      </span>
-                      <ChevronDown className="h-4 w-4" />
-                    </button>
-                    {isMenuOpen && (
-                      <div className="absolute right-0 z-10 mt-2 w-44 bg-white rounded-md shadow border border-gray-200">
-                        <button onClick={() => handleSelect('viewApproved')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50">View Approved</button>
-                        <button onClick={() => handleSelect('currentHolder')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50">Approved requests</button>
-                        <button onClick={() => handleSelect('verifyReturn')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50">Verify return</button>
-                      </div>
-                    )}
-                  </div>
+          {view === 'currentHolder' && (
+            <>
+              <div className="mt-10 flex items-center justify-between">
+                <h3 className="text-3xl font-semibold text-gray-700">Approved requests</h3>
+                <div className="relative">
+                  <button
+                    type="button"
+                    className="w-44 h-10 bg-gray-300 rounded-md flex items-center justify-between px-4 text-gray-700"
+                    onClick={() => setIsMenuOpen(!isMenuOpen)}
+                  >
+                    <span className="text-sm font-medium">
+                      {view === 'viewApproved' ? 'View Approved' : 
+                       view === 'currentHolder' ? 'Approved requests' : 'Verify return'}
+                    </span>
+                    <ChevronDown className="h-4 w-4" />
+                  </button>
+                  {isMenuOpen && (
+                    <div className="absolute right-0 z-10 mt-2 w-44 bg-white rounded-md shadow border border-gray-200">
+                      <button onClick={() => handleSelect('viewApproved')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50">View Approved</button>
+                      <button onClick={() => handleSelect('currentHolder')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50">Approved requests</button>
+                      <button onClick={() => handleSelect('verifyReturn')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50">Verify return</button>
+                    </div>
+                  )}
                 </div>
-                <div className="mt-4 bg-white rounded-2xl shadow p-4 md:p-6 border border-gray-100 transition-all duration-300">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left min-w-full">
-                      <thead className="bg-gray-50 text-gray-600">
-                        <tr className="border-b">
-                          <th className="py-2 px-3">Name</th>
-                          <th className="py-2 px-3">Position</th>
-                          <th className="py-2 px-3">Item</th>
-                          <th className="py-2 px-3">Request mode</th>
-                          <th className="py-2 px-3">End Date</th>
-                          <th className="py-2 px-3 text-right">Actions</th>
+              </div>
+              <div className="mt-4 bg-white rounded-2xl shadow p-4 md:p-6 border border-gray-100 transition-all duration-300">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left min-w-full">
+                    <thead className="bg-gray-50 text-gray-600">
+                      <tr className="border-b">
+                        <th className="py-2 px-3">Name</th>
+                        <th className="py-2 px-3">Position</th>
+                        <th className="py-2 px-3">Item</th>
+                        <th className="py-2 px-3">Request mode</th>
+                        <th className="py-2 px-3">End Date</th>
+                        <th className="py-2 px-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {loading ? (
+                      <tr>
+                        <td colSpan="6" className="py-8 text-center text-gray-500">
+                          Loading current holders...
+                        </td>
+                      </tr>
+                    ) : error ? (
+                      <tr>
+                        <td colSpan="6" className="py-8 text-center text-red-500">
+                          Error: {error}
+                        </td>
+                      </tr>
+                    ) : groupedCurrentHolders.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="py-8 text-center text-gray-500">
+                          No current holders found
+                        </td>
+                      </tr>
+                    ) : (
+                      groupedCurrentHolders.map((group) => (
+                        <tr 
+                          key={group.id}
+                          onClick={() => handleViewHolder(group.id)}
+                          className="border-b last:border-0 cursor-pointer transition-colors duration-200 hover:bg-blue-50"
+                        >
+                          <td className="py-3 px-3">{group.full_name}</td>
+                          <td className="py-3 px-3">{group.position}</td>
+                          <td className="py-3 px-3">
+                            <span>
+                              {group.items.length === 1 
+                                ? group.items[0].equipment_name 
+                                : `${group.items.length} items`}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3">{formatRequestMode(group.request_mode)}</td>
+                          <td className="py-3 px-3 text-red-600">{group.expected_return_date || 'N/A'}</td>
+                          <td className="py-3 px-3">
+                            <div className="flex items-center justify-end space-x-4 text-gray-700">
+                              <span className="px-3 py-1 rounded-full text-xs bg-green-600 text-white">Released</span>
+                            </div>
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {loading ? (
-                          <tr>
-                            <td colSpan="6" className="py-8 text-center text-gray-500">
-                              Loading current holders...
-                            </td>
-                          </tr>
-                        ) : error ? (
-                          <tr>
-                            <td colSpan="6" className="py-8 text-center text-red-500">
-                              Error: {error}
-                            </td>
-                          </tr>
-                        ) : groupedCurrentHolders.length === 0 ? (
-                          <tr>
-                            <td colSpan="6" className="py-8 text-center text-gray-500">
-                              No current holders found
-                            </td>
-                          </tr>
-                        ) : (
-                          groupedCurrentHolders.map((group) => (
-                            <tr
-                              key={group.id}
-                              onClick={() => handleViewHolder(group.id)}
-                              className="border-b last:border-0 cursor-pointer transition-colors duration-200 hover:bg-blue-50"
-                            >
-                              <td className="py-3 px-3">{group.full_name}</td>
-                              <td className="py-3 px-3">{group.position}</td>
-                              <td className="py-3 px-3">
-                                <span>
-                                  {group.items.length === 1
-                                    ? group.items[0].equipment_name
-                                    : `${group.items.length} items`}
-                                </span>
-                              </td>
-                              <td className="py-3 px-3">{formatRequestMode(group.request_mode)}</td>
-                              <td className="py-3 px-3 text-red-600">{group.expected_return_date || 'N/A'}</td>
-                              <td className="py-3 px-3">
-                                <div className="flex items-center justify-end space-x-4 text-gray-700">
-                                  <span className="px-3 py-1 rounded-full text-xs bg-green-600 text-white">Released</span>
-                                </div>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                      ))
+                    )}
+                  </tbody>
+                  </table>
                 </div>
-              </>
-            )}
+              </div>
+            </>
+          )}
 
             {view === 'verifyReturn' && (
               <>
