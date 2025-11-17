@@ -118,6 +118,15 @@ const ControlPanel = () => {
       return;
     }
 
+    // Validate employee type limit (maximum 7 types)
+    if (activeModal === 'employee type') {
+      const currentCount = dropdownItems[activeModal]?.length || 0;
+      if (currentCount >= 7) {
+        setItemError('Maximum limit reached. You can only have up to 7 employee types.');
+        return;
+      }
+    }
+
     setItemLoading(true);
     setItemError('');
     
@@ -146,7 +155,19 @@ const ControlPanel = () => {
       if (res?.data?.success) {
         setNewItemName('');
         setNewItemCode('');
-        await loadDropdownItems(activeModal);
+        
+        // Add new item to the top of the list instead of reloading
+        const newItem = res.data.data || { 
+          id: res.data.id, 
+          name: payload.name,
+          code: payload.code 
+        };
+        
+        setDropdownItems(prev => ({
+          ...prev,
+          [activeModal]: [newItem, ...prev[activeModal]]
+        }));
+        
         // Notify other components
         window.dispatchEvent(new CustomEvent(`${activeModal}:updated`));
       } else {

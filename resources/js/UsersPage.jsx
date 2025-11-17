@@ -575,9 +575,28 @@ const UsersPage = () => {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {loadingUsers && (
-                    <tr>
-                      <td colSpan="4" className="px-6 py-4 text-sm text-gray-500 text-center">Loading...</td>
-                    </tr>
+                    <>
+                      {[...Array(5)].map((_, index) => (
+                        <tr key={index} className="animate-pulse">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="h-4 bg-gray-200 rounded w-32"></div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="h-4 bg-gray-200 rounded w-48"></div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="h-4 bg-gray-200 rounded w-24"></div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex space-x-2">
+                              <div className="h-8 w-8 bg-gray-200 rounded"></div>
+                              <div className="h-8 w-8 bg-gray-200 rounded"></div>
+                              <div className="h-8 w-8 bg-gray-200 rounded"></div>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </>
                   )}
                   {usersError && !loadingUsers && (
                     <tr>
