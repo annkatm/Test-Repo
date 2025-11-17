@@ -38,12 +38,13 @@ const OnProcessTransactions = ({
   };
 
   return (
-    <div className="h-full min-h-0 bg-gray-50 p-4 sm:p-6 lg:p-8">
+    <div className="h-full min-h-0 bg-white p-4 sm:p-6 lg:p-8">
       {/* Hide scrollbars but keep scroll behavior */}
       <style>
         {`
           .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
           .no-scrollbar::-webkit-scrollbar { display: none; }
+          .grid-cols-13 { display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); }
         `}
       </style>
       {actionLoading && (
@@ -66,14 +67,15 @@ const OnProcessTransactions = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
           {/* Left Column - Table */}
           <div className={`${selectedRequest ? 'lg:col-span-8' : 'lg:col-span-12'}`}>
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
               {/* Table Header - Hidden on mobile, visible on tablet+ */}
-              <div className="hidden sm:grid grid-cols-12 bg-gray-50 text-gray-700 font-semibold text-base py-4 px-4 sm:px-6 border-b border-gray-200">
+              <div className="hidden sm:grid grid-cols-12 bg-gray-50 text-gray-700 font-semibold text-base py-3 px-4 border-b border-gray-200">
                 <div className="col-span-3">Date</div>
-                <div className="col-span-6">Item</div>
+                <div className="col-span-3">Type</div>
+                <div className="col-span-3">Brand</div>
                 <div className="col-span-3">Status</div>
               </div>
 
@@ -84,35 +86,44 @@ const OnProcessTransactions = ({
                     <div
                       key={i}
                       onClick={() => handleRowClick(row)}
-                      className={`grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-0 items-start sm:items-center py-4 sm:py-6 px-4 sm:px-6 hover:bg-blue-50 transition-colors cursor-pointer ${selectedRequest === row.id ? 'bg-blue-50 border-l-4 border-blue-600' : ''
+                      className={`grid grid-cols-1 sm:grid-cols-12 gap-1 sm:gap-2 items-start sm:items-center py-3 sm:py-4 px-4 hover:bg-blue-50 transition-colors cursor-pointer ${selectedRequest === row.id ? 'bg-blue-50 border-l-4 border-blue-600' : ''
                         }`}
                     >
                       {/* Mobile layout */}
                       <div className="sm:hidden space-y-2">
                         <div className="flex justify-between items-start">
-                          <div>
-                            <p className="text-xs text-gray-500 mb-1">Date</p>
-                            <p className="text-gray-800 text-base font-semibold">{row.date}</p>
+                          <div className="flex items-center gap-3">
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Date</p>
+                              <p className="text-gray-800 text-base font-semibold">{row.date}</p>
+                            </div>
                           </div>
                           <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200">
                             {row.status}
                           </span>
                         </div>
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1">Item</p>
+                        <div className="ml-0">
+                          <p className="text-xs text-gray-500 mb-1">Type</p>
                           <p className="text-gray-700 text-base font-semibold">{row.item}</p>
+                        </div>
+                        <div className="ml-0">
+                          <p className="text-xs text-gray-500 mb-1">Brand</p>
+                          <p className="text-gray-700 text-base font-semibold">{row.brand || '-'}</p>
                         </div>
                       </div>
 
                       {/* Desktop layout */}
                       <div className="hidden sm:contents">
-                        <div className="col-span-3 text-gray-800 text-base font-semibold">
+                        <div className="col-span-3 text-gray-800 text-base font-semibold flex items-center">
                           {row.date}
                         </div>
-                        <div className="col-span-6 text-gray-800 text-base font-semibold">
+                        <div className="col-span-3 text-gray-800 text-base font-semibold flex items-center">
                           {row.item}
                         </div>
-                        <div className="col-span-3">
+                        <div className="col-span-3 text-gray-800 text-base font-semibold flex items-center">
+                          {row.brand || '-'}
+                        </div>
+                        <div className="col-span-3 flex items-center">
                           <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200">
                             {row.status}
                           </span>
@@ -159,63 +170,51 @@ const OnProcessTransactions = ({
 
                   {/* Overview of specific data */}
                   {selectedRequestData ? (
-                    <div className="mb-6 grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <div className="text-gray-500">Item</div>
-                        <div className="text-gray-900 font-semibold">{selectedRequestData.item || '-'}</div>
-                      </div>
-                      <div>
-                        <div className="text-gray-500">Brand</div>
-                        <div className="text-gray-900 font-semibold">{selectedRequestData.brand || '-'}</div>
-                      </div>
-                      <div>
-                        <div className="text-gray-500">Request No.</div>
-                        <div className="text-gray-900 font-semibold">{selectedRequestData.number || selectedRequestData.request_number || '-'}</div>
-                      </div>
-                      <div>
-                        <div className="text-gray-500">Date</div>
-                        <div className="text-gray-900 font-semibold">{selectedRequestData.date || '-'}</div>
-                      </div>
-                      <div>
-                        <div className="text-gray-500">Status</div>
-                        <div className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200">
-                          {selectedRequestData.status || '-'}
+                    <div className="mb-6 space-y-4 text-sm">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <div className="text-gray-500">Item</div>
+                          <div className="text-gray-900 font-semibold">{selectedRequestData.item || '-'}</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-500">Brand</div>
+                          <div className="text-gray-900 font-semibold">{selectedRequestData.brand || '-'}</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-500">Serial Number</div>
+                          <div className="text-gray-900 font-semibold">{selectedRequestData.serial_number || selectedRequestData.serial || '-'}</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-500">Request No.</div>
+                          <div className="text-gray-900 font-semibold">{selectedRequestData.number || selectedRequestData.request_number || '-'}</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-500">Date</div>
+                          <div className="text-gray-900 font-semibold">{selectedRequestData.date || '-'}</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-500">Condition</div>
+                          <div className="text-gray-900 font-semibold">
+                            {selectedRequestData.condition === 'good' || selectedRequestData.condition === 'excellent'
+                              ? 'Good Condition'
+                              : selectedRequestData.condition === 'fair'
+                              ? 'Has Defect'
+                              : selectedRequestData.condition === 'poor'
+                              ? 'Damaged'
+                              : selectedRequestData.condition || '-'}
+                          </div>
                         </div>
                       </div>
-                      <div className="col-span-2">
-                        <div className="text-gray-500">Reason</div>
-                        <div className="text-gray-800">{selectedRequestData.reason || '—'}</div>
+                      <div className="border-t pt-4">
+                        <div className="text-gray-500 mb-2">Admin Description</div>
+                        <div className="text-gray-800 bg-gray-50 p-3 rounded-lg">{selectedRequestData.admin_description || selectedRequestData.approval_notes || selectedRequestData.specifications || selectedRequestData.equipment_notes || selectedRequestData.reason || '—'}</div>
                       </div>
                     </div>
                   ) : (
                     <div className="mb-6 text-sm text-gray-500">Select a request to see details.</div>
                   )}
 
-                  {/* Dynamic items based on selected request */}
-                  {selectedRequestData?.details.map((item, index) => (
-                    <div
-                      key={index}
-                      className={`flex items-start gap-4 pb-4 ${index < selectedRequestData.details.length - 1 ? 'mb-4 border-b border-gray-100' : 'mb-6'
-                        }`}
-                    >
-                      <div className="w-12 h-12 bg-gray-50 rounded-lg flex items-center justify-center border border-gray-200 shrink-0">
-                        <img 
-                          src={item.icon} 
-                          alt={item.name} 
-                          className="w-7 h-7 object-contain"
-                          onError={(e) => {
-                            e.target.style.display = 'none';
-                            e.target.parentElement.innerHTML = '<div class="w-7 h-7 bg-blue-100 rounded flex items-center justify-center text-blue-600 text-lg">📦</div>';
-                          }}
-                        />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-gray-900 mb-1">{item.name}</p>
-                        <p className="text-base text-gray-600 leading-relaxed">{item.description}</p>
-                      </div>
-                    </div>
-                  ))}
-
+                  
                   {/* Cancel Request Button */}
                   <button
                     onClick={() => setIsCancelModalOpen(true)}

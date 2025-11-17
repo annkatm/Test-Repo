@@ -653,21 +653,51 @@ const EmployeeHome = () => {
         request_number: t?.request_number || t?.number || '',
         reason: t?.reason || t?.description || t?.notes || '',
         status: t?.status || 'Pending',
+        serial_number: t?.serial_number || t?.equipment?.serial_number || t?.serial || null,
+        condition: t?.condition || t?.equipment?.condition || t?.current_condition || null,
+        admin_description: t?.approval_notes || t?.specifications || t?.equipment_notes || t?.reason || t?.description || t?.notes || null,
       }));
 
       // Normalize: if item looks like brand or missing, try to fetch equipment category
-      const needEnrich = mapped.filter(m => (!m.equipment_name || m.equipment_name.toLowerCase() === (m.brand || '').toLowerCase()) && m.equipment_id);
+      const needEnrich = mapped.filter(m => (
+        // Need enrichment if category/name is missing or same as brand
+        (!m.equipment_name || m.equipment_name.toLowerCase() === (m.brand || '').toLowerCase()) ||
+        // Or if important details like condition or serial are missing
+        (!m.condition || !m.serial_number)
+      ) && m.equipment_id);
       if (needEnrich.length > 0) {
         try {
           const enriched = await Promise.all(mapped.map(async (m) => {
             if (!m.equipment_id) return m;
-            if (m.equipment_name && m.equipment_name.toLowerCase() !== (m.brand || '').toLowerCase()) return m;
+            // If we already have a good name/brand AND condition/serial, skip extra fetch
+            if (
+              m.equipment_name &&
+              m.equipment_name.toLowerCase() !== (m.brand || '').toLowerCase() &&
+              m.condition &&
+              m.serial_number
+            ) {
+              return m;
+            }
             try {
               const resp = await fetch(`/api/equipment/${m.equipment_id}`, { credentials: 'same-origin' });
               const j = await resp.json();
               const eq = j?.data || j || {};
               const category = eq.category_name || eq.category?.name || eq.category || m.equipment_name;
-              return { ...m, equipment_name: category || m.equipment_name, brand: m.brand || eq.brand || '' };
+              return {
+                ...m,
+                equipment_name: category || m.equipment_name,
+                brand: m.brand || eq.brand || '',
+                serial_number: m.serial_number || eq.serial_number || eq.serial || null,
+                condition: m.condition || eq.condition || eq.current_condition || null,
+                admin_description:
+                  m.admin_description ||
+                  eq.approval_notes ||
+                  eq.specifications ||
+                  eq.equipment_notes ||
+                  eq.description ||
+                  eq.notes ||
+                  null,
+              };
             } catch (_) { return m; }
           }));
           console.log('[fetchPendingTransactions] Final enriched transactions:', enriched);
@@ -868,9 +898,12 @@ const EmployeeHome = () => {
         item: t?.equipment_name || t?.item || '-',
         brand: t?.brand || t?.equipment?.brand || '-',
         model: t?.model || t?.equipment?.model || '-',
+        serial_number: t?.serial_number || t?.equipment?.serial_number || t?.serial || '-',
         number: t?.request_number || t?.number || '-',
         request_number: t?.request_number || t?.number || '-',
         reason: t?.reason || t?.description || t?.notes || '-',
+        admin_description: t?.admin_description || t?.approval_notes || t?.specifications || t?.equipment_notes || t?.reason || t?.description || t?.notes || '-',
+        condition: t?.condition || t?.equipment?.condition || t?.current_condition || '-',
         status: t?.status || 'Pending',
         details: [
           {
