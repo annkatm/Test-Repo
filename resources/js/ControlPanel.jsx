@@ -396,15 +396,6 @@ const ControlPanel = () => {
                 <div className="mb-4">
                   <label className="block text-[12px] text-gray-600 mb-1">Add New {getDisplayName(activeModal)}</label>
                   
-                  {/* Show next code for employee type */}
-                  {activeModal === 'employee type' && (
-                    <div className="mb-2 text-xs text-gray-500">
-                      Next code will be: <span className="font-mono font-semibold text-blue-600">
-                        {Math.max(...dropdownItems[activeModal].map(item => item.code || 0), -1) + 1}
-                      </span>
-                    </div>
-                  )}
-                  
                   <div className="flex space-x-2">
                     <input
                       type="text"
@@ -436,9 +427,6 @@ const ControlPanel = () => {
                       {dropdownItems[activeModal]?.map((item, idx) => (
                         <div key={item.id ?? idx} className="flex items-center justify-between px-4 py-2 text-sm hover:bg-blue-50">
                           <div className="flex items-center space-x-2">
-                            {activeModal === 'employee type' && item.code !== undefined && (
-                              <span className="text-xs font-mono bg-blue-100 text-blue-700 px-2 py-0.5 rounded">{item.code}</span>
-                            )}
                             <span className="text-gray-700">{item.name}</span>
                           </div>
                           <button type="button" onClick={() => removeItem(idx)} className="text-red-500 hover:text-red-600">
