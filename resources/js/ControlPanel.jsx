@@ -146,7 +146,19 @@ const ControlPanel = () => {
       if (res?.data?.success) {
         setNewItemName('');
         setNewItemCode('');
-        await loadDropdownItems(activeModal);
+        
+        // Add new item to the top of the list instead of reloading
+        const newItem = res.data.data || { 
+          id: res.data.id, 
+          name: payload.name,
+          code: payload.code 
+        };
+        
+        setDropdownItems(prev => ({
+          ...prev,
+          [activeModal]: [newItem, ...prev[activeModal]]
+        }));
+        
         // Notify other components
         window.dispatchEvent(new CustomEvent(`${activeModal}:updated`));
       } else {
