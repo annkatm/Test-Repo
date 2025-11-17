@@ -361,6 +361,10 @@ const Archive = () => {
                                     <option value="requests">Requests</option>
                                     <option value="transactions">Transactions</option>
                                     <option value="employees">Employees</option>
+                                    <option value="employee_types">Employee Types</option>
+                                    <option value="positions">Positions</option>
+                                    <option value="departments">Departments</option>
+                                    <option value="clients">Clients</option>
                                     <option value="users">Users</option>
                                 </select>
                             </div>
@@ -474,6 +478,8 @@ const Archive = () => {
                                                         <div className="text-sm text-gray-500">
                                                             {item.type === 'equipment' && item.serial_number ? (
                                                                 <>Serial: {item.serial_number}{item.brand && item.model ? ` • ${item.brand} ${item.model}` : ''}</>
+                                                            ) : item.type === 'employee_type' && item.code ? (
+                                                                <>Code: {item.code}</>
                                                             ) : item.brand && item.model ? `${item.brand} ${item.model}` :
                                                                 item.employee ? item.employee :
                                                                     item.email ? item.email :
@@ -487,10 +493,18 @@ const Archive = () => {
                                                     item.type === 'request' ? 'bg-green-100 text-green-800' :
                                                         item.type === 'transaction' ? 'bg-purple-100 text-purple-800' :
                                                             item.type === 'employee' ? 'bg-orange-100 text-orange-800' :
-                                                                item.type === 'user' ? 'bg-indigo-100 text-indigo-800' :
-                                                                    'bg-gray-100 text-gray-800'
+                                                                item.type === 'employee_type' ? 'bg-yellow-100 text-yellow-800' :
+                                                                    item.type === 'position' ? 'bg-teal-100 text-teal-800' :
+                                                                        item.type === 'department' ? 'bg-cyan-100 text-cyan-800' :
+                                                                            item.type === 'client' ? 'bg-pink-100 text-pink-800' :
+                                                                                item.type === 'user' ? 'bg-indigo-100 text-indigo-800' :
+                                                                                    'bg-gray-100 text-gray-800'
                                                     }`}>
-                                                    {item.type}
+                                                    {item.type === 'employee_type' ? 'Employee Type' :
+                                                        item.type === 'position' ? 'Position' :
+                                                            item.type === 'department' ? 'Department' :
+                                                                item.type === 'client' ? 'Client' :
+                                                                    item.type}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
