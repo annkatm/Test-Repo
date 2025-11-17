@@ -697,7 +697,12 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                   ))}
                 </div>
               ) : (
-                <div className="text-center text-gray-500">No units available</div>
+                <div className="bg-gray-800 rounded-lg p-8 text-center">
+                  <p className="text-white text-lg font-medium mb-4">Click any item to view details</p>
+                  <svg className="w-8 h-8 text-white mx-auto arrow-down-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
               )}
             </div>
             <div className="px-6 py-4 border-t bg-gray-50 text-right">
@@ -739,7 +744,12 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                   ))}
                 </div>
               ) : (
-                <div className="text-center text-gray-500">No units available</div>
+                <div className="bg-gray-800 rounded-lg p-8 text-center">
+                  <p className="text-white text-lg font-medium mb-4">Click any item to view details</p>
+                  <svg className="w-8 h-8 text-white mx-auto arrow-down-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
               )}
             </div>
             <div className="px-6 py-4 border-t bg-gray-50 text-right">
@@ -781,7 +791,12 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                   ))}
                 </div>
               ) : (
-                <div className="text-center text-gray-500">No items available</div>
+                <div className="bg-gray-800 rounded-lg p-8 text-center">
+                  <p className="text-white text-lg font-medium mb-4">Click any item to view details</p>
+                  <svg className="w-8 h-8 text-white mx-auto arrow-down-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
               )}
             </div>
             <div className="px-6 py-4 border-t bg-gray-50 text-right">
@@ -1176,8 +1191,13 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                               setShowBrowseLaptopsModal(false);
                               setIsLaptopListOpen(true);
                             }}
-                            className="mt-4 w-full py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
-                          >View All</button>
+                            className="mt-4 w-full py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                          >
+                            <span>View All</span>
+                            <svg className="w-4 h-4 droplist-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -1201,8 +1221,13 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                               setShowBrowseLaptopsModal(false);
                               setIsProjectorListOpen(true);
                             }}
-                            className="mt-4 w-full py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
-                          >View All</button>
+                            className="mt-4 w-full py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                          >
+                            <span>View All</span>
+                            <svg className="w-4 h-4 droplist-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -1257,8 +1282,13 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                           setShowBrowseLaptopsModal(false);
                           setIsLaptopListOpen(true);
                         }}
-                        className="mt-4 w-full py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
-                      >View All</button>
+                        className="mt-4 w-full py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <span>View All</span>
+                        <svg className="w-4 h-4 droplist-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -1287,8 +1317,13 @@ const ApprovedTransactions = ({ onBack, transactionStats, approvedTransactions =
                           setShowBrowseLaptopsModal(false);
                           setIsProjectorListOpen(true);
                         }}
-                        className="mt-4 w-full py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
-                      >View All</button>
+                        className="mt-4 w-full py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <span>View All</span>
+                        <svg className="w-4 h-4 droplist-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
                 ))}
