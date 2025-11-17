@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { Printer, X, Package, User, Briefcase, Calendar, Hash, Edit2, Save } from 'lucide-react';
 
-const PrintReceipt = ({ 
-  isOpen, 
-  onClose, 
+const PrintReceipt = ({
+  isOpen,
+  onClose,
   transactionData,
-  onPrint
+  onPrint,
+  onSave
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editableItems, setEditableItems] = useState([]);
@@ -27,31 +28,49 @@ In the event that I am unable to return any of the company-issued equipment upon
   });
 
   // Initialize editable data when transactionData changes
+  // Use a ref to track if we've already initialized to prevent resetting saved changes
+  const initializedRef = React.useRef(false);
+  const lastTransactionDataRef = React.useRef(null);
+
   React.useEffect(() => {
     if (transactionData) {
-      // Collect all "other" content from items
-      const items = transactionData.items || [{
-        equipment_name: transactionData.equipment_name,
-        serial_number: transactionData.serial_number,
-      }];
-      
-      const allOthers = items
-        .map(item => item.other || item.notes || item.additional_info || '')
-        .filter(other => other.trim() !== '')
-        .join(', ');
-      
-      setEditableData(prev => ({
-        ...prev,
-        full_name: transactionData.full_name || '',
-        position: transactionData.position || '',
-        department: transactionData.department || 'YD Level 1',
-        equipment_name: transactionData.equipment_name || '',
-        serial_number: transactionData.serial_number || '',
-        other: allOthers || transactionData.other || transactionData.notes || '',
-      }));
-      
-      // Initialize editable items
-      setEditableItems(items);
+      // Only reset if this is a completely new transactionData object (different reference)
+      // or if it's the first time we're seeing this data
+      const isNewData = lastTransactionDataRef.current !== transactionData;
+
+      if (isNewData || !initializedRef.current) {
+        // Collect all "other" content from items
+        const items = transactionData.items || [{
+          equipment_name: transactionData.equipment_name,
+          serial_number: transactionData.serial_number,
+          serial_numbers: transactionData.serial_numbers || [],
+        }];
+
+        const allOthers = items
+          .map(item => item.other || item.notes || item.additional_info || '')
+          .filter(other => other.trim() !== '')
+          .join(', ');
+
+        setEditableData(prev => ({
+          ...prev,
+          full_name: transactionData.full_name || '',
+          position: transactionData.position || '',
+          department: transactionData.department || 'YD Level 1',
+          equipment_name: transactionData.equipment_name || '',
+          serial_number: transactionData.serial_number || '',
+          other: allOthers || transactionData.other || transactionData.notes || '',
+        }));
+
+        // Initialize editable items - use the items from transactionData which may have saved changes
+        setEditableItems(items.map(item => ({
+          ...item,
+          // Preserve serial_numbers array if it exists
+          serial_numbers: item.serial_numbers || []
+        })));
+
+        initializedRef.current = true;
+        lastTransactionDataRef.current = transactionData;
+      }
     }
   }, [transactionData]);
 
@@ -95,25 +114,48 @@ In the event that I am unable to return any of the company-issued equipment upon
   };
 
   const handleSave = () => {
+    // Prepare updated transaction data with saved changes
+    const updatedData = {
+      ...transactionData,
+      full_name: editableData.full_name,
+      position: editableData.position,
+      department: editableData.department,
+      other: editableData.other,
+      items: editableItems.map((item, index) => {
+        // Get the original item to preserve serial_numbers array
+        const originalItem = transactionData.items?.[index] || transactionData;
+        return {
+          ...originalItem, // Preserve all original properties including serial_numbers
+          ...item, // Override with any edited values
+          serial_number: item.serial_number || originalItem.serial_number || transactionData.serial_number
+        };
+      })
+    };
+
+    // Call onSave callback if provided to persist changes
+    if (onSave) {
+      onSave(updatedData);
+    }
+
     setIsEditing(false);
   };
 
   // Handle both single item and multiple items
   const items = editableItems.length > 0 ? editableItems : (transactionData.items || [{
-        equipment_name: transactionData.equipment_name,
-        serial_number: transactionData.serial_number,
-        notes: transactionData.notes
+    equipment_name: transactionData.equipment_name,
+    serial_number: transactionData.serial_number,
+    notes: transactionData.notes
   }]);
 
   const handlePrint = () => {
     // Get the logo as absolute URL - use full path to ensure it loads
     const logoUrl = window.location.origin + '/images/Frame_89-removebg-preview.png';
     const signatureUrl = window.location.origin + '/images/signature.jpg';
-    
+
     // Preload the image to ensure it's available for printing
     const img = new Image();
     img.src = logoUrl;
-    
+
     img.onload = () => {
       const printWindow = window.open('', '_blank');
       const printContent = `
@@ -239,14 +281,14 @@ In the event that I am unable to return any of the company-issued equipment upon
             </thead>
             <tbody>
               ${items.map((item, index) => {
-                const dateReleased = item.date_released ? new Date(item.date_released).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : 'N/A';
-                const dateReturned = item.date_returned ? new Date(item.date_returned).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '';
-                
-                // Use category_name for Item column, brand name for Description
-                const category = item.category_name || 'N/A';
-                const brandName = item.brand || item.model || item.equipment_name || 'N/A';
-                
-                return `
+        const dateReleased = item.date_released ? new Date(item.date_released).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : 'N/A';
+        const dateReturned = item.date_returned ? new Date(item.date_returned).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '';
+
+        // Use category_name for Item column, brand name for Description
+        const category = item.category_name || 'N/A';
+        const brandName = item.brand || item.model || item.equipment_name || 'N/A';
+
+        return `
                   <tr>
                     <td>${category}</td>
                     <td>${brandName}</td>
@@ -255,13 +297,13 @@ In the event that I am unable to return any of the company-issued equipment upon
                     <td>${dateReturned}</td>
                   </tr>
                 `;
-              }).join('')}
+      }).join('')}
               ${(() => {
-                // Get "other" content from editableData (user-editable field)
-                const otherContent = editableData.other || '';
-                
-                // Show "Other:" row
-                return `
+          // Get "other" content from editableData (user-editable field)
+          const otherContent = editableData.other || '';
+
+          // Show "Other:" row
+          return `
                   <tr class="others-row">
                     <td>Other:</td>
                     <td>${otherContent}</td>
@@ -270,7 +312,7 @@ In the event that I am unable to return any of the company-issued equipment upon
                     <td></td>
                   </tr>
                 `;
-              })()}
+        })()}
             </tbody>
           </table>
 
@@ -299,22 +341,22 @@ In the event that I am unable to return any of the company-issued equipment upon
         </body>
       </html>
       `;
-      
+
       printWindow.document.write(printContent);
       printWindow.document.close();
-      
+
       // Wait a bit for image to render then print
       setTimeout(() => {
         printWindow.focus();
         printWindow.print();
         printWindow.close();
       }, 500);
-      
+
       if (onPrint) {
         onPrint();
       }
     };
-    
+
     // If image fails to load, print anyway
     img.onerror = () => {
       alert('Logo image could not be loaded. Printing without logo.');
@@ -428,14 +470,14 @@ In the event that I am unable to return any of the company-issued equipment upon
               </thead>
               <tbody>
                 ${items.map((item, index) => {
-                  const dateReleased = item.date_released ? new Date(item.date_released).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : 'N/A';
-                  const dateReturned = item.date_returned ? new Date(item.date_returned).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '';
-                  
-                  // Use category_name for Item column, brand name for Description
-                  const category = item.category_name || 'N/A';
-                  const brandName = item.brand || item.model || item.equipment_name || 'N/A';
-                  
-                  return `
+        const dateReleased = item.date_released ? new Date(item.date_released).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : 'N/A';
+        const dateReturned = item.date_returned ? new Date(item.date_returned).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '';
+
+        // Use category_name for Item column, brand name for Description
+        const category = item.category_name || 'N/A';
+        const brandName = item.brand || item.model || item.equipment_name || 'N/A';
+
+        return `
                     <tr>
                       <td>${category}</td>
                       <td>${brandName}</td>
@@ -444,13 +486,13 @@ In the event that I am unable to return any of the company-issued equipment upon
                       <td>${dateReturned}</td>
                     </tr>
                   `;
-                }).join('')}
+      }).join('')}
                 ${(() => {
-                  // Get "other" content from editableData (user-editable field)
-                  const otherContent = editableData.other || '';
-                  
-                  // Show "Other:" row
-                  return `
+          // Get "other" content from editableData (user-editable field)
+          const otherContent = editableData.other || '';
+
+          // Show "Other:" row
+          return `
                     <tr class="others-row">
                       <td>Other:</td>
                       <td>${otherContent}</td>
@@ -459,7 +501,7 @@ In the event that I am unable to return any of the company-issued equipment upon
                       <td></td>
                     </tr>
                   `;
-                })()}
+        })()}
               </tbody>
             </table>
 
@@ -488,13 +530,13 @@ In the event that I am unable to return any of the company-issued equipment upon
           </body>
         </html>
       `;
-      
+
       printWindow.document.write(printContent);
       printWindow.document.close();
       printWindow.focus();
       printWindow.print();
       printWindow.close();
-      
+
       if (onPrint) {
         onPrint();
       }
@@ -553,9 +595,9 @@ In the event that I am unable to return any of the company-issued equipment upon
           {/* Form Preview */}
           <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
             <div className="text-center mb-6">
-              <img 
-                src="/images/Frame_89-removebg-preview.png" 
-                alt="iREPLY Logo" 
+              <img
+                src="/images/Frame_89-removebg-preview.png"
+                alt="iREPLY Logo"
                 className="w-24 h-auto mx-auto mb-4"
               />
               <div className="text-lg font-semibold text-gray-900">ACCOUNTABILITY FORM AGREEMENT</div>
@@ -645,7 +687,7 @@ In the event that I am unable to return any of the company-issued equipment upon
                   {items.map((item, index) => {
                     const dateReleased = item.date_released ? new Date(item.date_released).toLocaleDateString() : new Date().toLocaleDateString();
                     const dateReturned = item.date_returned ? new Date(item.date_returned).toLocaleDateString() : null;
-                    
+
                     return (
                       <div key={index} className="border-l-2 border-blue-500 pl-3 py-1">
                         <div className="font-medium">{index + 1}. {item.equipment_name || 'N/A'}</div>
@@ -705,7 +747,7 @@ In the event that I am unable to return any of the company-issued equipment upon
                       </div>
                     );
                   })}
-                  
+
                   {/* Other Field - Always Editable */}
                   <div className="mt-4 pt-4 border-t border-gray-200">
                     <div className="flex items-center gap-3">

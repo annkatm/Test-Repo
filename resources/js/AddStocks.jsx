@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import HomeSidebar from './HomeSidebar';
-import { Copy, Plus, Minus, X, ChevronRight, ArrowLeft, Grid3X3, Search } from 'lucide-react';
+import { Copy, Plus, Minus, X, ChevronRight, ArrowLeft, Grid3X3, Search, ChevronDown } from 'lucide-react';
 import GlobalHeader from './components/GlobalHeader';
 
 // Add custom scrollbar styles and animations
@@ -24,6 +24,14 @@ const scrollbarStyles = `
     background: #2563EB;
   }
 
+  .hide-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
   @keyframes fadeIn {
     from {
       opacity: 0;
@@ -44,12 +52,55 @@ const scrollbarStyles = `
     }
   }
 
+  @keyframes glowPulse {
+    0%, 100% {
+      opacity: 0.6;
+      transform: translateY(0px);
+    }
+    50% {
+      opacity: 1;
+      transform: translateY(4px);
+    }
+  }
+
+  @keyframes fadeChevron {
+    0% {
+      opacity: 0.3;
+    }
+    50% {
+      opacity: 0.5;
+    }
+    100% {
+      opacity: 0.3;
+    }
+  }
+
   .animate-fadeIn {
     animation: fadeIn 0.3s ease-out;
   }
 
   .animate-scaleIn {
     animation: scaleIn 0.4s ease-out;
+  }
+
+  .scroll-indicator {
+    animation: glowPulse 2s ease-in-out infinite;
+  }
+
+  .chevron-fade-1 {
+    animation: fadeChevron 2s ease-in-out infinite;
+    animation-delay: 0s;
+  }
+
+  .chevron-fade-2 {
+    animation: fadeChevron 2s ease-in-out infinite;
+    animation-delay: 0.3s;
+  }
+
+  .chevron-glow {
+    filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.8)) drop-shadow(0 0 16px rgba(59, 130, 246, 0.6));
+    animation: glowPulse 2s ease-in-out infinite;
+    animation-delay: 0.6s;
   }
 `;
 
@@ -95,6 +146,39 @@ const AddStocks = () => {
   const [expandedRows, setExpandedRows] = useState({}); // { '<productKey>-<timestamp>': true }
   const toggleExpanded = (rowId) => setExpandedRows(prev => ({ ...prev, [rowId]: !prev[rowId] }));
   const [receiptPreview, setReceiptPreview] = useState(null); // { src, alt } for receipt lightbox
+  const [dropdownScrollIndicators, setDropdownScrollIndicators] = useState({}); // Track scroll indicators for each dropdown
+  const dropdownRefs = useRef({}); // Refs for each dropdown container
+
+  // Check if dropdown is scrollable
+  const checkDropdownScrollable = (rowId) => {
+    const container = dropdownRefs.current[rowId];
+    if (container) {
+      const { scrollHeight, clientHeight, scrollTop } = container;
+      const isScrollable = scrollHeight > clientHeight;
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 5;
+      const shouldShow = isScrollable && !isAtBottom;
+      setDropdownScrollIndicators(prev => ({ ...prev, [rowId]: shouldShow }));
+    }
+  };
+
+  // Handle dropdown scroll
+  const handleDropdownScroll = (rowId) => {
+    const container = dropdownRefs.current[rowId];
+    if (container) {
+      const { scrollHeight, clientHeight, scrollTop } = container;
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 5;
+      setDropdownScrollIndicators(prev => ({ ...prev, [rowId]: !isAtBottom }));
+    }
+  };
+
+  // Check scrollable when row is expanded
+  useEffect(() => {
+    Object.keys(expandedRows).forEach(rowId => {
+      if (expandedRows[rowId]) {
+        setTimeout(() => checkDropdownScrollable(rowId), 100);
+      }
+    });
+  }, [expandedRows]);
 
   // Fetch equipment data
   useEffect(() => {
@@ -666,8 +750,13 @@ const AddStocks = () => {
                                       <div>Receipt</div>
                                     </div>
                                   </div>
-                                  <div className="divide-y divide-gray-200 max-h-64 overflow-y-auto">
-                                    {(item.allItems || []).map((equipmentItem, i) => {
+                                  <div className="relative">
+                                    <div 
+                                      ref={(el) => (dropdownRefs.current[rowId] = el)}
+                                      onScroll={() => handleDropdownScroll(rowId)}
+                                      className="divide-y divide-gray-200 max-h-64 overflow-y-auto hide-scrollbar"
+                                    >
+                                      {(item.allItems || []).map((equipmentItem, i) => {
                                       const isRecentlyAdded = item.recentlyAddedItems.some(rai => rai.id === equipmentItem.id);
                                       const addedDate = equipmentItem.created_at
                                         ? new Date(equipmentItem.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -725,9 +814,20 @@ const AddStocks = () => {
                                           </div>
                                         </div>
                                       );
-                                    })}
-                                    {(!item.allItems || item.allItems.length === 0) && (
-                                      <div className="px-4 py-3 bg-white text-sm text-gray-500">No items found for this product.</div>
+                                      })}
+                                      {(!item.allItems || item.allItems.length === 0) && (
+                                        <div className="px-4 py-3 bg-white text-sm text-gray-500">No items found for this product.</div>
+                                      )}
+                                    </div>
+                                    {/* Scroll Indicator Arrow */}
+                                    {dropdownScrollIndicators[rowId] && (
+                                      <div className="absolute bottom-3 left-1/2 transform -translate-x-1/2 pointer-events-none z-10">
+                                        <div className="flex flex-col items-center -space-y-3">
+                                          <ChevronDown className="h-7 w-7 text-gray-400 chevron-fade-1" strokeWidth={2.5} />
+                                          <ChevronDown className="h-7 w-7 text-gray-400 chevron-fade-2" strokeWidth={2.5} />
+                                          <ChevronDown className="h-7 w-7 text-blue-500 chevron-glow" strokeWidth={3} />
+                                        </div>
+                                      </div>
                                     )}
                                   </div>
                                 </div>

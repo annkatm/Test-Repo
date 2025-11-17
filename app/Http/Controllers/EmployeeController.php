@@ -464,14 +464,22 @@ class EmployeeController extends Controller
                 ->select(
                     'transactions.id as transaction_id',
                     'transactions.transaction_number',
+                    'transactions.equipment_id',
+                    'employees.id as employee_id',
                     'employees.first_name',
                     'employees.last_name',
+                    DB::raw("CONCAT(employees.first_name, ' ', employees.last_name) as full_name"),
                     'employees.position',
                     'equipment.name as equipment_name',
+                    'equipment.brand',
+                    'equipment.model',
+                    'equipment.serial_number',
+                    'equipment.specifications',
                     'categories.name as category_name',
                     'transactions.return_date',
                     'transactions.expected_return_date',
-                    'transactions.return_condition'
+                    'transactions.return_condition',
+                    'transactions.return_notes'
                 )
                 ->orderBy('transactions.return_date', 'desc')
                 ->get();

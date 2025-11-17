@@ -169,10 +169,6 @@ const OnProcessTransactions = ({
                         <div className="text-gray-900 font-semibold">{selectedRequestData.brand || '-'}</div>
                       </div>
                       <div>
-                        <div className="text-gray-500">Model</div>
-                        <div className="text-gray-900 font-semibold">{selectedRequestData.model || '-'}</div>
-                      </div>
-                      <div>
                         <div className="text-gray-500">Request No.</div>
                         <div className="text-gray-900 font-semibold">{selectedRequestData.number || selectedRequestData.request_number || '-'}</div>
                       </div>
@@ -419,9 +415,6 @@ const OnProcessTransactions = ({
                     </p>
                     <p className="text-sm text-gray-500">
                       {deniedRequests.find(r => r.id === selectedRequest)?.brand}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {deniedRequests.find(r => r.id === selectedRequest)?.model}
                     </p>
                   </div>
                 ) : (
