@@ -1267,6 +1267,9 @@ const EmployeeHome = () => {
                 {(borrowedItems || []).map((it, i) => (
                   <div key={it.id || i} className="border border-gray-200 rounded-lg p-3">
                     <div className="font-semibold text-gray-900">{it.equipment_name || it.item || '-'}</div>
+                    <div className="text-sm text-gray-600 mt-1">
+                      Serial: {it.serial_number || it.serial || 'N/A'}
+                    </div>
                   </div>
                 ))}
         </div>
@@ -1295,6 +1298,9 @@ const EmployeeHome = () => {
                 {(borrowedItems || []).map((it, i) => (
                   <div key={it.id || i} className="border border-gray-200 rounded-lg p-3">
                     <div className="font-semibold text-gray-900">{it.equipment_name || it.item || '-'}</div>
+                    <div className="text-sm text-gray-600 mt-1">
+                      Serial: {it.serial_number || it.serial || 'N/A'}
+                    </div>
                   </div>
                 ))}
                 {(!borrowedItems || borrowedItems.length === 0) && (
