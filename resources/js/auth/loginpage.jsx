@@ -212,20 +212,35 @@ const LoginPage = ({ onAuthSuccess }) => {
     setErrors(prev => ({ general: prev.general || null }));
 
     try {
-      // Get CSRF token from meta tag or fetch from server
-      let csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || null;
-
-      if (!csrfToken) {
-        // Fetch CSRF token from server
-        const tokenResponse = await fetch('/csrf-token', {
-          credentials: 'same-origin'
-        });
-        if (tokenResponse.ok) {
-          const tokenData = await tokenResponse.json();
-          csrfToken = tokenData.csrf_token;
-        } else {
-          throw new Error('Failed to get CSRF token');
+      // Helper function to fetch fresh CSRF token
+      const fetchCsrfToken = async () => {
+        try {
+          const tokenResponse = await fetch('/csrf-token', {
+            credentials: 'same-origin',
+            method: 'GET',
+          });
+          if (tokenResponse.ok) {
+            const tokenData = await tokenResponse.json();
+            const token = tokenData.csrf_token;
+            // Update meta tag with fresh token
+            const metaTag = document.querySelector('meta[name="csrf-token"]');
+            if (metaTag) {
+              metaTag.setAttribute('content', token);
+            }
+            return token;
+          }
+        } catch (err) {
+          console.error('Failed to fetch CSRF token:', err);
         }
+        return null;
+      };
+
+      // Always fetch a fresh CSRF token to avoid expired token issues
+      let csrfToken = await fetchCsrfToken();
+      
+      // Fallback to meta tag if fetch fails
+      if (!csrfToken) {
+        csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || null;
       }
 
       if (!csrfToken) {
@@ -247,6 +262,66 @@ const LoginPage = ({ onAuthSuccess }) => {
         credentials: 'same-origin', // Include cookies for session authentication
         body: formData,
       });
+
+      // Handle 419 CSRF token mismatch - retry with fresh token
+      if (response.status === 419) {
+        console.log('CSRF token expired, fetching fresh token and retrying...');
+        // Fetch a fresh token and retry once
+        csrfToken = await fetchCsrfToken();
+        if (csrfToken) {
+          // Update form data with new token
+          formData.set('_token', csrfToken);
+          
+          const retryResponse = await fetch('/login', {
+            method: 'POST',
+            headers: {
+              'X-CSRF-TOKEN': csrfToken,
+              'Accept': 'application/json',
+            },
+            credentials: 'same-origin',
+            body: formData,
+          });
+
+          // Process retry response
+          if (retryResponse.redirected || retryResponse.status === 302) {
+            console.log('Login successful - redirected to dashboard');
+            window.location.href = retryResponse.url || '/dashboard';
+            return;
+          }
+
+          // If still 419, show error
+          if (retryResponse.status === 419) {
+            setErrors({ general: 'Session expired. Please refresh the page and try again.' });
+            return;
+          }
+
+          // Continue processing retry response
+          const contentType = retryResponse.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            try {
+              const retryData = await retryResponse.json();
+              if (retryResponse.ok && retryData.success) {
+                if (retryData.user) {
+                  localStorage.setItem('user', JSON.stringify(retryData.user));
+                  window.dispatchEvent(new CustomEvent('userDataUpdated'));
+                }
+                onAuthSuccess();
+                return;
+              } else {
+                const errorMessage = retryData.message || retryData.error || 'Wrong email or password. Please try again.';
+                setErrors({ general: errorMessage });
+                return;
+              }
+            } catch (parseError) {
+              setErrors({ general: 'Wrong email or password. Please try again.' });
+              return;
+            }
+          }
+        } else {
+          setErrors({ general: 'Session expired. Please refresh the page and try again.' });
+          return;
+        }
+      }
 
       // Check if the response is a redirect (status 302) - means login was successful
       if (response.redirected || response.status === 302) {

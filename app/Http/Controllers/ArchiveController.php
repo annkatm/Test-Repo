@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ActivityLog;
 use App\Models\Category;
 use App\Models\Employee;
+use App\Models\EmployeeType;
 use App\Models\Equipment;
 use App\Models\Request as EquipmentRequest;
 use App\Models\Transaction;
@@ -26,6 +27,8 @@ class ArchiveController extends Controller
             'employee' => 'App\\Models\\Employee',
             'user' => 'App\\Models\\User',
             'category' => 'App\\Models\\Category',
+            'employee_type' => 'App\\Models\\EmployeeType',
+            'employee_types' => 'App\\Models\\EmployeeType',
         ];
         
         $fullModelType = $modelTypeMap[$modelType] ?? null;
@@ -224,6 +227,31 @@ class ArchiveController extends Controller
             $archivedItems = $archivedItems->merge($categories);
         }
         
+        if ($filterType === 'all' || $filterType === 'employee_types') {
+            $employeeTypesQuery = EmployeeType::onlyTrashed()
+                ->whereNotNull('deleted_at'); // Ensure only properly soft-deleted items
+            
+            if ($searchTerm) {
+                $employeeTypesQuery->where(function($query) use ($searchTerm) {
+                    $query->where('name', 'like', "%{$searchTerm}%")
+                          ->orWhere('code', 'like', "%{$searchTerm}%");
+                });
+            }
+            
+            $employeeTypes = $employeeTypesQuery->get()
+                ->map(function($item) {
+                    return [
+                        'id' => $item->id,
+                        'type' => 'employee_type',
+                        'name' => $item->name,
+                        'code' => $item->code,
+                        'deleted_at' => $item->deleted_at,
+                        'deleted_by' => $this->getDeletedBy('employee_type', $item->id, $item->deleted_at),
+                    ];
+                });
+            $archivedItems = $archivedItems->merge($employeeTypes);
+        }
+        
         // Filter out items with invalid deleted_at timestamps (like 1970-01-01)
         $archivedItems = $archivedItems->filter(function($item) {
             return $item['deleted_at'] && 
@@ -278,6 +306,10 @@ class ArchiveController extends Controller
             case 'user':
                 $model = User::withTrashed()->find($id);
                 break;
+            case 'employee_type':
+            case 'employee_types':
+                $model = EmployeeType::withTrashed()->find($id);
+                break;
         }
 
         if ($model) {
@@ -310,6 +342,10 @@ class ArchiveController extends Controller
                 break;
             case 'user':
                 $model = User::withTrashed()->find($id);
+                break;
+            case 'employee_type':
+            case 'employee_types':
+                $model = EmployeeType::withTrashed()->find($id);
                 break;
         }
 
@@ -351,6 +387,10 @@ class ArchiveController extends Controller
                     break;
                 case 'user':
                     $model = User::withTrashed()->find($id);
+                    break;
+                case 'employee_type':
+                case 'employee_types':
+                    $model = EmployeeType::withTrashed()->find($id);
                     break;
             }
 
@@ -400,6 +440,10 @@ class ArchiveController extends Controller
                     break;
                 case 'user':
                     $model = User::withTrashed()->find($id);
+                    break;
+                case 'employee_type':
+                case 'employee_types':
+                    $model = EmployeeType::withTrashed()->find($id);
                     break;
             }
 

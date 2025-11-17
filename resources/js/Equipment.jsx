@@ -383,7 +383,7 @@ const Equipment = () => {
                       <div className="grid grid-cols-3 gap-4 mb-4 text-gray-700 font-semibold text-sm">
                         <div className="text-left">Items</div>
                         <div className="text-center">Available/Total</div>
-                        <div className="text-right">Total Price(₱)</div>
+                        <div className="text-right">Price(₱)</div>
                       </div>
                       
                       <div className="space-y-3">

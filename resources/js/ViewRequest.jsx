@@ -184,6 +184,8 @@ const ViewRequest = () => {
           avatar_url: getAvatarUrl(holder),
           request_mode: holder.request_mode,
           expected_return_date: holder.expected_return_date,
+          request_date: holder.request_date || holder.created_at,
+          created_at: holder.created_at,
           holders: [],
           items: []
         };
@@ -191,7 +193,17 @@ const ViewRequest = () => {
       grouped[employeeName].holders.push(holder);
       grouped[employeeName].items.push({
         id: holder.equipment_id || holder.id,
-        equipment_name: holder.equipment_name || 'Unknown Item'
+        equipment_id: holder.equipment_id,
+        equipment_name: holder.equipment_name || 'Unknown Item',
+        name: holder.equipment_name || 'Unknown Item',
+        brand: holder.brand || '',
+        model: holder.model || '',
+        category_id: holder.category_id || null,
+        category_name: holder.category_name || holder.category || '',
+        category: holder.category_name || holder.category || '',
+        serial_number: holder.serial_number || holder.equipment_serial_number || holder.asset_tag || 'N/A',
+        specifications: holder.specifications || holder.specs || [holder.brand, holder.model].filter(Boolean).join(' ') || holder.category_name || '',
+        specs: holder.specifications || holder.specs || [holder.brand, holder.model].filter(Boolean).join(' ') || holder.category_name || ''
       });
     });
     return Object.values(grouped);
@@ -1235,29 +1247,27 @@ const ViewRequest = () => {
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="text-left py-4 px-6 text-sm font-semibold text-gray-700">Name</th>
-                <th className="text-left py-4 px-6 text-sm font-semibold text-gray-700">Position</th>
                 <th className="text-left py-4 px-6 text-sm font-semibold text-gray-700">Item</th>
                 <th className="text-left py-4 px-6 text-sm font-semibold text-gray-700">Request mode</th>
-                <th className="text-left py-4 px-6 text-sm font-semibold text-gray-700">End Date</th>
                 <th className="text-right py-4 px-6 text-sm font-semibold text-gray-700">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="6" className="py-8 text-center text-gray-500">
+                  <td colSpan="4" className="py-8 text-center text-gray-500">
                     Loading current holders...
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan="6" className="py-8 text-center text-red-500">
+                  <td colSpan="4" className="py-8 text-center text-red-500">
                     Error: {error}
                   </td>
                 </tr>
               ) : groupedCurrentHolders.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="py-8 text-center text-gray-500">
+                  <td colSpan="4" className="py-8 text-center text-gray-500">
                     No current holders found
                   </td>
                 </tr>
@@ -1289,9 +1299,6 @@ const ViewRequest = () => {
                       </div>
                     </td>
                     <td className="py-4 px-6 text-sm text-gray-700">
-                      {group.position}
-                    </td>
-                    <td className="py-4 px-6 text-sm text-gray-700">
                       <span>
                         {group.items.length === 1 
                           ? group.items[0].equipment_name 
@@ -1300,9 +1307,6 @@ const ViewRequest = () => {
                     </td>
                     <td className="py-4 px-6 text-sm text-gray-700">
                       {formatRequestMode(group.request_mode)}
-                    </td>
-                    <td className="py-4 px-6 text-sm text-red-600 font-medium">
-                      {group.expected_return_date || 'N/A'}
                     </td>
                     <td className="py-4 px-6">
                       <div className="flex items-center justify-end space-x-2">
@@ -1359,29 +1363,27 @@ const ViewRequest = () => {
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="text-left py-4 px-6 text-sm font-semibold text-gray-700">Name</th>
-                <th className="text-left py-4 px-6 text-sm font-semibold text-gray-700">Position</th>
                 <th className="text-left py-4 px-6 text-sm font-semibold text-gray-700">Item</th>
                 <th className="text-left py-4 px-6 text-sm font-semibold text-gray-700">Request mode</th>
-                <th className="text-left py-4 px-6 text-sm font-semibold text-gray-700">End Date</th>
                 <th className="text-right py-4 px-6 text-sm font-semibold text-gray-700">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="6" className="py-8 text-center text-gray-500">
+                  <td colSpan="4" className="py-8 text-center text-gray-500">
                     Loading verify returns...
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan="6" className="py-8 text-center text-red-500">
+                  <td colSpan="4" className="py-8 text-center text-red-500">
                     Error: {error}
                   </td>
                 </tr>
               ) : groupedVerifyReturns.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="py-8 text-center text-gray-500">
+                  <td colSpan="4" className="py-8 text-center text-gray-500">
                     No returns to verify found
                   </td>
                 </tr>
@@ -1413,9 +1415,6 @@ const ViewRequest = () => {
                       </div>
                     </td>
                     <td className="py-4 px-6 text-sm text-gray-700">
-                      {group.position}
-                    </td>
-                    <td className="py-4 px-6 text-sm text-gray-700">
                       <div className="flex items-center space-x-2">
                         <span>
                           {group.items.length === 1 
@@ -1431,9 +1430,6 @@ const ViewRequest = () => {
                     </td>
                     <td className="py-4 px-6 text-sm text-gray-700">
                       {formatRequestMode(group.request_mode)}
-                    </td>
-                    <td className="py-4 px-6 text-sm text-red-600 font-medium">
-                      {group.return_date || 'N/A'}
                     </td>
                     <td className="py-4 px-6">
                       <div className="flex items-center justify-end space-x-2">
@@ -1590,5 +1586,6 @@ const ViewRequest = () => {
     </div>
   );
 };
+
 
 export default ViewRequest;
