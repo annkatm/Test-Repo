@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Echo from '../echo';
 import { X, RefreshCcw, ClipboardList, Mouse, FilePlus2 } from 'lucide-react';
 import OnProcessTransactions from './OnProcessTransactions';
-import ApprovedTransactions from './ApprovedTransactions';
 import StatsCards from './StatsCards';
 const EmployeeHome = () => {
   const [, setShowExchangeConfirmModal] = useState(false);
@@ -18,7 +17,6 @@ const EmployeeHome = () => {
   
   const [showPendings, setShowPendings] = useState(false);
   const [, setSelectedRow] = useState(1);
-  const [currentView, setCurrentView] = useState('transactions');
   const [, setShowReasonModal] = useState(false);
   const [exchangeReason, setExchangeReason] = useState('');
   const [uploadedFile, setUploadedFile] = useState(null);
@@ -329,7 +327,6 @@ const EmployeeHome = () => {
         
         // Move to approved transactions
         try { 
-          fetchApprovedTransactions(); 
           try { showToast('Request approved', 'success'); } catch (_) {}
         } catch (_) {}
       }
@@ -677,92 +674,13 @@ const EmployeeHome = () => {
     }
   };
 
-  const fetchApprovedTransactions = async () => {
-    try {
-      // 1) Fetch from approved endpoint
-      const respApproved = await fetch('/api/transactions/approved', { credentials: 'same-origin' });
-      const jsonApproved = await respApproved.json().catch(() => ({}));
-      const listApproved = Array.isArray(jsonApproved)
-        ? jsonApproved
-        : (Array.isArray(jsonApproved?.data)
-          ? jsonApproved.data
-          : (Array.isArray(jsonApproved?.data?.data) ? jsonApproved.data.data : []));
-
-      // 2) Fetch from generic transactions and filter approved-like
-      let listGeneric = [];
-      try {
-        const res2 = await fetch('/api/transactions', { credentials: 'same-origin' });
-        const j2 = await res2.json().catch(() => ({}));
-        const raw2 = Array.isArray(j2) ? j2 : (Array.isArray(j2?.data) ? j2.data : (Array.isArray(j2?.data?.data) ? j2.data.data : []));
-        const allowed = ['approved', 'released', 'borrowed', 'active'];
-        listGeneric = (raw2 || []).filter(t => allowed.includes(String(t?.status || '').toLowerCase()));
-      } catch (_) {}
-
-      // Merge approved + generic and de-duplicate
-      let merged = [...(Array.isArray(listApproved) ? listApproved : []), ...(Array.isArray(listGeneric) ? listGeneric : [])];
-      if (merged.length > 0) {
-        const seen = new Set();
-        merged = merged.filter((t) => {
-          const id = t?.id ?? t?.transaction_id ?? t?.request_id ?? null;
-          const eq = t?.equipment_id ?? t?.equipment?.id ?? null;
-          // Only de-duplicate when BOTH id and equipment_id exist and are non-empty
-          if (id != null && id !== '' && eq != null && eq !== '') {
-            const key = `${String(id)}::${String(eq)}`;
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return true;
-          }
-          // Otherwise, keep the entry to avoid accidental collapsing
-          return true;
-        });
-      }
-
-      // 3) Fallback to current holders if still empty
-      if (!Array.isArray(merged) || merged.length === 0) {
-        try {
-          const res3 = await fetch('/api/employees/current-holders', { credentials: 'same-origin' });
-          const j3 = await res3.json().catch(() => ({}));
-          merged = Array.isArray(j3) ? j3 : (Array.isArray(j3?.data) ? j3.data : []);
-        } catch (_) {}
-      }
-
-      // 4) Additional fallback to approved requests
-      if (!Array.isArray(merged) || merged.length === 0) {
-        try {
-          const res4 = await fetch('/api/requests?status=approved', { credentials: 'same-origin' });
-          const j4 = await res4.json().catch(() => ({}));
-          const reqs = Array.isArray(j4) ? j4 : (Array.isArray(j4?.data) ? j4.data : []);
-          merged = (reqs || []).map(r => ({
-            id: r.id,
-            equipment_id: r.equipment_id || r.equipment?.id,
-            equipment_name: r.equipment_name || r.item || '-',
-            expected_start_date: r.expected_start_date || r.start_date,
-            expected_end_date: r.expected_end_date || r.return_date,
-            status: r.status || 'approved',
-          }));
-        } catch (_) {}
-      }
-
-      const finalList = Array.isArray(merged) ? merged : [];
-      try {
-        console.log('[EmployeeTransaction] Approved fetch result count:', finalList.length, finalList.slice(0, 3));
-      } catch (_) {}
-      setTransactions(finalList);
-      // Ensure the dashboard 'Item Currently Borrowed' reflects approved items count
-      try { setTransactionStats((prev) => ({ ...prev, borrowed: Array.isArray(finalList) ? finalList.length : 0 })); } catch (_) {}
-    } catch (error) {
-      console.error('Failed to fetch approved transactions:', error);
-      setTransactions([]);
-    }
-  };
-
+  
 
 
   useEffect(() => {
     const loadTransactionData = async () => {
       await fetchTransactionStats();
       await fetchPendingTransactions();
-      await fetchApprovedTransactions();
       await fetchDeniedRequests(); // Fetch denied requests on load
 
       try {
@@ -878,8 +796,6 @@ const EmployeeHome = () => {
 
   const handleSendExchangeRequest = () => {
     setShowExchangeConfirmModal(false);
-    // Reset to transactions view after confirmation
-    setTimeout(() => setCurrentView('transactions'), 300);
   };
 
   if (loading) {
@@ -899,52 +815,6 @@ const EmployeeHome = () => {
   }
 
 
-
-  // Main transaction view
-  // Show full Approved list when requested
-  if (currentView === 'approved') {
-    const approvedData = [...(transactions || [])]
-      .sort((a, b) => {
-        const aDate = new Date(a?.created_at || a?.expected_start_date || a?.start_date || 0).getTime();
-        const bDate = new Date(b?.created_at || b?.expected_start_date || b?.start_date || 0).getTime();
-        return bDate - aDate;
-      })
-      .map((t) => {
-        const dsrc = t?.created_at || t?.expected_start_date || t?.start_date || t?.date || null;
-        const date = dsrc
-          ? new Date(dsrc).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
-          : new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
-        return {
-          // Use any available identifier to ensure Return works
-          id: t?.id ?? t?.transaction_id ?? t?.request_id ?? t?.transactionID ?? t?.trans_id ?? t?.trx_id ?? t?.uuid ?? t?.pivot?.transaction_id ?? null,
-          tx_id: t?.id ?? t?.transaction_id ?? t?.request_id ?? t?.transactionID ?? t?.trans_id ?? t?.trx_id ?? t?.uuid ?? t?.pivot?.transaction_id ?? null,
-          date,
-          item: t?.equipment_name || t?.item || '-',
-          match_name: t?.equipment_name || t?.item || '-',
-          status: t?.status || '-',
-          equipment_id: t?.equipment_id || t?.equipment?.id || null,
-          brand: t?.brand || t?.equipment?.brand || null,
-          model: t?.model || t?.equipment?.model || null,
-          equipment: t?.equipment || t?.equipment_details || null,
-          exchangeItems: [
-            {
-              name: t?.equipment_name || t?.item || '-',
-              brand: 'Equipment',
-              details: t?.description || '',
-              icon: '💻',
-            },
-          ],
-        };
-      });
-
-    return (
-      <ApprovedTransactions
-        onBack={() => setCurrentView('transactions')}
-        transactionStats={transactionStats}
-        approvedTransactions={approvedData}
-      />
-    );
-  }
 
   // Show full On Process list when requested
   if (showPendings) {
@@ -1000,6 +870,16 @@ const EmployeeHome = () => {
       <div className="col-span-12 md:col-span-11 space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-4xl font-bold text-[#2262C6] transition-all duration-300">Home</h1>
+          <button
+            onClick={() => {
+              console.log('[DEBUG] Manual refresh clicked');
+              clearCancelledIds();
+            }}
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <RefreshCcw size={16} />
+            Refresh
+          </button>
         </div>
 
         <StatsCards 
@@ -1016,21 +896,14 @@ const EmployeeHome = () => {
               <div className="flex gap-2">
                 <button
                   onClick={() => {
-                    console.log('[DEBUG] Manual refresh clicked');
-                    clearCancelledIds();
-                  }}
-                  className="text-right text-red-600 text-xs font-medium hover:text-red-700">
-                  Refresh
-                </button>
-                <button
-                  onClick={() => {
                     // Show the view immediately to avoid UX delay; fetch in background
                     setShowPendings(true);
                     try { fetchDeniedRequests(); } catch (_) {}
                     try { fetchPendingTransactions(); } catch (_) {}
                     logActivity('Opened On Process view', 'info');
                   }}
-                  className="text-right text-blue-600 text-sm font-medium hover:text-blue-700">
+                  className="text-right text-blue-600 text-sm font-medium hover:text-blue-700"
+                >
                   View all
                 </button>
               </div>
@@ -1039,10 +912,10 @@ const EmployeeHome = () => {
 
           <div className="px-4 py-4 bg-gray-50 border-b border-gray-200">
             <div className="grid grid-cols-12 gap-6 text-sm font-medium text-gray-700">
-              <div className="col-span-7">Type</div>
-              <div className="col-span-2">Start Date</div>
+              <div className="col-span-2">Date</div>
+              <div className="col-span-6">Type</div>
               <div className="col-span-2">Brand</div>
-              <div className="col-span-1">Status</div>
+              <div className="col-span-2">Status</div>
             </div>
           </div>
 
@@ -1068,40 +941,6 @@ const EmployeeHome = () => {
                 onClick={() => logActivity(`Clicked pending row: ${transaction.equipment_name || transaction.item || 'Item'} (${transaction.id || index})`, 'info')}
               >
                 <div className="grid grid-cols-12 gap-6 items-center">
-                  <div className="col-span-7">
-                    <span className="text-sm text-gray-900">
-                      {(() => {
-                        const equipName = (transaction.equipment_name || transaction.item || '').toLowerCase();
-                        const reason = (transaction.reason || '').toLowerCase();
-                        const brand = (transaction.brand || transaction.equipment_brand || transaction?.equipment?.brand || '').toLowerCase();
-                        
-                        if (equipName.includes('laptop') || equipName.includes('notebook') || reason.includes('laptop') || reason.includes('notebook')) {
-                          return 'Laptop';
-                        }
-                        if (equipName.includes('monitor') || equipName.includes('display') || equipName.includes('screen') || 
-                            reason.includes('monitor') || reason.includes('display') || reason.includes('screen') ||
-                            brand.includes('asus')) {
-                          return 'Monitor';
-                        }
-                        if (equipName.includes('mouse') || reason.includes('mouse')) {
-                          return 'Mouse';
-                        }
-                        if (equipName.includes('keyboard') || reason.includes('keyboard')) {
-                          return 'Keyboard';
-                        }
-                        
-                        if (brand.includes('keyboard') || brand.includes('tuf gaming')) {
-                          return 'Keyboard';
-                        }
-                        
-                        if (brand.includes('rog') || brand.includes('msi') || brand.includes('dell') || brand.includes('hp') || brand.includes('lenovo')) {
-                          return 'Laptop';
-                        }
-                        
-                        return transaction.equipment_name || transaction.item || 'Unknown';
-                      })()}
-                    </span>
-                  </div>
                   <div className="col-span-2">
                     <span className="text-sm text-gray-900">
                       {transaction.expected_start_date
@@ -1113,14 +952,36 @@ const EmployeeHome = () => {
                         : '-'}
                     </span>
                   </div>
+                  <div className="col-span-6">
+                    <span className="text-sm text-gray-900 font-medium">
+                      {(() => {
+                        const brand = String(transaction.equipment?.brand || transaction.brand || transaction.equipment_brand || '').toLowerCase();
+                        const name = transaction.equipment_name || transaction.item || 'Unknown';
+                        
+                        if (brand.includes('apple') || brand.includes('iphone') || brand.includes('ipad') || brand.includes('macbook')) {
+                          return `${name} (Apple)`;
+                        }
+                        
+                        if (brand.includes('samsung')) {
+                          return `${name} (Samsung)`;
+                        }
+                        
+                        if (brand.includes('rog') || brand.includes('msi') || brand.includes('dell') || brand.includes('hp') || brand.includes('lenovo')) {
+                          return `${name} (Laptop)`;
+                        }
+                        
+                        return transaction.equipment_name || transaction.item || 'Unknown';
+                      })()}
+                    </span>
+                  </div>
                   <div className="col-span-2">
                     <span className="text-sm text-gray-900">
                       {transaction.equipment?.brand || transaction.brand || transaction.equipment_brand || '-'}
                     </span>
                   </div>
-                  <div className="col-span-1">
+                  <div className="col-span-2">
                     {(() => {
-                      const s = String(transaction.status || 'pending').toLowerCase();
+                      const s = String(transaction.status || '').toLowerCase();
                       const isApproved = /approved|released|borrowed|active/.test(s);
                       const cls = isApproved
                         ? 'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200'
@@ -1141,126 +1002,7 @@ const EmployeeHome = () => {
           </div>
         </div>
 
-        <div className="bg-gray-100 rounded-lg border border-gray-200 w-full">
-          <div className="p-4 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-[#2262C6]">Approved</h2>
-              <button
-                onClick={() => {
-                  // Switch immediately; fetch in background
-                  setSelectedRow(null);
-                  setCurrentView('approved');
-                  try { fetchApprovedTransactions(); } catch (_) {}
-                  logActivity('Opened Approved view', 'info');
-                }}
-                className="text-right text-blue-600 text-sm font-medium hover:text-blue-700">
-                View all
-              </button>
-            </div>
-          </div>
-
-          <div className="px-4 py-4 bg-gray-50 border-b border-gray-200">
-            <div className="grid grid-cols-12 gap-6 text-sm font-medium text-gray-700">
-              <div className="col-span-7">Type</div>
-              <div className="col-span-2">Start Date</div>
-              <div className="col-span-2">Brand</div>
-              <div className="col-span-1">Status</div>
-            </div>
-          </div>
-
-          <div className="divide-y divide-gray-100">
-            {transactions.length > 0 ? (() => {
-              const sorted = [...transactions].sort((a, b) => {
-                const aDate = new Date(a.created_at || a.expected_start_date || a.start_date || 0).getTime();
-                const bDate = new Date(b.created_at || b.expected_start_date || b.start_date || 0).getTime();
-                return bDate - aDate; // newest first
-              });
-              const filtered = sorted.filter(t => {
-                const s = String(t.status || '').toLowerCase();
-                return ['approved', 'released', 'borrowed', 'active'].includes(s);
-              });
-              const useList = (filtered.length > 0 ? filtered : sorted).slice(0, 8);
-              return useList.map((transaction, index) => (
-                <div
-                  key={transaction.id || index}
-                  className="px-4 py-4 hover:bg-gray-50 transition-colors cursor-pointer"
-                  onClick={() => logActivity(`Clicked approved row: ${transaction.equipment_name || transaction.item || 'Item'} (${transaction.id || index})`, 'info')}
-                >
-                  <div className="grid grid-cols-12 gap-6 items-center">
-                    <div className="col-span-7">
-                      <span className="text-sm text-gray-900">
-                        {(() => {
-                          const equipName = (transaction.equipment_name || transaction.item || '').toLowerCase();
-                          const reason = (transaction.reason || '').toLowerCase();
-                          const brand = (transaction.brand || transaction.equipment_brand || transaction?.equipment?.brand || '').toLowerCase();
-                          
-                          if (equipName.includes('laptop') || equipName.includes('notebook') || reason.includes('laptop') || reason.includes('notebook')) {
-                            return 'Laptop';
-                          }
-                          if (equipName.includes('monitor') || equipName.includes('display') || equipName.includes('screen') || 
-                              reason.includes('monitor') || reason.includes('display') || reason.includes('screen') ||
-                              brand.includes('asus')) {
-                            return 'Monitor';
-                          }
-                          if (equipName.includes('mouse') || reason.includes('mouse')) {
-                            return 'Mouse';
-                          }
-                          if (equipName.includes('keyboard') || reason.includes('keyboard')) {
-                            return 'Keyboard';
-                          }
-                          
-                          if (brand.includes('keyboard') || brand.includes('tuf gaming')) {
-                            return 'Keyboard';
-                          }
-                          
-                          if (brand.includes('rog') || brand.includes('msi') || brand.includes('dell') || brand.includes('hp') || brand.includes('lenovo')) {
-                            return 'Laptop';
-                          }
-                          
-                          return transaction.equipment_name || transaction.item || 'Unknown';
-                        })()}
-                      </span>
-                    </div>
-                    <div className="col-span-2">
-                      <span className="text-sm text-gray-900">
-                        {(transaction.expected_start_date || transaction.start_date || transaction.created_at || transaction.borrow_date || transaction.borrowed_at || transaction.release_date || transaction.start || transaction.expected_start || transaction.startDate)
-                          ? new Date(
-                              transaction.expected_start_date || transaction.start_date || transaction.created_at ||
-                              transaction.borrow_date || transaction.borrowed_at || transaction.release_date ||
-                              transaction.start || transaction.expected_start || transaction.startDate
-                            ).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
-                          : '-'}
-                      </span>
-                    </div>
-                    <div className="col-span-2">
-                      <span className="text-sm text-gray-600">
-                        {transaction.brand || transaction.equipment_brand || transaction?.equipment?.brand || '-'}
-                      </span>
-                    </div>
-                    <div className="col-span-1">
-                      {(() => {
-                        const s = String(transaction.status || 'approved').toLowerCase();
-                        const isApproved = /approved|released|borrowed|active/.test(s);
-                        const cls = isApproved
-                          ? 'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200'
-                          : 'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200';
-                        const label = isApproved ? 'Approved' : (transaction.status || 'Approved');
-                        return (
-                          <span className={cls}>{label}</span>
-                        );
-                      })()}
-                    </div>
-                  </div>
-                </div>
-              ));
-            })() : (
-              <div className="px-6 py-6 text-sm text-gray-500">
-                Currently no item has been approved
               </div>
-            )}
-          </div>
-        </div>
-      </div>
 
       <div className="col-span-12 md:col-span-2 space-y-6">
         <div className="space-y-3 max-h-96 overflow-y-auto">
