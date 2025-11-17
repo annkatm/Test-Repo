@@ -3,7 +3,6 @@ import { Archive as ArchiveIcon, Search, Filter, Download, Eye, Trash2, RotateCc
 import { useApi } from './hooks/useApi';
 import GlobalHeader from './components/GlobalHeader';
 import SimpleConfirmModal from './components/SimpleConfirmModal';
-
 const Archive = () => {
     // Get initial data from server-side rendering
     const archiveRoot = document.getElementById('archive-root');

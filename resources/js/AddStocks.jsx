@@ -662,7 +662,12 @@ const AddStocks = () => {
               ) : error ? (
                 <div className="p-8 text-center text-red-500">{error}</div>
               ) : equipment.length === 0 ? (
-                <div className="p-8 text-center text-gray-500">No equipment found. Add some items to get started.</div>
+                <div className="bg-gray-800 rounded-lg p-8 text-center">
+                  <p className="text-white text-lg font-medium mb-4">Click any item to view details</p>
+                  <svg className="w-8 h-8 text-white mx-auto arrow-down-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
               ) : (
                 <table className="w-full">
                   <thead>
@@ -721,7 +726,12 @@ const AddStocks = () => {
                               </div>
                             </td>
                             <td className="py-4 px-6 text-gray-700">
-                              {item.category?.name || 'Uncategorized'}
+                              <div className="flex items-center">
+                                {item.category?.name || 'Uncategorized'}
+                                <svg className="w-4 h-4 text-gray-600 ml-2 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={isOpen ? "M5 15l7-7 7 7" : "M19 9l-7 7-7-7"} />
+                                </svg>
+                              </div>
                             </td>
                             <td className="py-4 px-6 text-gray-700 font-semibold text-right">
                               {item.total_count || 0}
@@ -1266,7 +1276,12 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
               {loading ? (
                 <div className="text-center py-4 text-gray-500">Loading products...</div>
               ) : filteredProducts.length === 0 ? (
-                <div className="text-center py-4 text-gray-500">No products found</div>
+                <div className="bg-gray-800 rounded-lg p-6 text-center">
+                  <p className="text-white text-lg font-medium mb-3">Click any item to view details</p>
+                  <svg className="w-6 h-6 text-white mx-auto arrow-down-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
               ) : (
                 filteredProducts.map((product) => (
                   <div
