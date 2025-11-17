@@ -646,13 +646,48 @@ const EmployeeHome = () => {
         created_at: t?.created_at || t?.date || null,
         expected_start_date: t?.expected_start_date || null,
         equipment_id: t?.equipment_id || t?.equipment?.id || null,
-        equipment_name: t?.equipment_name || t?.equipment?.name || t?.item || 'Item',
+        // Show the item CATEGORY (e.g., Monitor), not the brand
+        equipment_name: t?.category_name || t?.category || t?.equipment_type || t?.equipment?.category_name || t?.equipment?.category || t?.equipment_name || t?.equipment?.name || t?.item || 'Item',
         brand: t?.brand || t?.equipment?.brand || '',
         model: t?.model || t?.equipment?.model || '',
         request_number: t?.request_number || t?.number || '',
         reason: t?.reason || t?.description || t?.notes || '',
         status: t?.status || 'Pending',
       }));
+
+      // Normalize: if item looks like brand or missing, try to fetch equipment category
+      const needEnrich = mapped.filter(m => (!m.equipment_name || m.equipment_name.toLowerCase() === (m.brand || '').toLowerCase()) && m.equipment_id);
+      if (needEnrich.length > 0) {
+        try {
+          const enriched = await Promise.all(mapped.map(async (m) => {
+            if (!m.equipment_id) return m;
+            if (m.equipment_name && m.equipment_name.toLowerCase() !== (m.brand || '').toLowerCase()) return m;
+            try {
+              const resp = await fetch(`/api/equipment/${m.equipment_id}`, { credentials: 'same-origin' });
+              const j = await resp.json();
+              const eq = j?.data || j || {};
+              const category = eq.category_name || eq.category?.name || eq.category || m.equipment_name;
+              return { ...m, equipment_name: category || m.equipment_name, brand: m.brand || eq.brand || '' };
+            } catch (_) { return m; }
+          }));
+          console.log('[fetchPendingTransactions] Final enriched transactions:', enriched);
+          setPendingTransactions((prev) => {
+            const base = Array.isArray(prev) ? prev : [];
+            const merged = [...enriched, ...base];
+            const seen = new Set();
+            const deduped = [];
+            for (const r of merged) {
+              const key = `${String(r?.id ?? '')}::${String(r?.equipment_id ?? '')}`;
+              if (!seen.has(key)) { seen.add(key); deduped.push(r); }
+            }
+            console.log('[fetchPendingTransactions] Final deduped enriched transactions:', deduped);
+            return deduped;
+          });
+          return;
+        } catch (_) {
+          console.log('[fetchPendingTransactions] Category enrichment failed, using original mapping');
+        }
+      }
 
       console.log('[fetchPendingTransactions] Final mapped transactions:', mapped);
 
@@ -910,8 +945,8 @@ const EmployeeHome = () => {
             </div>
           </div>
 
-          <div className="px-4 py-4 bg-gray-50 border-b border-gray-200">
-            <div className="grid grid-cols-12 gap-6 text-sm font-medium text-gray-700">
+          <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+            <div className="grid grid-cols-12 gap-4 text-sm font-medium text-gray-700">
               <div className="col-span-2">Date</div>
               <div className="col-span-6">Type</div>
               <div className="col-span-2">Brand</div>
@@ -937,10 +972,10 @@ const EmployeeHome = () => {
               .map((transaction, index) => (
               <div
                 key={transaction.id || index}
-                className="px-4 py-4 hover:bg-gray-50 transition-colors cursor-pointer"
+                className="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer"
                 onClick={() => logActivity(`Clicked pending row: ${transaction.equipment_name || transaction.item || 'Item'} (${transaction.id || index})`, 'info')}
               >
-                <div className="grid grid-cols-12 gap-6 items-center">
+                <div className="grid grid-cols-12 gap-4 items-center">
                   <div className="col-span-2">
                     <span className="text-sm text-gray-900">
                       {transaction.expected_start_date
@@ -954,24 +989,7 @@ const EmployeeHome = () => {
                   </div>
                   <div className="col-span-6">
                     <span className="text-sm text-gray-900 font-medium">
-                      {(() => {
-                        const brand = String(transaction.equipment?.brand || transaction.brand || transaction.equipment_brand || '').toLowerCase();
-                        const name = transaction.equipment_name || transaction.item || 'Unknown';
-                        
-                        if (brand.includes('apple') || brand.includes('iphone') || brand.includes('ipad') || brand.includes('macbook')) {
-                          return `${name} (Apple)`;
-                        }
-                        
-                        if (brand.includes('samsung')) {
-                          return `${name} (Samsung)`;
-                        }
-                        
-                        if (brand.includes('rog') || brand.includes('msi') || brand.includes('dell') || brand.includes('hp') || brand.includes('lenovo')) {
-                          return `${name} (Laptop)`;
-                        }
-                        
-                        return transaction.equipment_name || transaction.item || 'Unknown';
-                      })()}
+                      {transaction.equipment_name || transaction.item || 'Unknown'}
                     </span>
                   </div>
                   <div className="col-span-2">
