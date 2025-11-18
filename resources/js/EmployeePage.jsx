@@ -2035,97 +2035,115 @@ const EmployeePage = () => {
                         const availability = getEquipmentAvailability(equipment);
                         const isExpanded = expandedEquipment.has(specKey);
                         const serialNumbers = equipment.serial_numbers || [];
+                        const isAdded = issuedEquipment.find(eq => eq.specKey === specKey);
 
                         return (
                           <div
                             key={specKey}
-                            className="bg-white border-2 rounded-xl p-4 transition-all hover:shadow-lg border-gray-200 hover:border-blue-300"
+                            onClick={() => {
+                              if (availability > 0 && !isAdded) {
+                                addEquipmentToIssued(equipment);
+                              } else if (isAdded) {
+                                removeEquipmentFromIssued(equipment);
+                              }
+                            }}
+                            className={`bg-white border-2 rounded-xl overflow-hidden transition-all relative cursor-pointer ${
+                              isAdded 
+                                ? 'border-blue-500 bg-blue-50 shadow-[0_0_20px_rgba(59,130,246,0.5)] hover:shadow-[0_0_25px_rgba(59,130,246,0.6)]' 
+                                : 'border-gray-200 hover:border-blue-300 hover:shadow-lg'
+                            }`}
+                            style={isAdded ? {
+                              boxShadow: '0 0 20px rgba(59, 130, 246, 0.5), 0 0 40px rgba(59, 130, 246, 0.3)',
+                            } : {}}
                           >
-                            {/* Equipment Image */}
-                            <div className="mb-4">
-                              {equipment.item_image ? (
-                                <img
-                                  src={`/storage/${equipment.item_image}`}
-                                  alt={equipment.name}
-                                  className="w-full h-32 rounded-lg object-cover"
-                                />
-                              ) : (
-                                <div className="w-full h-32 rounded-lg bg-gray-100 flex items-center justify-center">
-                                  <span className="text-gray-400 text-sm">No Image</span>
-                                </div>
-                              )}
+                            <div className="p-4">
+                              {/* Equipment Image */}
+                              <div className="mb-4">
+                                {equipment.item_image ? (
+                                  <img
+                                    src={`/storage/${equipment.item_image}`}
+                                    alt={equipment.name}
+                                    className="w-full h-32 rounded-lg object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-full h-32 rounded-lg bg-gray-100 flex items-center justify-center">
+                                    <span className="text-gray-400 text-sm">No Image</span>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Equipment Details */}
+                              <div className="space-y-2">
+                                <h4 className="font-semibold text-gray-900 text-sm truncate">
+                                  {equipment.brand || equipment.name}
+                                </h4>
+                                <p className="text-xs text-gray-600">
+                                  Available: {availability} / {equipment.available_count}
+                                </p>
+                              </div>
+
+                              {/* Show Button */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleEquipmentExpansion(specKey);
+                                }}
+                                className="w-full mt-4 py-2 rounded-lg font-medium text-sm transition-colors bg-blue-500 text-white hover:bg-blue-600"
+                              >
+                                Show
+                              </button>
                             </div>
 
-                            {/* Equipment Details */}
-                            <div className="space-y-2">
-                              <h4 className="font-semibold text-gray-900 text-sm truncate">
-                                {equipment.brand || equipment.name}
-                              </h4>
-                              <p className="text-xs text-gray-600">
-                                Available: {availability} / {equipment.available_count}
-                              </p>
-                            </div>
-
-                            {/* Expand/Collapse Button */}
-                            <button
-                              onClick={() => toggleEquipmentExpansion(specKey)}
-                              className="w-full mt-4 py-2 rounded-lg font-medium text-sm transition-colors bg-blue-500 text-white hover:bg-blue-600 flex items-center justify-center gap-2"
-                            >
-                              {isExpanded ? '▼ Hide Units' : '▶ Show Units'}
-                            </button>
-
-                            {/* Serial Numbers List */}
+                            {/* Slide Up Details Panel */}
                             {isExpanded && (
-                              <div className="mt-3 border-t pt-3">
-                                {/* Select All / Deselect All Buttons */}
-                                <div className="flex gap-2 mb-2">
+                              <div 
+                                className="absolute bottom-0 left-0 right-0 bg-blue-50 border-t-2 border-blue-200 rounded-t-2xl shadow-lg"
+                                style={{
+                                  animation: 'slideUpInCard 0.3s ease-out',
+                                  maxHeight: '200px',
+                                  overflowY: 'auto'
+                                }}
+                              >
+                                <style jsx>{`
+                                  @keyframes slideUpInCard {
+                                    from {
+                                      transform: translateY(100%);
+                                      opacity: 0;
+                                    }
+                                    to {
+                                      transform: translateY(0);
+                                      opacity: 1;
+                                    }
+                                  }
+                                `}</style>
+                                
+                                <div className="p-4">
+                                  {/* Close button */}
                                   <button
-                                    onClick={() => {
-                                      serialNumbers.forEach(serial => {
-                                        if (!isSerialSelected(equipment, serial)) {
-                                          addEquipmentToIssued(equipment, serial);
-                                        }
-                                      });
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleEquipmentExpansion(specKey);
                                     }}
-                                    className="flex-1 px-2 py-1 bg-blue-500 text-white rounded text-xs font-medium hover:bg-blue-600"
+                                    className="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
                                   >
-                                    Select All
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
                                   </button>
-                                  <button
-                                    onClick={() => {
-                                      serialNumbers.forEach(serial => {
-                                        const unitKey = `${equipment.brand || equipment.name}-${equipment.specifications}-${serial}`;
-                                        removeEquipmentFromIssued({ unitKey });
-                                      });
-                                    }}
-                                    className="flex-1 px-2 py-1 bg-gray-500 text-white rounded text-xs font-medium hover:bg-gray-600"
-                                  >
-                                    Deselect All
-                                  </button>
-                                </div>
 
-                                {/* Individual Serial Numbers */}
-                                <div className="space-y-2 max-h-48 overflow-y-auto">
-                                  {serialNumbers.map((serial, idx) => {
-                                    const isSelected = isSerialSelected(equipment, serial);
-                                    return (
-                                      <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                                        <span className="text-xs font-mono">{serial}</span>
-                                        <button
-                                          onClick={() => isSelected
-                                            ? removeEquipmentFromIssued({ unitKey: `${equipment.brand || equipment.name}-${equipment.specifications}-${serial}` })
-                                            : addEquipmentToIssued(equipment, serial)
-                                          }
-                                          className={`px-3 py-1 rounded text-xs font-medium ${isSelected
-                                            ? 'bg-red-500 text-white hover:bg-red-600'
-                                            : 'bg-green-500 text-white hover:bg-green-600'
-                                            }`}
-                                        >
-                                          {isSelected ? 'Remove' : 'Add'}
-                                        </button>
-                                      </div>
-                                    );
-                                  })}
+                                  <div className="space-y-3 mt-2">
+                                    <div>
+                                      <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Brand</label>
+                                      <p className="text-sm text-gray-900">{equipment.brand || 'N/A'}</p>
+                                    </div>
+                                    
+                                    <div>
+                                      <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Specifications</label>
+                                      <p className="text-sm text-gray-900">
+                                        {equipment.specifications || equipment.description || 'N/A'}
+                                      </p>
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
                             )}
@@ -2298,6 +2316,8 @@ const EmployeePage = () => {
             </div>
           </div>
         )}
+
+
       </div>
     </div>
   );
