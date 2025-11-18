@@ -891,7 +891,7 @@ const EmployeeTaskbar = ({
                 <div className="grid grid-cols-1 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Department</label>
-                    <p className="text-base text-gray-900 font-medium">{formData.accountType ? (formData.accountType.charAt(0).toUpperCase()+formData.accountType.slice(1)) : 'Employee'}</p>
+                    <p className="text-base text-gray-900 font-medium">{formData.Department || '-'}</p>
                   </div>
                 </div>
 

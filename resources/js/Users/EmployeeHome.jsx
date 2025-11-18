@@ -435,6 +435,11 @@ const EmployeeHome = () => {
       // Do not derive using return_date; keep API-driven list only
 
       setBorrowedItems(list);
+      // Keep dashboard count in sync with actual employee items shown in modal
+      try {
+        const count = Array.isArray(list) ? list.length : 0;
+        setTransactionStats(prev => ({ ...prev, borrowed: count }));
+      } catch (_) {}
       return list;
     } catch (_) {
       setBorrowedItems([]);
@@ -1135,7 +1140,7 @@ const EmployeeHome = () => {
                 <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center">📦</div>
                 <div>
                   <div className="font-semibold text-gray-900">Currently Borrowed</div>
-                  <div className="text-sm text-gray-600">Total items: {transactionStats?.borrowed || 0}</div>
+                  <div className="text-sm text-gray-600">Total items: {borrowedItems?.length || 0}</div>
                 </div>
               </div>
               <div className="space-y-3 max-h-96 overflow-y-auto">

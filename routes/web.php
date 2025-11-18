@@ -65,10 +65,6 @@ Route::middleware(['auth'])->group(function () {
         return view('viewrequest'); // loads resources/views/viewrequest.blade.php
     })->name('viewrequest');
 
-    Route::get('/exchangerequests', function () {
-        return view('viewexchangerequests'); // loads resources/views/viewexchangerequests.blade.php
-    })->name('exchangerequests');
-
     Route::get('/activitylogs', function () {
         return view('activitylogs');
     })->name('activitylogs');

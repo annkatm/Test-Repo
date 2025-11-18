@@ -33,13 +33,6 @@ const GlobalHeader = ({ title = "", onSearch, hideSearch = false, showTitle = tr
       permission: 'view_approve'
     },
     {
-      path: '/exchangerequests',
-      name: 'Exchange Requests',
-      description: 'View employee exchange requests',
-      icon: RefreshCcw,
-      permission: 'view_request'
-    },
-    {
       path: '/equipment',
       name: 'Equipment',
       description: 'Equipment inventory management',
