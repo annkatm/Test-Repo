@@ -244,6 +244,14 @@ class EmployeeController extends Controller
             $query = Employee::with(['user', 'employeeType']);
 
             // Apply filters
+            if ($request->has('user_id') && !empty($request->user_id)) {
+                $query->where('user_id', $request->user_id);
+            }
+
+            if ($request->has('email') && !empty($request->email)) {
+                $query->where('email', $request->email);
+            }
+
             if ($request->has('employee_type') && $request->employee_type !== 'all') {
                 $query->whereHas('employeeType', function($q) use ($request) {
                     $q->where('name', $request->employee_type);

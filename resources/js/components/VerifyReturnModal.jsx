@@ -225,15 +225,18 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
                         <div className="overflow-hidden">
                           {/* Table Header */}
                           <div className="bg-gray-100 border-b border-gray-200">
-                            <div className="grid grid-cols-3">
+                            <div className="grid grid-cols-4">
                               <div className="px-3 py-1.5 border-r border-gray-200">
                                 <span className="text-xs font-medium text-gray-700">Model</span>
                               </div>
                               <div className="px-3 py-1.5 border-r border-gray-200">
                                 <span className="text-xs font-medium text-gray-700">Serial</span>
                               </div>
-                              <div className="px-3 py-1.5">
+                              <div className="px-3 py-1.5 border-r border-gray-200">
                                 <span className="text-xs font-medium text-gray-700">Specs</span>
+                              </div>
+                              <div className="px-3 py-1.5">
+                                <span className="text-xs font-medium text-gray-700">Condition</span>
                               </div>
                             </div>
                           </div>
@@ -250,7 +253,7 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
                               return (
                                 <div 
                                   key={item.id || itemIndex} 
-                                  className={`grid grid-cols-3 ${itemIndex < group.items.length - 1 ? 'border-b border-gray-200' : ''}`}
+                                  className={`grid grid-cols-4 ${itemIndex < group.items.length - 1 ? 'border-b border-gray-200' : ''}`}
                                 >
                                   <div className="px-3 py-2 border-r border-gray-200">
                                     <span className="text-xs text-gray-700">{model}</span>
@@ -258,8 +261,29 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
                                   <div className="px-3 py-2 border-r border-gray-200">
                                     <span className="text-xs text-gray-700">{serialNumber || 'N/A'}</span>
                                   </div>
-                                  <div className="px-3 py-2">
+                                  <div className="px-3 py-2 border-r border-gray-200">
                                     <span className="text-xs text-gray-700">{specs || 'N/A'}</span>
+                                  </div>
+                                  <div className="px-3 py-2">
+                                    {(() => {
+                                      const code = (item.return_condition || currentCondition || '').toString().toLowerCase();
+                                      const label = code === 'good_condition' ? 'Good Condition'
+                                        : code === 'damaged' ? 'Damaged'
+                                        : code === 'has_defect' ? 'Has Defect'
+                                        : 'N/A';
+                                      const cls = code === 'good_condition'
+                                        ? 'bg-green-100 text-green-700'
+                                        : code === 'damaged'
+                                        ? 'bg-red-100 text-red-700'
+                                        : code === 'has_defect'
+                                        ? 'bg-amber-100 text-amber-700'
+                                        : 'bg-gray-100 text-gray-700';
+                                      return (
+                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-medium ${cls}`}>
+                                          {label}
+                                        </span>
+                                      );
+                                    })()}
                                   </div>
                                 </div>
                               );

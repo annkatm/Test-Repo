@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { X, Calendar, User, Package, MapPin, FileText, Clock, CheckCircle } from 'lucide-react';
 
 const ViewTransactionModal = ({ isOpen, onClose, transactionData, hideCancel = false, buttonText = 'Release', onRelease = null }) => {
@@ -11,6 +11,26 @@ const ViewTransactionModal = ({ isOpen, onClose, transactionData, hideCancel = f
       onClose();
     }
   };
+
+  const [items, setItems] = useState(Array.isArray(transactionData?.items) ? transactionData.items : []);
+
+  useEffect(() => {
+    const base = Array.isArray(transactionData?.items) ? transactionData.items : [];
+    const need = base.filter(it => !(it?.category_name || it?.category));
+    if (need.length === 0) { setItems(base); return; }
+    Promise.all(base.map(async (it) => {
+      if (it?.category_name || it?.category) return it;
+      const id = it?.equipment_id || it?.id;
+      if (!id) return it;
+      try {
+        const resp = await fetch(`/api/equipment/${id}`, { credentials: 'same-origin' });
+        const j = await resp.json();
+        const d = j?.data || j || {};
+        const cat = d?.category?.name || d?.category_name || null;
+        return cat ? { ...it, category_name: cat } : it;
+      } catch (_e) { return it; }
+    })).then(setItems).catch(() => setItems(base));
+  }, [isOpen, transactionData]);
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -194,11 +214,11 @@ const ViewTransactionModal = ({ isOpen, onClose, transactionData, hideCancel = f
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Items</label>
             <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2" style={{ scrollbarWidth: 'thin', scrollbarColor: '#cbd5e0 #f7fafc' }}>
-              {transactionData.items && transactionData.items.length > 0 ? (
+              {items && items.length > 0 ? (
                 (() => {
                   // Group items by category_id/category_name first, then by equipment_id
                   const groupedItems = {};
-                  transactionData.items.forEach((item) => {
+                  items.forEach((item) => {
                     // Use category_id if available, otherwise use category_name as unique identifier
                     const categoryId = item.category_id || item.category_name || 'Uncategorized';
                     const equipmentId = item.id || item.equipment_id || 'unknown';

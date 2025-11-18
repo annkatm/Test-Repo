@@ -145,6 +145,14 @@ const EmployeeHome = () => {
   }, []);
 
   useEffect(() => {
+    (async () => {
+      try { await fetchTransactionStats(); } catch (_) {}
+      try { await fetchPendingTransactions(); } catch (_) {}
+      try { await fetchBorrowedItems(); } catch (_) {}
+    })();
+  }, []);
+
+  useEffect(() => {
     try {
       const now = Date.now();
       const within24h = (iso) => {
@@ -277,6 +285,9 @@ const EmployeeHome = () => {
     const onCreated = (e) => {
       const d = e?.detail || {};
       if (!d || (!d.id && !d.equipment_id)) return;
+      
+      console.log('[EmployeeHome] Request created event received:', d);
+      
       // Un-ignore this request/equipment if it was previously cancelled
       if (d.id) {
         setCancelledReqIds((prev) => {
@@ -292,22 +303,44 @@ const EmployeeHome = () => {
           return next;
         });
       }
+      
       setPendingTransactions((prev) => {
         const list = Array.isArray(prev) ? prev : [];
         const exists = list.some((r) => (d.id && String(r.id) === String(d.id)) || (d.equipment_id && String(r.equipment_id || '') === String(d.equipment_id)));
-        if (exists) return list;
-        return [{
+        if (exists) {
+          console.log('[EmployeeHome] Request already exists in pending list');
+          return list;
+        }
+        
+        const newRequest = {
           id: d.id || Date.now(),
           created_at: d.created_at || new Date().toISOString(),
-          expected_start_date: d.expected_start_date || null,
-          expected_end_date: d.expected_end_date || null,
+          expected_start_date: d.expected_start_date || d.start_date || new Date().toISOString(),
+          expected_end_date: d.expected_end_date || d.end_date || null,
           equipment_id: d.equipment_id || null,
-          equipment_name: d.equipment_name || d.item || 'Item',
-          item: d.equipment_name || d.item || 'Item',
+          equipment_name: d.equipment_name || d.category_name || d.category || d.item || 'Item',
+          item: d.equipment_name || d.category_name || d.category || d.item || 'Item',
+          brand: d.brand || d.equipment_brand || '',
+          model: d.model || d.equipment_model || '',
           status: d.status || 'Pending',
-        }, ...list];
+          request_number: d.request_number || d.number || '',
+          reason: d.reason || d.description || d.notes || '',
+          serial_number: d.serial_number || null,
+          condition: d.condition || null,
+          admin_description: d.admin_description || null,
+        };
+        
+        console.log('[EmployeeHome] Adding new request to pending list:', newRequest);
+        return [newRequest, ...list];
       });
-      try { showToast('Request created', 'success'); } catch (_) {}
+      
+      try { showToast('Request created successfully', 'success'); } catch (_) {}
+      
+      // Also refresh from server to ensure consistency
+      setTimeout(() => {
+        console.log('[EmployeeHome] Refreshing pending transactions from server');
+        fetchPendingTransactions();
+      }, 1000);
     };
     
     const onApproved = (e) => {
@@ -611,7 +644,7 @@ const EmployeeHome = () => {
             } catch (_) {}
           }
           if (userData?.authenticated && user?.id) {
-            const empRes = await fetch(`/api/employees?user_id=${user.id}`);
+            const empRes = await fetch(`/api/employees?user_id=${user.id}`, { credentials: 'same-origin' });
             const empData = await empRes.json();
             const employees = Array.isArray(empData) ? empData : (Array.isArray(empData?.data) ? empData.data : []);
             if (employees.length > 0) return employees[0].id;
@@ -660,6 +693,7 @@ const EmployeeHome = () => {
       const mapped = (Array.isArray(list) ? list : []).map((t, index) => ({
         id: t?.id || index + 1,
         created_at: t?.created_at || t?.date || null,
+        requested_date: t?.requested_date || t?.requested_at || t?.requestedDate || null,
         expected_start_date: t?.expected_start_date || null,
         equipment_id: t?.equipment_id || t?.equipment?.id || null,
         // Show the item CATEGORY (e.g., Monitor), not the brand
@@ -922,21 +956,23 @@ const EmployeeHome = () => {
       <div className="col-span-12 md:col-span-11 space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-4xl font-bold text-[#2262C6] transition-all duration-300">Home</h1>
-          <button
-            onClick={handleRefreshHome}
-            disabled={refreshing}
-            className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors border ${
-              refreshing
-                ? 'text-blue-700 border-blue-200 bg-blue-50 cursor-wait'
-                : 'text-gray-600 border-transparent hover:text-gray-900 hover:bg-gray-100'
-            }`}
-          >
-            <RefreshCcw
-              size={16}
-              className={refreshing ? 'animate-spin-slow' : ''}
-            />
-            {refreshing ? 'Refreshing…' : 'Refresh'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleRefreshHome}
+              disabled={refreshing}
+              className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors border ${
+                refreshing
+                  ? 'text-blue-700 border-blue-200 bg-blue-50 cursor-wait'
+                  : 'text-gray-600 border-transparent hover:text-gray-900 hover:bg-gray-100'
+              }`}
+            >
+              <RefreshCcw
+                size={16}
+                className={refreshing ? 'animate-spin-slow' : ''}
+              />
+              {refreshing ? 'Refreshing…' : 'Refresh'}
+            </button>
+          </div>
         </div>
 
         <StatsCards 
@@ -964,10 +1000,10 @@ const EmployeeHome = () => {
 
               <div className="divide-y divide-gray-100">
                 {[...pendingTransactions]
-                  .filter((t) => !cancelledReqIds.includes(String(t?.id)) && !cancelledEquipIds.includes(String(t?.equipment_id || '')))
+                  .filter((t) => !cancelledReqIds.includes(String(t?.id)))
                   .sort((a, b) => {
-                    const aDate = new Date(a.created_at || a.expected_start_date || 0).getTime();
-                    const bDate = new Date(b.created_at || b.expected_start_date || 0).getTime();
+                    const aDate = new Date(a.expected_start_date || a.requested_date || a.created_at || 0).getTime();
+                    const bDate = new Date(b.expected_start_date || b.requested_date || b.created_at || 0).getTime();
                     return bDate - aDate; // newest first
                   })
                   .slice(0, 6)
@@ -983,13 +1019,12 @@ const EmployeeHome = () => {
                       <div className="grid grid-cols-12 gap-4 items-center">
                         <div className="col-span-3">
                           <span className="text-[15px] text-gray-900">
-                            {transaction.expected_start_date
-                              ? new Date(transaction.expected_start_date).toLocaleDateString("en-US", {
-                                  month: "2-digit",
-                                  day: "2-digit",
-                                  year: "numeric",
-                                })
-                              : '-'}
+                            {(() => {
+                              const d = transaction.expected_start_date || transaction.requested_date || transaction.created_at;
+                              return d
+                                ? new Date(d).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" })
+                                : '-';
+                            })()}
                           </span>
                         </div>
                         <div className="col-span-3">
@@ -1017,7 +1052,7 @@ const EmployeeHome = () => {
                     </div>
                   ))}
 
-                {(!pendingTransactions || pendingTransactions.filter((t) => !cancelledReqIds.includes(String(t?.id)) && !cancelledEquipIds.includes(String(t?.equipment_id || ''))).length === 0) && (
+                {(!pendingTransactions || pendingTransactions.filter((t) => !cancelledReqIds.includes(String(t?.id))).length === 0) && (
                   <div className="px-6 py-6 text-sm text-gray-500">No requests are currently in process.</div>
                 )}
               </div>
