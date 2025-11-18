@@ -42,17 +42,30 @@ const ReturnItems = () => {
     } catch (_) {
       dateStr = String(dateRaw || "");
     }
+    
+    // Determine status - if returned but not completed, show as pending verification
+    let status = r?.status || (r?.return_date ? "Returned" : "Approved");
+    if (status === 'returned') {
+      status = 'Returned - Pending Verification';
+    } else if (status === 'completed') {
+      status = 'Returned - Verified';
+    }
+    
     return {
       id: r?.id ?? r?.transaction_id ?? r?.request_id ?? r?.trx_id ?? r?.uuid ?? (idx + 1),
+      transaction_id: r?.transaction_id || r?.id,
       date: dateStr,
       item: r?.equipment_name || r?.item || r?.title || r?.name || "Item",
-      status: r?.status || (r?.return_date ? "Returned" : "Approved"),
+      status: status,
       category: r?.category || r?.equipment_category || r?.equipment?.category_name || "General",
       quantity: r?.quantity || 1,
       serial_number: r?.serial_number || r?.serial_no || r?.serial || r?.equipment?.serial_number || `SN${String(idx + 1).padStart(6, '0')}`,
       serialNo: r?.serial_number || r?.serial_no || r?.serial || r?.equipment?.serial_number || `SN${String(idx + 1).padStart(6, '0')}`,
       equipment: r?.equipment || null,
-      is_approved: r?.status === 'approved' || r?.is_approved || false
+      is_approved: r?.status === 'approved' || r?.is_approved || false,
+      return_condition: r?.return_condition || null,
+      return_notes: r?.return_notes || null,
+      originalData: r
     };
   };
 
@@ -76,11 +89,14 @@ const ReturnItems = () => {
     setLoading(true);
     setError("");
     try {
-      // Fetch approved transactions
+      // Fetch approved transactions (items that can be returned)
       const approvedItems = await fetchAllPages('/api/transactions/approved');
       
-      // Fetch returned items
+      // Fetch returned items (both pending verification and completed)
       let returnedItems = await fetchAllPages('/api/transactions/history?status=returned');
+      
+      // Also fetch completed transactions to show verified returns
+      const completedItems = await fetchAllPages('/api/transactions/history?status=completed');
       
       // If no returned items found, try to get them from other endpoints
       if (!Array.isArray(returnedItems) || returnedItems.length === 0) {
@@ -97,12 +113,14 @@ const ReturnItems = () => {
       // Combine and normalize all items
       const allItems = [
         ...(approvedItems || []).map(item => ({ ...item, status: 'approved' })),
-        ...(returnedItems || []).map(item => ({ ...item, status: 'returned' }))
+        ...(returnedItems || []).map(item => ({ ...item, status: 'returned' })),
+        ...(completedItems || []).filter(item => item.return_date).map(item => ({ ...item, status: 'completed' }))
       ];
       
       const mapped = (allItems || []).map((r, idx) => normalize(r, idx));
       setData(mapped);
     } catch (e) {
+      console.error('Error loading returns:', e);
       setError("Failed to load items");
     } finally {
       setLoading(false);
@@ -260,24 +278,64 @@ const ReturnItems = () => {
     setActionLoading(true);
     
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Map condition to API format
+      const conditionMap = {
+        'Good Condition': 'good_condition',
+        'Damaged': 'damaged',
+        'Has Defect': 'has_defect'
+      };
+      const returnCondition = conditionMap[itemCondition] || 'good_condition';
+      
+      // Get transaction ID from the item
+      const transactionId = selectedItem.id || selectedItem.transaction_id || selectedItem.originalData?.id;
+      
+      if (!transactionId) {
+        throw new Error('Transaction ID not found');
+      }
+      
+      // Get CSRF token
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      
+      // Call the return API
+      const response = await fetch(`/api/transactions/${transactionId}/return`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-CSRF-TOKEN': csrfToken || ''
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          return_condition: returnCondition,
+          return_notes: returnRemarks || null
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Failed to return item');
+      }
       
       // Dispatch event to update the UI
       window.dispatchEvent(new CustomEvent('ireply:returned:add', {
         detail: {
-          id: selectedItem.id,
+          id: transactionId,
           date: new Date().toISOString(),
           item: selectedItem.item,
           equipment_name: selectedItem.item,
           serial_number: selectedItem.serialNo,
           category: selectedItem.category,
           quantity: selectedItem.quantity,
-          status: 'Returned',
+          status: 'Returned - Pending Verification',
           remarks: returnRemarks,
-          condition: itemCondition
+          condition: itemCondition,
+          transaction_id: transactionId
         }
       }));
+      
+      // Refresh the list to show updated status
+      await loadAllReturns();
       
       // Close modal and reset state
       setShowReturnModal(false);
@@ -286,10 +344,10 @@ const ReturnItems = () => {
       setItemCondition("Good Condition");
       
       // Show success message
-      alert('Item returned successfully!');
+      alert('Item returned successfully! It is now pending admin verification.');
     } catch (error) {
       console.error('Error returning item:', error);
-      alert('Failed to return item. Please try again.');
+      alert(error.message || 'Failed to return item. Please try again.');
     } finally {
       setActionLoading(false);
     }
@@ -989,24 +1047,33 @@ const ReturnItems = () => {
 
                 {/* Options */}
                 <div className="col-span-3 flex justify-end space-x-2">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleReturnItem(item);
-                    }}
-                    className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    Return
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleExchange(item);
-                    }}
-                    className="px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-colors"
-                  >
-                    Exchange
-                  </button>
+                  {/* Only show Return button if item is approved (not yet returned) */}
+                  {item.status === 'Approved' || item.status === 'approved' ? (
+                    <>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleReturnItem(item);
+                        }}
+                        className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        Return
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleExchange(item);
+                        }}
+                        className="px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-colors"
+                      >
+                        Exchange
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-sm text-gray-500 italic">
+                      {item.status.includes('Pending') ? 'Awaiting Admin Verification' : 'Return Completed'}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -1028,12 +1095,42 @@ const ReturnItems = () => {
                     <div className="text-sm text-gray-700 font-medium">{item.serialNo}</div>
                     <div className="text-sm text-gray-700">{item.category}</div>
                     <div>
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
+                        item.status.includes('Pending') 
+                          ? 'bg-yellow-100 text-yellow-800' 
+                          : item.status.includes('Verified') 
+                          ? 'bg-green-100 text-green-800'
+                          : item.status === 'Approved' || item.status === 'approved'
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-gray-100 text-gray-800'
+                      }`}>
                         {item.status}
                       </span>
                     </div>
                     <div className="text-sm text-gray-700">{item.date}</div>
                   </div>
+                  
+                  {/* Show return condition and notes if item was returned */}
+                  {(item.return_condition || item.return_notes) && (
+                    <div className="mt-4 pt-4 border-t border-gray-300">
+                      <div className="grid grid-cols-2 gap-4">
+                        {item.return_condition && (
+                          <div>
+                            <div className="text-xs font-semibold text-gray-500 mb-1">Return Condition</div>
+                            <div className="text-sm text-gray-700 capitalize">
+                              {item.return_condition.replace('_', ' ')}
+                            </div>
+                          </div>
+                        )}
+                        {item.return_notes && (
+                          <div>
+                            <div className="text-xs font-semibold text-gray-500 mb-1">Return Notes</div>
+                            <div className="text-sm text-gray-700">{item.return_notes}</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

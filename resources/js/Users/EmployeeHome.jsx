@@ -32,7 +32,6 @@ const EmployeeHome = () => {
   const [toasts, setToasts] = useState([]);
   const [isBorrowedOpen, setIsBorrowedOpen] = useState(false);
   const [isOverdueOpen, setIsOverdueOpen] = useState(false);
-  const [isPreviousBorrowedOpen, setIsPreviousBorrowedOpen] = useState(false);
   const [borrowedItems, setBorrowedItems] = useState([]);
   const [selectedDeniedId, setSelectedDeniedId] = useState(null);
   // Track locally-cancelled requests to immediately hide them from On Process
@@ -455,31 +454,38 @@ const EmployeeHome = () => {
 
 
 
-  // Fetch denied requests
+  // Fetch denied/rejected requests
   const fetchDeniedRequests = async () => {
     try {
-      const res = await fetch('/api/requests?status=denied', { credentials: 'same-origin' });
+      // Fetch rejected requests (API uses 'rejected' status, not 'denied')
+      const res = await fetch('/api/requests?status=rejected', { credentials: 'same-origin' });
       const data = await res.json();
 
 
       if (data.success && Array.isArray(data.data)) {
-        const mapped = data.data.map((r, idx) => ({
-          id: r.id ?? idx + 1,
-          date: r.created_at ? new Date(r.created_at).toLocaleDateString("en-US", {
+        const mapped = data.data.map((r, idx) => {
+          // Format date from requested_date, approved_at, or created_at
+          const dateValue = r.requested_date || r.approved_at || r.created_at;
+          const formattedDate = dateValue ? new Date(dateValue).toLocaleDateString("en-US", {
             month: "2-digit",
             day: "2-digit",
             year: "numeric",
-          }) : '',
-          // Show the item CATEGORY (e.g., Monitor), not the brand
-          item: r.category_name || r.category || r.equipment_type || r?.equipment?.category_name || r?.equipment?.category || r.equipment_name || r.item || r.items || r.title || 'Request',
-          // Brand field should contain the brand like LG
-          brand: r.brand || r.equipment_brand || r?.equipment?.brand || '',
-          model: r.model || r.equipment_model || r?.equipment?.model || '',
-          status: 'Denied',
-          // Capture the admin's actual denial reason from common fields
-          reason: r.denial_reason || r.denied_reason || r.reject_reason || r.rejection_reason || r.reason || r.remarks || r.remark || r.comment || r.comments || r.note || r.notes || 'No reason provided',
-          equipment_id: r.equipment_id || r?.equipment?.id || null,
-        }));
+          }) : '';
+          
+          return {
+            id: r.id ?? idx + 1,
+            date: formattedDate,
+            // Show the item CATEGORY (e.g., Monitor), not the brand
+            item: r.category_name || r.category || r.equipment_type || r?.equipment?.category_name || r?.equipment?.category || r.equipment_name || r.item || r.items || r.title || 'Request',
+            // Brand field should contain the brand like LG
+            brand: r.brand || r.equipment_brand || r?.equipment?.brand || '',
+            model: r.model || r.equipment_model || r?.equipment?.model || '',
+            status: 'Rejected',
+            // Capture the admin's rejection reason (API uses rejection_reason)
+            reason: r.rejection_reason || r.denial_reason || r.denied_reason || r.reject_reason || r.reason || r.remarks || r.remark || r.comment || r.comments || r.note || r.notes || 'No reason provided',
+            equipment_id: r.equipment_id || r?.equipment?.id || null,
+          };
+        });
         // Normalize: if item looks like brand or missing, try to fetch equipment category
         const needEnrich = mapped.filter(m => (!m.item || m.item.toLowerCase() === (m.brand || '').toLowerCase()) && m.equipment_id);
         if (needEnrich.length > 0) {
@@ -937,10 +943,6 @@ const EmployeeHome = () => {
           transactionStats={transactionStats} 
           onBorrowedClick={async () => { await fetchBorrowedItems(); setIsBorrowedOpen(true); }} 
           onOverdueClick={async () => { await fetchDeniedRequests(); setSelectedDeniedId(null); setIsOverdueOpen(true); }} 
-          onPreviousBorrowedClick={() => {
-            logActivity('Opened Previously Borrowed items view', 'info');
-            setIsPreviousBorrowedOpen(true);
-          }} 
         />
 
 
@@ -1127,46 +1129,6 @@ const EmployeeHome = () => {
         </div>
       )}
 
-      {isPreviousBorrowedOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm">
-          <div className="relative w-full max-w-4xl max-h-[90vh] bg-white rounded-xl shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-bold text-gray-900">Previously Borrowed Items</h2>
-              <button
-                onClick={() => setIsPreviousBorrowedOpen(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-100 rounded-lg"
-                aria-label="Close"
-              >
-                <X size={22} />
-              </button>
-            </div>
-            <div className="p-6 max-h-[70vh] overflow-y-auto no-scrollbar">
-              <div className="space-y-3">
-                {(borrowedItems || []).length > 0 ? (
-                  (borrowedItems || []).map((it, i) => (
-                    <div key={it.id || i} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="font-semibold text-gray-900">{it.equipment_name || it.item || '-'}</div>
-                          <div className="text-xs text-gray-500 mt-1">
-                            Serial: {it.serial_number || it.serial || 'N/A'}
-                          </div>
-                        </div>
-                        <div className="text-xs text-gray-500 text-right">
-                          {/* If history dates are available, they can be shown here in the future */}
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-sm text-gray-500">No previously borrowed items to display.</div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {isOverdueOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm">
           <div className="relative w-full max-w-5xl max-h-[90vh] bg-white rounded-xl shadow-2xl overflow-hidden">
@@ -1205,7 +1167,7 @@ const EmployeeHome = () => {
                           )}
                         </td>
                         <td className="p-3 text-xs">
-                          <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold bg-red-100 text-red-700">Denied</span>
+                          <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold bg-red-100 text-red-700">Rejected</span>
                         </td>
                       </tr>
                     ))}
@@ -1227,7 +1189,7 @@ const EmployeeHome = () => {
                       <p className="text-xs text-gray-500">Brand: {(deniedRequests.find(r => r.id === selectedDeniedId) || {}).brand}</p>
                     )}
                     <div className="mt-4">
-                      <h4 className="font-semibold text-gray-800 mb-2 text-sm">Denied Reason</h4>
+                      <h4 className="font-semibold text-gray-800 mb-2 text-sm">Rejection Reason</h4>
                       <textarea
                         value={(deniedRequests.find(r => r.id === selectedDeniedId) || {}).reason || ''}
                         readOnly
