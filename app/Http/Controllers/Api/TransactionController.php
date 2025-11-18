@@ -959,7 +959,8 @@ class TransactionController extends Controller
                     DB::raw("COALESCE(equipment.serial_number, '') as serial_number"),
                     DB::raw("COALESCE(equipment.specifications, '') as specifications"),
                     DB::raw("COALESCE(equipment.asset_tag, '') as asset_tag"),
-                    DB::raw("COALESCE(categories.name, '') as category_name")
+                    DB::raw("COALESCE(categories.name, '') as category_name"),
+                    DB::raw("COALESCE(categories.id, equipment.category_id) as category_id")
                 )
                 ->orderBy('transactions.created_at', 'desc');
 

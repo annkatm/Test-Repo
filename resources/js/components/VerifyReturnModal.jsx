@@ -130,15 +130,24 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
         }
       `}</style>
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-[520px] max-w-[95vw] p-5 border border-blue-100">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-semibold text-blue-600">Verify Return</h3>
-          <button type="button" onClick={onClose} className="text-gray-500 hover:text-gray-700">✕</button>
+      <div className="relative bg-white rounded-2xl shadow-2xl w-[600px] max-w-[95vw] p-6 border border-blue-100">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-semibold text-blue-600">Verify Return</h3>
+          <button 
+            type="button" 
+            onClick={onClose} 
+            className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+            aria-label="Close"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
         {/* Employee Info with Avatar */}
-        <div className="bg-blue-50 rounded-lg p-3 mb-4 flex items-center space-x-3">
-          <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center overflow-hidden text-white font-semibold text-sm flex-shrink-0">
+        <div className="bg-blue-50 rounded-lg p-4 mb-4 flex items-center space-x-3">
+          <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center overflow-hidden text-white font-semibold text-base flex-shrink-0">
             {avatarUrl ? (
               <img 
                 src={avatarUrl} 
@@ -154,8 +163,8 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
             )}
           </div>
           <div>
-            <p className="font-semibold text-gray-900">{employeeName}</p>
-            <p className="text-xs text-gray-600">Employee</p>
+            <p className="font-semibold text-gray-900 text-base">{employeeName}</p>
+            <p className="text-sm text-gray-600">Employee</p>
           </div>
         </div>
 
@@ -216,38 +225,65 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
                         <div className="overflow-hidden">
                           {/* Table Header */}
                           <div className="bg-gray-100 border-b border-gray-200">
-                            <div className="flex">
-                              <div className="px-3 py-1.5 border-r border-gray-200" style={{ width: '30%' }}>
+                            <div className="grid grid-cols-4">
+                              <div className="px-3 py-1.5 border-r border-gray-200">
                                 <span className="text-xs font-medium text-gray-700">Model</span>
                               </div>
-                              <div className="px-3 py-1.5 border-r border-gray-200" style={{ width: '30%' }}>
+                              <div className="px-3 py-1.5 border-r border-gray-200">
                                 <span className="text-xs font-medium text-gray-700">Serial</span>
                               </div>
-                              <div className="px-3 py-1.5" style={{ width: '40%' }}>
+                              <div className="px-3 py-1.5 border-r border-gray-200">
                                 <span className="text-xs font-medium text-gray-700">Specs</span>
+                              </div>
+                              <div className="px-3 py-1.5">
+                                <span className="text-xs font-medium text-gray-700">Condition</span>
                               </div>
                             </div>
                           </div>
                           
-                          {/* Table Rows with Condition Selection */}
+                          {/* Table Rows */}
                           <div className="bg-white">
                             {group.items.map((item, itemIndex) => {
-                              const specs = item.specifications || item.specs || '';
-                              const model = item.model || item.brand || 'N/A';
-                              const serialNumber = item.serial_number || 'N/A';
+                              const specs = item.specifications || item.specs || item.description || '';
+                              const model = item.model || item.brand || item.name || 'N/A';
+                              const serialNumber = item.serial_number || item.serial || '';
                               const itemKey = item.id || `item-${groupIndex}-${itemIndex}`;
                               const currentCondition = itemConditions[itemKey] || 'good_condition';
                               
                               return (
                                 <div 
                                   key={item.id || itemIndex} 
-                                  className={`grid grid-cols-2 ${itemIndex < group.items.length - 1 ? 'border-b border-gray-200' : ''}`}
+                                  className={`grid grid-cols-4 ${itemIndex < group.items.length - 1 ? 'border-b border-gray-200' : ''}`}
                                 >
                                   <div className="px-3 py-2 border-r border-gray-200">
-                                    <span className="text-xs text-gray-700">{serialNumber}</span>
+                                    <span className="text-xs text-gray-700">{model}</span>
+                                  </div>
+                                  <div className="px-3 py-2 border-r border-gray-200">
+                                    <span className="text-xs text-gray-700">{serialNumber || 'N/A'}</span>
+                                  </div>
+                                  <div className="px-3 py-2 border-r border-gray-200">
+                                    <span className="text-xs text-gray-700">{specs || 'N/A'}</span>
                                   </div>
                                   <div className="px-3 py-2">
-                                    <span className="text-xs text-gray-700">{specs || 'N/A'}</span>
+                                    {(() => {
+                                      const code = (item.return_condition || currentCondition || '').toString().toLowerCase();
+                                      const label = code === 'good_condition' ? 'Good Condition'
+                                        : code === 'damaged' ? 'Damaged'
+                                        : code === 'has_defect' ? 'Has Defect'
+                                        : 'N/A';
+                                      const cls = code === 'good_condition'
+                                        ? 'bg-green-100 text-green-700'
+                                        : code === 'damaged'
+                                        ? 'bg-red-100 text-red-700'
+                                        : code === 'has_defect'
+                                        ? 'bg-amber-100 text-amber-700'
+                                        : 'bg-gray-100 text-gray-700';
+                                      return (
+                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-medium ${cls}`}>
+                                          {label}
+                                        </span>
+                                      );
+                                    })()}
                                   </div>
                                 </div>
                               );
@@ -276,18 +312,18 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
             value={verificationNotes}
             onChange={(e) => setVerificationNotes(e.target.value)}
             placeholder="Add any verification notes or observations..."
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-            rows="2"
+            className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm resize-none"
+            rows="3"
             maxLength="500"
           />
           <p className="text-xs text-gray-500 mt-1">{verificationNotes.length}/500 characters</p>
         </div>
 
-        <div className="flex justify-end gap-3 mt-5">
+        <div className="flex justify-end gap-3 mt-6">
           <button 
             type="button" 
             onClick={onClose} 
-            className="px-4 py-2 rounded-md bg-gray-300 text-gray-700 hover:bg-gray-400 transition-colors"
+            className="px-5 py-2 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors font-medium text-sm"
             disabled={isProcessing}
           >
             Close
@@ -310,7 +346,7 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
               }
             }}
             disabled={isProcessing}
-            className="px-6 py-2 rounded-md bg-green-600 text-white hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-6 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium text-sm"
           >
             {isProcessing ? (
               <>
