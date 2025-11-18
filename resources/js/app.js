@@ -8,6 +8,7 @@ import EmployeeDashboard from './Users/EmployeeDashboard.jsx';
 import SimpleEmployee from './SimpleEmployee';
 import ViewRequest from './ViewRequest';
 import ViewApproved from './ViewApproved.jsx';
+import ViewExchangeRequests from './ViewExchangeRequests.jsx';
 import ActivityLogs from './ActivityLogs.jsx';
 import HomePage from './Home.jsx';
 import Equipment from './Equipment.jsx';
@@ -46,6 +47,7 @@ try {
 // Expose components globally
 window.ViewApproved = ViewApproved;
 window.ViewRequest = ViewRequest;
+window.ViewExchangeRequests = ViewExchangeRequests;
 window.ActivityLogs = ActivityLogs;
 window.Equipment = Equipment;
 window.AddStocks = AddStocks;
@@ -480,6 +482,28 @@ document.addEventListener('DOMContentLoaded', function() {
             // Use React to render error instead of innerHTML
             try {
                 const root = getOrCreateRoot(activityLogsContainer, createRoot);
+                root.render(React.createElement(ErrorFallback, { message: error.message }));
+            } catch (e) {
+                console.error('Failed to render error fallback:', e);
+            }
+        }
+    }
+    
+    // Check for viewexchangerequests-root (for exchange requests page)
+    const viewExchangeRequestsContainer = document.getElementById('viewexchangerequests-root');
+    console.log('viewexchangerequests-root element found:', viewExchangeRequestsContainer);
+    
+    if (viewExchangeRequestsContainer) {
+        try {
+            console.log('Initializing ViewExchangeRequests component');
+            const root = getOrCreateRoot(viewExchangeRequestsContainer, createRoot);
+            root.render(React.createElement(ErrorBoundary, null, React.createElement(ViewExchangeRequests)));
+            console.log('ViewExchangeRequests component rendered successfully');
+        } catch (error) {
+            console.error('Error rendering ViewExchangeRequests component:', error);
+            // Use React to render error instead of innerHTML
+            try {
+                const root = getOrCreateRoot(viewExchangeRequestsContainer, createRoot);
                 root.render(React.createElement(ErrorFallback, { message: error.message }));
             } catch (e) {
                 console.error('Failed to render error fallback:', e);

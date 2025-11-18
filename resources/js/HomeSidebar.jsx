@@ -26,7 +26,7 @@ const HomeSidebar = ({ onSelect }) => {
     window.location.pathname === path;
 
   const isInTransactionSection = () => {
-    return isActive("/viewrequest") || isActive("/viewapproved");
+    return isActive("/viewrequest") || isActive("/viewapproved") || isActive("/exchangerequests");
   };
 
   const isInEquipmentSection = () => {
@@ -292,6 +292,19 @@ const HomeSidebar = ({ onSelect }) => {
                           }`}
                       >
                         View Approved
+                      </div>
+                    </li>
+                  )}
+                  {(can('view_request') || can('view_approve')) && (
+                    <li>
+                      <div
+                        onClick={() => handleDropdownItemClick("/exchangerequests")}
+                        className={`inline-block px-3 py-1 rounded-full text-sm w-fit transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer ${isActive("/exchangerequests")
+                          ? "bg-white text-[#2262C6] shadow-sm scale-105"
+                          : "text-white/90 hover:bg-white hover:text-[#2262C6]"
+                          }`}
+                      >
+                        Exchange Requests
                       </div>
                     </li>
                   )}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, X, Home, Eye, CheckCircle, Package, Plus, Users, FileText, Clock, Settings, Shield } from 'lucide-react';
+import { Search, X, Home, Eye, CheckCircle, Package, Plus, Users, FileText, Clock, Settings, Shield, RefreshCcw } from 'lucide-react';
 import BubbleProfile from './BubbleProfile';
 
 const GlobalHeader = ({ title = "", onSearch, hideSearch = false, showTitle = true }) => {
@@ -31,6 +31,13 @@ const GlobalHeader = ({ title = "", onSearch, hideSearch = false, showTitle = tr
       description: 'View approved equipment requests',
       icon: CheckCircle,
       permission: 'view_approve'
+    },
+    {
+      path: '/exchangerequests',
+      name: 'Exchange Requests',
+      description: 'View employee exchange requests',
+      icon: RefreshCcw,
+      permission: 'view_request'
     },
     {
       path: '/equipment',
