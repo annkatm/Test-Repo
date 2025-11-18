@@ -1015,7 +1015,7 @@ const ReturnItems = () => {
           <div className="col-span-3">Date</div>
           <div className="col-span-3">Serial No.</div>
           <div className="col-span-3">Category</div>
-          <div className="col-span-3 text-right">Options</div>
+          <div className="col-span-3 text-right">Actions</div>
         </div>
 
         {loading ? (
@@ -1058,15 +1058,6 @@ const ReturnItems = () => {
                         className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
                       >
                         Return
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleExchange(item);
-                        }}
-                        className="px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-colors"
-                      >
-                        Exchange
                       </button>
                     </>
                   ) : (

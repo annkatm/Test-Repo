@@ -1242,21 +1242,6 @@ const EmployeeHome = () => {
                     <p className="text-gray-500 text-sm">Select a denied item to inspect</p>
                   </div>
                 )}
-                <button
-                  disabled={!selectedDeniedId || actionLoading}
-                  onClick={() => {
-                    if (!selectedDeniedId || actionLoading) return;
-                    setActionLoading(true);
-                    setTimeout(() => {
-                      setActionLoading(false);
-                      showToast('Appeal submitted. An admin will review your request.', 'info');
-                      setIsOverdueOpen(false);
-                    }, 800);
-                  }}
-                  className={`w-full py-2.5 rounded-lg font-medium text-sm shadow-sm transition-all ${selectedDeniedId ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-300 text-gray-500 cursor-not-allowed'} disabled:opacity-60 disabled:cursor-not-allowed`}
-                >
-                  {actionLoading ? 'Submitting...' : 'Appeal'}
-                </button>
               </div>
             </div>
             {/* Footer Close button removed as requested */}
