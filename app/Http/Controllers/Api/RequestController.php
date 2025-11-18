@@ -110,6 +110,7 @@ class RequestController extends Controller
                     DB::raw("COALESCE(equipment.model, '') as model"),
                     DB::raw("COALESCE(equipment.serial_number, '') as serial_number"),
                     DB::raw("COALESCE(equipment.specifications, '') as specifications"),
+                    DB::raw("COALESCE(equipment.notes, '') as equipment_notes"),
                     DB::raw("COALESCE(equipment.asset_tag, '') as asset_tag"),
                     DB::raw("COALESCE(categories.name, '') as category_name"),
                     DB::raw("COALESCE(approver.name, '') as approved_by_name")

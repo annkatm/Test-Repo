@@ -21,8 +21,18 @@ class UserController extends Controller
     public function index(): JsonResponse
     {
         try {
-            // Get all users with their roles and permissions
-            $users = User::with(['role', 'userPermissions'])->get();
+            // Get all users with their roles, permissions, and linked employee profile & type
+            $users = User::with(['role', 'userPermissions', 'employee.employeeType'])->get();
+            
+            // Ensure each user has a normalized employee_type attribute for frontend
+            $users->each(function ($user) {
+                if ($user->employee && $user->employee->employeeType) {
+                    // Expose the employee type name directly on the user payload
+                    $user->employee_type = $user->employee->employeeType->name;
+                } else {
+                    $user->employee_type = null;
+                }
+            });
             
             // Separate admins and employees based on role
             $admins = $users->filter(function ($user) {

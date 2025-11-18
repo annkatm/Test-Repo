@@ -180,19 +180,27 @@ const AddStocks = () => {
     });
   }, [expandedRows]);
 
-  // Fetch equipment data
+  // Fetch categories first, then equipment
   useEffect(() => {
-    fetchEquipment();
-    fetchCategories();
+    const loadData = async () => {
+      const categoriesData = await fetchCategories();
+      // Fetch equipment after categories are loaded, passing categories
+      if (categoriesData && categoriesData.length > 0) {
+        fetchEquipment(categoriesData);
+      } else {
+        fetchEquipment();
+      }
+    };
+    loadData();
 
     // Listen for equipment updates from other pages (e.g., EmployeePage, Equipment)
     const handleEquipmentUpdate = () => {
-      fetchEquipment(); // Refresh equipment list when changes occur
+      fetchEquipment(); // Refresh equipment list when changes occur (will use categories from state)
     };
 
     // Listen for equipment restore from ViewRequest (when equipment is returned)
     const handleEquipmentRestore = () => {
-      fetchEquipment(); // Refresh equipment list when equipment is returned
+      fetchEquipment(); // Refresh equipment list when equipment is returned (will use categories from state)
     };
 
     window.addEventListener('equipment:updated', handleEquipmentUpdate);
@@ -222,18 +230,25 @@ const AddStocks = () => {
       }
 
       if (data.success) {
-        setCategories(data.data);
+        const categoriesData = data.data;
+        setCategories(categoriesData);
+        return categoriesData;
       } else {
         setError('Failed to fetch categories');
+        return [];
       }
     } catch (err) {
       setError('Error fetching categories');
+      return [];
     }
   };
 
-  const fetchEquipment = async () => {
+  const fetchEquipment = async (categoriesList = null) => {
     try {
       setLoading(true);
+      // Use provided categories or fall back to state
+      const categoriesToUse = categoriesList || categories;
+      
       // Request all equipment without status filter and with high per_page to show all items
       const response = await fetch('/api/equipment?per_page=1000', {
         headers: {
@@ -250,10 +265,21 @@ const AddStocks = () => {
       }
 
       if (data.success) {
-        const equipmentWithCategories = data.data.data.map(item => ({
-          ...item,
-          category: item.category || { id: null, name: 'Uncategorized' }
-        }));
+        const equipmentWithCategories = data.data.data.map(item => {
+          // If item has category object, use it
+          if (item.category && item.category.id) {
+            return { ...item, category: item.category };
+          }
+          // If item has category_id but no category object, look it up from categories
+          if (item.category_id && categoriesToUse.length > 0) {
+            const foundCategory = categoriesToUse.find(cat => cat.id === item.category_id);
+            if (foundCategory) {
+              return { ...item, category: foundCategory };
+            }
+          }
+          // Only default to Uncategorized if no category_id exists
+          return { ...item, category: { id: null, name: 'Uncategorized' } };
+        });
         setEquipment(equipmentWithCategories);
       } else {
         setError('Failed to fetch equipment');

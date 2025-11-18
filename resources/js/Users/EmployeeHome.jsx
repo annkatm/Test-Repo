@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Echo from '../echo';
 import { X, RefreshCcw, ClipboardList, Mouse, FilePlus2 } from 'lucide-react';
-import OnProcessTransactions from './OnProcessTransactions';
 import StatsCards from './StatsCards';
 const EmployeeHome = () => {
   const [, setShowExchangeConfirmModal] = useState(false);
@@ -12,10 +11,11 @@ const EmployeeHome = () => {
   const [transactionStats, setTransactionStats] = useState({
     borrowed: 0,
     available: 0,
-    overdue: 0
+    overdue: 0,
+    previousBorrowed: 0,
   });
   
-  const [showPendings, setShowPendings] = useState(false);
+  const [selectedPendingId, setSelectedPendingId] = useState(null);
   const [, setSelectedRow] = useState(1);
   const [, setShowReasonModal] = useState(false);
   const [exchangeReason, setExchangeReason] = useState('');
@@ -25,6 +25,7 @@ const EmployeeHome = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [itemsPerPage, setItemsPerPage] = useState(5);
   const [actionLoading, setActionLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   // Denied requests will be fetched from API
   const [deniedRequests, setDeniedRequests] = useState([]);
   // Toasts for upper-right popup notifications
@@ -140,6 +141,14 @@ const EmployeeHome = () => {
   useEffect(() => {
     (async () => {
       try { await fetchDeniedRequests(); } catch (_) {}
+    })();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try { await fetchTransactionStats(); } catch (_) {}
+      try { await fetchPendingTransactions(); } catch (_) {}
+      try { await fetchBorrowedItems(); } catch (_) {}
     })();
   }, []);
 
@@ -276,6 +285,9 @@ const EmployeeHome = () => {
     const onCreated = (e) => {
       const d = e?.detail || {};
       if (!d || (!d.id && !d.equipment_id)) return;
+      
+      console.log('[EmployeeHome] Request created event received:', d);
+      
       // Un-ignore this request/equipment if it was previously cancelled
       if (d.id) {
         setCancelledReqIds((prev) => {
@@ -291,22 +303,44 @@ const EmployeeHome = () => {
           return next;
         });
       }
+      
       setPendingTransactions((prev) => {
         const list = Array.isArray(prev) ? prev : [];
         const exists = list.some((r) => (d.id && String(r.id) === String(d.id)) || (d.equipment_id && String(r.equipment_id || '') === String(d.equipment_id)));
-        if (exists) return list;
-        return [{
+        if (exists) {
+          console.log('[EmployeeHome] Request already exists in pending list');
+          return list;
+        }
+        
+        const newRequest = {
           id: d.id || Date.now(),
           created_at: d.created_at || new Date().toISOString(),
-          expected_start_date: d.expected_start_date || null,
-          expected_end_date: d.expected_end_date || null,
+          expected_start_date: d.expected_start_date || d.start_date || new Date().toISOString(),
+          expected_end_date: d.expected_end_date || d.end_date || null,
           equipment_id: d.equipment_id || null,
-          equipment_name: d.equipment_name || d.item || 'Item',
-          item: d.equipment_name || d.item || 'Item',
+          equipment_name: d.equipment_name || d.category_name || d.category || d.item || 'Item',
+          item: d.equipment_name || d.category_name || d.category || d.item || 'Item',
+          brand: d.brand || d.equipment_brand || '',
+          model: d.model || d.equipment_model || '',
           status: d.status || 'Pending',
-        }, ...list];
+          request_number: d.request_number || d.number || '',
+          reason: d.reason || d.description || d.notes || '',
+          serial_number: d.serial_number || null,
+          condition: d.condition || null,
+          admin_description: d.admin_description || null,
+        };
+        
+        console.log('[EmployeeHome] Adding new request to pending list:', newRequest);
+        return [newRequest, ...list];
       });
-      try { showToast('Request created', 'success'); } catch (_) {}
+      
+      try { showToast('Request created successfully', 'success'); } catch (_) {}
+      
+      // Also refresh from server to ensure consistency
+      setTimeout(() => {
+        console.log('[EmployeeHome] Refreshing pending transactions from server');
+        fetchPendingTransactions();
+      }, 1000);
     };
     
     const onApproved = (e) => {
@@ -453,31 +487,38 @@ const EmployeeHome = () => {
 
 
 
-  // Fetch denied requests
+  // Fetch denied/rejected requests
   const fetchDeniedRequests = async () => {
     try {
-      const res = await fetch('/api/requests?status=denied', { credentials: 'same-origin' });
+      // Fetch rejected requests (API uses 'rejected' status, not 'denied')
+      const res = await fetch('/api/requests?status=rejected', { credentials: 'same-origin' });
       const data = await res.json();
 
 
       if (data.success && Array.isArray(data.data)) {
-        const mapped = data.data.map((r, idx) => ({
-          id: r.id ?? idx + 1,
-          date: r.created_at ? new Date(r.created_at).toLocaleDateString("en-US", {
+        const mapped = data.data.map((r, idx) => {
+          // Format date from requested_date, approved_at, or created_at
+          const dateValue = r.requested_date || r.approved_at || r.created_at;
+          const formattedDate = dateValue ? new Date(dateValue).toLocaleDateString("en-US", {
             month: "2-digit",
             day: "2-digit",
             year: "numeric",
-          }) : '',
-          // Show the item CATEGORY (e.g., Monitor), not the brand
-          item: r.category_name || r.category || r.equipment_type || r?.equipment?.category_name || r?.equipment?.category || r.equipment_name || r.item || r.items || r.title || 'Request',
-          // Brand field should contain the brand like LG
-          brand: r.brand || r.equipment_brand || r?.equipment?.brand || '',
-          model: r.model || r.equipment_model || r?.equipment?.model || '',
-          status: 'Denied',
-          // Capture the admin's actual denial reason from common fields
-          reason: r.denial_reason || r.denied_reason || r.reject_reason || r.rejection_reason || r.reason || r.remarks || r.remark || r.comment || r.comments || r.note || r.notes || 'No reason provided',
-          equipment_id: r.equipment_id || r?.equipment?.id || null,
-        }));
+          }) : '';
+          
+          return {
+            id: r.id ?? idx + 1,
+            date: formattedDate,
+            // Show the item CATEGORY (e.g., Monitor), not the brand
+            item: r.category_name || r.category || r.equipment_type || r?.equipment?.category_name || r?.equipment?.category || r.equipment_name || r.item || r.items || r.title || 'Request',
+            // Brand field should contain the brand like LG
+            brand: r.brand || r.equipment_brand || r?.equipment?.brand || '',
+            model: r.model || r.equipment_model || r?.equipment?.model || '',
+            status: 'Rejected',
+            // Capture the admin's rejection reason (API uses rejection_reason)
+            reason: r.rejection_reason || r.denial_reason || r.denied_reason || r.reject_reason || r.reason || r.remarks || r.remark || r.comment || r.comments || r.note || r.notes || 'No reason provided',
+            equipment_id: r.equipment_id || r?.equipment?.id || null,
+          };
+        });
         // Normalize: if item looks like brand or missing, try to fetch equipment category
         const needEnrich = mapped.filter(m => (!m.item || m.item.toLowerCase() === (m.brand || '').toLowerCase()) && m.equipment_id);
         if (needEnrich.length > 0) {
@@ -546,10 +587,18 @@ const EmployeeHome = () => {
       const data = await response.json();
 
       if (data.success) {
+        const stats = data.data || {};
         setTransactionStats({
-          borrowed: data.data.borrowed || 0,
-          available: data.data.available || 0,
-          overdue: data.data.overdue || 0
+          borrowed: stats.borrowed || 0,
+          available: stats.available || 0,
+          overdue: stats.overdue || 0,
+          // Try multiple possible keys for previously-borrowed/returned history
+          previousBorrowed:
+            stats.previous_borrowed ||
+            stats.previously_borrowed ||
+            stats.returned ||
+            stats.completed ||
+            0,
         });
       }
     } catch (error) {
@@ -595,7 +644,7 @@ const EmployeeHome = () => {
             } catch (_) {}
           }
           if (userData?.authenticated && user?.id) {
-            const empRes = await fetch(`/api/employees?user_id=${user.id}`);
+            const empRes = await fetch(`/api/employees?user_id=${user.id}`, { credentials: 'same-origin' });
             const empData = await empRes.json();
             const employees = Array.isArray(empData) ? empData : (Array.isArray(empData?.data) ? empData.data : []);
             if (employees.length > 0) return employees[0].id;
@@ -644,6 +693,7 @@ const EmployeeHome = () => {
       const mapped = (Array.isArray(list) ? list : []).map((t, index) => ({
         id: t?.id || index + 1,
         created_at: t?.created_at || t?.date || null,
+        requested_date: t?.requested_date || t?.requested_at || t?.requestedDate || null,
         expected_start_date: t?.expected_start_date || null,
         equipment_id: t?.equipment_id || t?.equipment?.id || null,
         // Show the item CATEGORY (e.g., Monitor), not the brand
@@ -653,21 +703,51 @@ const EmployeeHome = () => {
         request_number: t?.request_number || t?.number || '',
         reason: t?.reason || t?.description || t?.notes || '',
         status: t?.status || 'Pending',
+        serial_number: t?.serial_number || t?.equipment?.serial_number || t?.serial || null,
+        condition: t?.condition || t?.equipment?.condition || t?.current_condition || null,
+        admin_description: t?.admin_description || t?.approval_notes || t?.specifications || t?.equipment_notes || t?.reason || t?.description || t?.notes || null,
       }));
 
       // Normalize: if item looks like brand or missing, try to fetch equipment category
-      const needEnrich = mapped.filter(m => (!m.equipment_name || m.equipment_name.toLowerCase() === (m.brand || '').toLowerCase()) && m.equipment_id);
+      const needEnrich = mapped.filter(m => (
+        // Need enrichment if category/name is missing or same as brand
+        (!m.equipment_name || m.equipment_name.toLowerCase() === (m.brand || '').toLowerCase()) ||
+        // Or if important details like condition or serial are missing
+        (!m.condition || !m.serial_number)
+      ) && m.equipment_id);
       if (needEnrich.length > 0) {
         try {
           const enriched = await Promise.all(mapped.map(async (m) => {
             if (!m.equipment_id) return m;
-            if (m.equipment_name && m.equipment_name.toLowerCase() !== (m.brand || '').toLowerCase()) return m;
+            // If we already have a good name/brand AND condition/serial, skip extra fetch
+            if (
+              m.equipment_name &&
+              m.equipment_name.toLowerCase() !== (m.brand || '').toLowerCase() &&
+              m.condition &&
+              m.serial_number
+            ) {
+              return m;
+            }
             try {
               const resp = await fetch(`/api/equipment/${m.equipment_id}`, { credentials: 'same-origin' });
               const j = await resp.json();
               const eq = j?.data || j || {};
               const category = eq.category_name || eq.category?.name || eq.category || m.equipment_name;
-              return { ...m, equipment_name: category || m.equipment_name, brand: m.brand || eq.brand || '' };
+              return {
+                ...m,
+                equipment_name: category || m.equipment_name,
+                brand: m.brand || eq.brand || '',
+                serial_number: m.serial_number || eq.serial_number || eq.serial || null,
+                condition: m.condition || eq.condition || eq.current_condition || null,
+                admin_description:
+                  m.admin_description ||
+                  eq.approval_notes ||
+                  eq.specifications ||
+                  eq.equipment_notes ||
+                  eq.description ||
+                  eq.notes ||
+                  null,
+              };
             } catch (_) { return m; }
           }));
           console.log('[fetchPendingTransactions] Final enriched transactions:', enriched);
@@ -753,7 +833,7 @@ const EmployeeHome = () => {
             const eRes = await fetch('/api/employees');
             const eData = await eRes.json();
             const list = eData.success ? eData.data : eData;
-            if (Array.isArray(list) && userData && userData.user && userData.user.email) {
+            if (Array.isArray(list) && userData && userData.user && userData.email) {
               const found = list.find(emp => emp.email && emp.email.toLowerCase() === userData.user.email.toLowerCase());
               if (found) employeeId = found.id;
             }
@@ -829,17 +909,27 @@ const EmployeeHome = () => {
     setUploadedFile(null);
   };
 
-  const handleSendExchangeRequest = () => {
-    setShowExchangeConfirmModal(false);
+  const handleRefreshHome = () => {
+    if (refreshing) return;
+    console.log('[EmployeeHome] Home refresh triggered');
+    setRefreshing(true);
+    clearCancelledIds();
+    Promise.all([
+      (async () => { try { await fetchTransactionStats(); } catch (_) {} })(),
+      (async () => { try { await fetchPendingTransactions(); } catch (_) {} })(),
+      (async () => { try { await fetchDeniedRequests(); } catch (_) {} })(),
+      (async () => { try { await fetchBorrowedItems(); } catch (_) {} })(),
+    ])
+      .then(() => {
+        try { showToast('Home data refreshed', 'success'); } catch (_) {}
+      })
+      .catch(() => {
+        // ignore refresh errors to avoid breaking UI
+      })
+      .finally(() => {
+        setRefreshing(false);
+      });
   };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Loading...</div>
-      </div>
-    );
-  }
 
   if (error) {
     return (
@@ -851,48 +941,9 @@ const EmployeeHome = () => {
 
 
 
-  // Show full On Process list when requested
-  if (showPendings) {
-    const visiblePending = (pendingTransactions || []).filter((t) => {
-      const idOk = cancelledReqIds.includes(String(t?.id)) ? false : true;
-      const eqOk = cancelledEquipIds.includes(String(t?.equipment_id || '')) ? false : true;
-      return idOk && eqOk;
-    });
-    const requestsData = visiblePending.map((t, index) => {
-      const dsrc = t?.created_at || t?.expected_start_date || null;
-      const date = dsrc ? new Date(dsrc).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '';
-      return {
-        id: t?.id || index + 1,
-        equipment_id: t?.equipment_id || t?.equipment?.id || null,
-        date: date || '-',
-        item: t?.equipment_name || t?.item || '-',
-        brand: t?.brand || t?.equipment?.brand || '-',
-        model: t?.model || t?.equipment?.model || '-',
-        number: t?.request_number || t?.number || '-',
-        request_number: t?.request_number || t?.number || '-',
-        reason: t?.reason || t?.description || t?.notes || '-',
-        status: t?.status || 'Pending',
-        details: [
-          {
-            name: t?.equipment_name || t?.item || '-',
-            description: t?.reason || t?.description || t?.notes || 'Equipment request',
-            icon: '/images/placeholder-equipment.png',
-          },
-        ],
-      };
-    });
-
-    return (
-      <OnProcessTransactions
-        onBack={() => setShowPendings(false)}
-        requests={requestsData}
-        deniedRequests={deniedRequests}
-        setDeniedRequests={setDeniedRequests}
-        fetchDeniedRequests={fetchDeniedRequests}
-        showToast={showToast}
-      />
-    );
-  }
+  const selectedPending = selectedPendingId
+    ? (pendingTransactions || []).find((t) => String(t.id) === String(selectedPendingId)) || null
+    : null;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
@@ -905,16 +956,23 @@ const EmployeeHome = () => {
       <div className="col-span-12 md:col-span-11 space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-4xl font-bold text-[#2262C6] transition-all duration-300">Home</h1>
-          <button
-            onClick={() => {
-              console.log('[DEBUG] Manual refresh clicked');
-              clearCancelledIds();
-            }}
-            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <RefreshCcw size={16} />
-            Refresh
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleRefreshHome}
+              disabled={refreshing}
+              className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors border ${
+                refreshing
+                  ? 'text-blue-700 border-blue-200 bg-blue-50 cursor-wait'
+                  : 'text-gray-600 border-transparent hover:text-gray-900 hover:bg-gray-100'
+              }`}
+            >
+              <RefreshCcw
+                size={16}
+                className={refreshing ? 'animate-spin-slow' : ''}
+              />
+              {refreshing ? 'Refreshing…' : 'Refresh'}
+            </button>
+          </div>
         </div>
 
         <StatsCards 
@@ -926,95 +984,121 @@ const EmployeeHome = () => {
 
         <div className="bg-gray-100 rounded-lg border border-gray-200 mb-8 w-full">
           <div className="p-4 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-[#2262C6]">On Process</h2>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    // Show the view immediately to avoid UX delay; fetch in background
-                    setShowPendings(true);
-                    try { fetchDeniedRequests(); } catch (_) {}
-                    try { fetchPendingTransactions(); } catch (_) {}
-                    logActivity('Opened On Process view', 'info');
-                  }}
-                  className="text-right text-blue-600 text-sm font-medium hover:text-blue-700"
-                >
-                  View all
-                </button>
-              </div>
-            </div>
+            <h2 className="text-xl font-bold text-[#2262C6]">On Process</h2>
           </div>
 
-          <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-            <div className="grid grid-cols-12 gap-4 text-sm font-medium text-gray-700">
-              <div className="col-span-2">Date</div>
-              <div className="col-span-6">Type</div>
-              <div className="col-span-2">Brand</div>
-              <div className="col-span-2">Status</div>
-            </div>
-          </div>
-
-          <div className="divide-y divide-gray-100">
-            {(() => {
-              console.log('[EmployeeHome] Rendering On Process - pendingTransactions:', pendingTransactions);
-              console.log('[EmployeeHome] Cancelled IDs:', cancelledReqIds, cancelledEquipIds);
-              const filtered = pendingTransactions.filter((t) => !cancelledReqIds.includes(String(t?.id)) && !cancelledEquipIds.includes(String(t?.equipment_id || '')));
-              console.log('[EmployeeHome] After filtering:', filtered);
-              return filtered.length;
-            })() > 0 ? [...pendingTransactions]
-              .filter((t) => !cancelledReqIds.includes(String(t?.id)) && !cancelledEquipIds.includes(String(t?.equipment_id || '')))
-              .sort((a, b) => {
-                const aDate = new Date(a.created_at || a.expected_start_date || 0).getTime();
-                const bDate = new Date(b.created_at || b.expected_start_date || 0).getTime();
-                return bDate - aDate; // newest first
-              })
-              .slice(0, 6)
-              .map((transaction, index) => (
-              <div
-                key={transaction.id || index}
-                className="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer"
-                onClick={() => logActivity(`Clicked pending row: ${transaction.equipment_name || transaction.item || 'Item'} (${transaction.id || index})`, 'info')}
-              >
-                <div className="grid grid-cols-12 gap-4 items-center">
-                  <div className="col-span-2">
-                    <span className="text-sm text-gray-900">
-                      {transaction.expected_start_date
-                        ? new Date(transaction.expected_start_date).toLocaleDateString("en-US", {
-                          month: "2-digit",
-                          day: "2-digit",
-                          year: "numeric",
-                        })
-                        : '-'}
-                    </span>
-                  </div>
-                  <div className="col-span-6">
-                    <span className="text-sm text-gray-900 font-medium">
-                      {transaction.equipment_name || transaction.item || 'Unknown'}
-                    </span>
-                  </div>
-                  <div className="col-span-2">
-                    <span className="text-sm text-gray-900">
-                      {transaction.equipment?.brand || transaction.brand || transaction.equipment_brand || '-'}
-                    </span>
-                  </div>
-                  <div className="col-span-2">
-                    {(() => {
-                      const s = String(transaction.status || '').toLowerCase();
-                      const isApproved = /approved|released|borrowed|active/.test(s);
-                      const cls = isApproved
-                        ? 'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200'
-                        : 'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200';
-                      const label = isApproved ? 'Approved' : (transaction.status || 'Pending');
-                      return (
-                        <span className={cls}>{label}</span>
-                      );
-                    })()}
-                  </div>
+          <div className="flex flex-col md:flex-row">
+            <div className="flex-1">
+              <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+                <div className="grid grid-cols-12 gap-4 text-[15px] font-semibold text-gray-700">
+                  <div className="col-span-3">Date</div>
+                  <div className="col-span-3">Type</div>
+                  <div className="col-span-3">Brand</div>
+                  <div className="col-span-3">Status</div>
                 </div>
               </div>
-            )) : (
-              <div className="px-6 py-6 text-sm text-gray-500">
-                No requests are currently in process.
+
+              <div className="divide-y divide-gray-100">
+                {[...pendingTransactions]
+                  .filter((t) => !cancelledReqIds.includes(String(t?.id)))
+                  .sort((a, b) => {
+                    const aDate = new Date(a.expected_start_date || a.requested_date || a.created_at || 0).getTime();
+                    const bDate = new Date(b.expected_start_date || b.requested_date || b.created_at || 0).getTime();
+                    return bDate - aDate; // newest first
+                  })
+                  .slice(0, 6)
+                  .map((transaction, index) => (
+                    <div
+                      key={transaction.id || index}
+                      className="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer text-[15px]"
+                      onClick={() => {
+                        setSelectedPendingId(transaction.id || index);
+                        logActivity(`Opened pending item inspect: ${transaction.equipment_name || transaction.item || 'Item'} (${transaction.id || index})`, 'info');
+                      }}
+                    >
+                      <div className="grid grid-cols-12 gap-4 items-center">
+                        <div className="col-span-3">
+                          <span className="text-[15px] text-gray-900">
+                            {(() => {
+                              const d = transaction.expected_start_date || transaction.requested_date || transaction.created_at;
+                              return d
+                                ? new Date(d).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" })
+                                : '-';
+                            })()}
+                          </span>
+                        </div>
+                        <div className="col-span-3">
+                          <span className="text-[15px] text-gray-900 font-semibold">
+                            {transaction.equipment_name || transaction.item || 'Unknown'}
+                          </span>
+                        </div>
+                        <div className="col-span-3">
+                          <span className="text-sm text-gray-900">
+                            {transaction.equipment?.brand || transaction.brand || transaction.equipment_brand || '-'}
+                          </span>
+                        </div>
+                        <div className="col-span-3">
+                          {(() => {
+                            const s = String(transaction.status || '').toLowerCase();
+                            const isApproved = /approved|released|borrowed|active/.test(s);
+                            const cls = isApproved
+                              ? 'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200'
+                              : 'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200';
+                            const label = isApproved ? 'Approved' : (transaction.status || 'Pending');
+                            return <span className={cls}>{label}</span>;
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                {(!pendingTransactions || pendingTransactions.filter((t) => !cancelledReqIds.includes(String(t?.id))).length === 0) && (
+                  <div className="px-6 py-6 text-sm text-gray-500">No requests are currently in process.</div>
+                )}
+              </div>
+            </div>
+
+            {selectedPending && (
+              <div className="w-full md:w-80 lg:w-96 p-4 md:pl-6 md:ml-4 flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-gray-800 text-lg">Inspect</h3>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPendingId(null)}
+                    className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-200 transition-colors"
+                    aria-label="Close Inspect"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+                <div className="bg-white rounded-2xl p-5 shadow-md border border-gray-200 text-[15px] space-y-4">
+                  <div>
+                    <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">Item</p>
+                    <p className="text-base font-semibold text-gray-900">{selectedPending.equipment_name || selectedPending.item || 'Unknown'}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">Brand</p>
+                      <p className="text-[15px] text-gray-900">{selectedPending.equipment?.brand || selectedPending.brand || '-'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">Serial</p>
+                      <p className="text-[15px] text-gray-900">{selectedPending.serial_number || selectedPending.serial || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">Condition</p>
+                      <p className="text-[15px] text-gray-900">{selectedPending.condition || '-'}</p>
+                    </div>
+                  </div>
+                  <div className="border-t border-dashed border-gray-200 pt-3 mt-1">
+                    <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">Request #</p>
+                    <p className="text-[15px] text-gray-900">{selectedPending.request_number || selectedPending.number || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">Admin Description</p>
+                    <p className="text-[15px] text-gray-900 whitespace-pre-wrap">{selectedPending.admin_description || 'No admin notes yet.'}</p>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -1118,7 +1202,7 @@ const EmployeeHome = () => {
                           )}
                         </td>
                         <td className="p-3 text-xs">
-                          <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold bg-red-100 text-red-700">Denied</span>
+                          <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold bg-red-100 text-red-700">Rejected</span>
                         </td>
                       </tr>
                     ))}
@@ -1140,7 +1224,7 @@ const EmployeeHome = () => {
                       <p className="text-xs text-gray-500">Brand: {(deniedRequests.find(r => r.id === selectedDeniedId) || {}).brand}</p>
                     )}
                     <div className="mt-4">
-                      <h4 className="font-semibold text-gray-800 mb-2 text-sm">Denied Reason</h4>
+                      <h4 className="font-semibold text-gray-800 mb-2 text-sm">Rejection Reason</h4>
                       <textarea
                         value={(deniedRequests.find(r => r.id === selectedDeniedId) || {}).reason || ''}
                         readOnly
