@@ -95,6 +95,9 @@ class RequestController extends Controller
                 ->leftJoin('equipment', 'requests.equipment_id', '=', 'equipment.id')
                 ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
                 ->leftJoin('users as approver', 'requests.approved_by', '=', 'approver.id')
+                // Join original transaction for exchange requests to get original equipment info
+                ->leftJoin('transactions as original_transaction', 'requests.original_transaction_id', '=', 'original_transaction.id')
+                ->leftJoin('equipment as original_equipment', 'original_transaction.equipment_id', '=', 'original_equipment.id')
                 ->select(
                     'requests.*',
                     DB::raw("COALESCE(employees.first_name, '') as first_name"),
@@ -110,9 +113,14 @@ class RequestController extends Controller
                     DB::raw("COALESCE(equipment.model, '') as model"),
                     DB::raw("COALESCE(equipment.serial_number, '') as serial_number"),
                     DB::raw("COALESCE(equipment.specifications, '') as specifications"),
+                    DB::raw("COALESCE(equipment.notes, '') as equipment_notes"),
                     DB::raw("COALESCE(equipment.asset_tag, '') as asset_tag"),
                     DB::raw("COALESCE(categories.name, '') as category_name"),
-                    DB::raw("COALESCE(approver.name, '') as approved_by_name")
+                    DB::raw("COALESCE(approver.name, '') as approved_by_name"),
+                    // Original equipment info for exchange requests
+                    DB::raw("COALESCE(original_equipment.name, '') as original_equipment_name"),
+                    DB::raw("COALESCE(original_equipment.brand, '') as original_brand"),
+                    DB::raw("COALESCE(original_equipment.model, '') as original_model")
                 )
                 ->orderBy('requests.created_at', 'desc');
 
@@ -500,34 +508,81 @@ class RequestController extends Controller
             ]);
 
             DB::transaction(function () use ($equipmentRequest, $validated, $id) {
-                // Update request status
+                // Handle exchange requests differently
+                if ($equipmentRequest->request_type === 'exchange' && $equipmentRequest->original_transaction_id) {
+                    // For exchange requests:
+                    // 1. Return the original equipment
+                    $originalTransaction = DB::table('transactions')->where('id', $equipmentRequest->original_transaction_id)->first();
+                    
+                    if ($originalTransaction) {
+                        // Return the original transaction
+                        DB::table('transactions')->where('id', $equipmentRequest->original_transaction_id)->update([
+                            'status' => 'returned',
+                            'return_date' => now(),
+                            'updated_at' => now(),
+                        ]);
+                        
+                        // Set original equipment back to available
+                        if ($originalTransaction->equipment_id) {
+                            DB::table('equipment')->where('id', $originalTransaction->equipment_id)->update([
+                                'status' => 'available',
+                                'updated_at' => now(),
+                            ]);
+                        }
+                    }
+                    
+                    // 2. Create new transaction for the new equipment
+                    $transactionNumber = $this->generateUniqueTransactionNumber();
+                    
+                    DB::table('transactions')->insert([
+                        'transaction_number' => $transactionNumber,
+                        'user_id' => Auth::id(),
+                        'employee_id' => $equipmentRequest->employee_id,
+                        'equipment_id' => $equipmentRequest->equipment_id,
+                        'request_id' => $id,
+                        'status' => 'pending', // Will be changed to 'released' when equipment is actually released
+                        'request_mode' => $equipmentRequest->request_mode ?? 'on_site',
+                        'expected_return_date' => $equipmentRequest->expected_end_date,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                    
+                    // 3. Update new equipment status to borrowed
+                    DB::table('equipment')->where('id', $equipmentRequest->equipment_id)->update([
+                        'status' => 'borrowed',
+                        'updated_at' => now(),
+                    ]);
+                } else {
+                    // Regular request approval flow
+                    // Update equipment status
+                    DB::table('equipment')->where('id', $equipmentRequest->equipment_id)->update([
+                        'status' => 'borrowed',
+                        'updated_at' => now(),
+                    ]);
+
+                    // Create transaction record with unique transaction number
+                    $transactionNumber = $this->generateUniqueTransactionNumber();
+                    
+                    DB::table('transactions')->insert([
+                        'transaction_number' => $transactionNumber,
+                        'user_id' => Auth::id(), // Use currently authenticated user's ID
+                        'employee_id' => $equipmentRequest->employee_id,
+                        'equipment_id' => $equipmentRequest->equipment_id,
+                        'request_id' => $id,
+                        'status' => 'pending', // Will be changed to 'released' when equipment is actually released
+                        'request_mode' => $equipmentRequest->request_mode,
+                        'expected_return_date' => $equipmentRequest->expected_end_date,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
+                
+                // Update request status (for both exchange and regular requests)
                 DB::table('requests')->where('id', $id)->update([
                     'status' => 'approved',
                     'approved_by' => Auth::id(), // Use currently authenticated user's ID
                     'approved_at' => now(),
                     'approval_notes' => $validated['approval_notes'] ?? null,
-                    'updated_at' => now(),
-                ]);
-
-                // Update equipment status
-                DB::table('equipment')->where('id', $equipmentRequest->equipment_id)->update([
-                    'status' => 'borrowed',
-                    'updated_at' => now(),
-                ]);
-
-                // Create transaction record with unique transaction number
-                $transactionNumber = $this->generateUniqueTransactionNumber();
-                
-                DB::table('transactions')->insert([
-                    'transaction_number' => $transactionNumber,
-                    'user_id' => Auth::id(), // Use currently authenticated user's ID
-                    'employee_id' => $equipmentRequest->employee_id,
-                    'equipment_id' => $equipmentRequest->equipment_id,
-                    'request_id' => $id,
-                    'status' => 'pending', // Will be changed to 'released' when equipment is actually released
-                    'request_mode' => $equipmentRequest->request_mode,
-                    'expected_return_date' => $equipmentRequest->expected_end_date,
-                    'created_at' => now(),
                     'updated_at' => now(),
                 ]);
             });

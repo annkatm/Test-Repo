@@ -574,10 +574,10 @@ const EmployeePage = () => {
       if (equipment.all_items && Array.isArray(equipment.all_items)) {
         actualEquipment = equipment.all_items.find(item => item.serial_number === serialNumber);
       }
-      
+
       // If not found in all_items, search in availableEquipment
       if (!actualEquipment) {
-        actualEquipment = availableEquipment.find(eq => 
+        actualEquipment = availableEquipment.find(eq =>
           eq.serial_number === serialNumber &&
           eq.brand === equipment.brand &&
           eq.specifications === equipment.specifications
@@ -695,7 +695,7 @@ const EmployeePage = () => {
     // Convert dropdown IDs to names for display
     const positionName = form.position ? getLabelFromValue(form.position, dropdownOptions.positions) : (form.position || 'N/A');
     const departmentName = form.department ? getLabelFromValue(form.department, dropdownOptions.departments) : (form.department || 'N/A');
-    
+
     // Use flatMap to create separate items for each serial number
     const printData = {
       full_name: `${form.firstName} ${form.lastName}`.trim(),
@@ -711,13 +711,13 @@ const EmployeePage = () => {
         // Match by brand and specifications (normalize for comparison)
         const normalizedBrand = (eq.brand || eq.name || '').trim();
         const normalizedSpecs = (eq.specifications || '').trim();
-        
+
         const equipmentType = availableEquipment.filter(availEq => {
           const availBrand = (availEq.brand || availEq.name || '').trim();
           const availSpecs = (availEq.specifications || '').trim();
           return availBrand === normalizedBrand && availSpecs === normalizedSpecs;
         });
-        
+
         // Get all unique serial numbers from this equipment type
         const allAvailableSerials = equipmentType
           .map(availEq => availEq.serial_number)
@@ -735,15 +735,15 @@ const EmployeePage = () => {
             const groupSpecs = (grouped.specifications || '').trim();
             return groupBrand === normalizedBrand && groupSpecs === normalizedSpecs;
           });
-          
+
           if (groupedEquipment && groupedEquipment.serial_numbers && groupedEquipment.serial_numbers.length > 0) {
             groupedSerials = groupedEquipment.serial_numbers.filter(serial => serial && serial.trim() !== '');
           }
         }
 
         // Use grouped serials if available (more complete), otherwise use filtered available equipment
-        const availableSerialNumbers = groupedSerials.length > 0 
-          ? groupedSerials 
+        const availableSerialNumbers = groupedSerials.length > 0
+          ? groupedSerials
           : (allAvailableSerials.length > 0 ? allAvailableSerials : serialNumbers);
 
         // Create a separate item for each serial number
@@ -1123,7 +1123,7 @@ const EmployeePage = () => {
               color: getBadgeColor(form.firstName)
             });
           }
-          
+
           closeEdit();
           refreshEmployees();
           // Reload available equipment to reflect issued items
@@ -1192,39 +1192,39 @@ const EmployeePage = () => {
           showTitle={true}
         />
 
-        <div className="bg-white px-8 py-4 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="relative">
+        <div className="bg-white px-4 md:px-6 lg:px-8 py-4 border-b border-gray-200">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 flex-1">
+              <div className="relative flex-1 sm:flex-initial">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <input
                   type="text"
                   placeholder="Search"
                   value={searchTerm}
                   onChange={(e) => handleSearchChange(e.target.value)}
-                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-80"
+                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full sm:w-64 md:w-80"
                 />
               </div>
               <EmployeeFilter
                 selectedFilters={filters}
                 onFilterChange={handleFilterChange}
-                className="min-w-[120px]"
+                className="min-w-[120px] w-full sm:w-auto"
               />
             </div>
             <button
               onClick={() => setIsAddOpen(true)}
-              className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors whitespace-nowrap"
             >
               Add New
             </button>
           </div>
         </div>
 
-        <div className="flex-1 bg-white px-8 py-6 overflow-y-auto">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-gray-800">Employees</h2>
+        <div className="flex-1 bg-white px-4 md:px-6 lg:px-8 py-4 md:py-6 overflow-y-auto">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
+            <h2 className="text-lg md:text-xl font-semibold text-gray-800">Employees</h2>
             {Object.keys(filters).length > 0 && (
-              <div className="flex items-center space-x-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm text-gray-600">
                   {filteredEmployees.length} of {employees.length} employees
                 </span>
@@ -1240,14 +1240,14 @@ const EmployeePage = () => {
           </div>
 
           <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
-              <div className="grid grid-cols-12 gap-4 text-sm font-medium text-gray-600">
-                <div className="col-span-3">Name</div>
-                <div className="col-span-2">Client</div>
-                <div className="col-span-2">Position</div>
-                <div className="col-span-2">Employee Type</div>
-                <div className="col-span-1">Department</div>
-                <div className="col-span-2 text-center">Actions</div>
+            <div className="bg-gray-50 px-4 md:px-6 py-4 border-b border-gray-200">
+              <div className="grid grid-cols-12 gap-2 md:gap-4 text-xs md:text-sm font-medium text-gray-600">
+                <div className="col-span-4 md:col-span-3">Name</div>
+                <div className="col-span-2 hidden md:block">Client</div>
+                <div className="col-span-2 hidden lg:block">Position</div>
+                <div className="col-span-2 hidden lg:block">Employee Type</div>
+                <div className="col-span-1 hidden xl:block">Department</div>
+                <div className="col-span-4 md:col-span-2 text-center">Actions</div>
               </div>
             </div>
 
@@ -1255,28 +1255,28 @@ const EmployeePage = () => {
               {employees.length === 0 && !filteredEmployees.length ? (
                 <>
                   {[...Array(5)].map((_, index) => (
-                    <div key={index} className="px-6 py-4 animate-pulse">
-                      <div className="grid grid-cols-12 gap-4 items-center">
-                        <div className="col-span-3 flex items-center space-x-3">
+                    <div key={index} className="px-4 md:px-6 py-4 animate-pulse">
+                      <div className="grid grid-cols-12 gap-2 md:gap-4 items-center">
+                        <div className="col-span-4 md:col-span-3 flex items-center space-x-3">
                           <div className="w-8 h-8 bg-gray-200 rounded-full"></div>
                           <div className="flex flex-col space-y-2">
                             <div className="h-4 bg-gray-200 rounded w-32"></div>
                             <div className="h-3 bg-gray-200 rounded w-24"></div>
                           </div>
                         </div>
-                        <div className="col-span-2">
+                        <div className="col-span-2 hidden md:block">
                           <div className="h-4 bg-gray-200 rounded w-24"></div>
                         </div>
-                        <div className="col-span-2">
+                        <div className="col-span-2 hidden lg:block">
                           <div className="h-4 bg-gray-200 rounded w-28"></div>
                         </div>
-                        <div className="col-span-2">
+                        <div className="col-span-2 hidden lg:block">
                           <div className="h-4 bg-gray-200 rounded w-20"></div>
                         </div>
-                        <div className="col-span-1">
+                        <div className="col-span-1 hidden xl:block">
                           <div className="h-4 bg-gray-200 rounded w-16"></div>
                         </div>
-                        <div className="col-span-2 flex items-center justify-center space-x-3">
+                        <div className="col-span-4 md:col-span-2 flex items-center justify-center space-x-3">
                           <div className="h-8 w-8 bg-gray-200 rounded"></div>
                           <div className="h-8 w-8 bg-gray-200 rounded"></div>
                           <div className="h-8 w-8 bg-gray-200 rounded"></div>
@@ -1289,41 +1289,47 @@ const EmployeePage = () => {
                 <div className="py-8 text-center text-gray-500">No employees found.</div>
               ) : (
                 filteredEmployees.map((e) => (
-                  <div key={e.id} className="px-6 py-4 hover:bg-blue-50 transition-colors">
-                    <div className="grid grid-cols-12 gap-4 items-center">
-                      <div className="col-span-3 flex items-center space-x-3">
-                        <div className={`w-8 h-8 ${e.color} rounded-full text-white text-sm flex items-center justify-center font-medium`}>
+                  <div key={e.id} className="px-4 md:px-6 py-4 hover:bg-blue-50 transition-colors">
+                    <div className="grid grid-cols-12 gap-2 md:gap-4 items-center">
+                      <div className="col-span-4 md:col-span-3 flex items-center space-x-3 min-w-0">
+                        <div className={`w-8 h-8 ${e.color} rounded-full text-white text-sm flex items-center justify-center font-medium flex-shrink-0`}>
                           {e.badge}
                         </div>
-                        <div className="flex flex-col">
-                          <span className="text-gray-900 font-medium">{e.name}</span>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-gray-900 font-medium truncate">{e.name}</span>
                           {e.user && (
-                            <span className="text-xs text-green-600 font-medium">
+                            <span className="text-xs text-green-600 font-medium truncate">
                               ✓ Connected to {e.user.name}
                             </span>
                           )}
+                          <div className="md:hidden text-xs text-gray-500 mt-1">
+                            {e.client} • {e.position}
+                          </div>
                         </div>
                       </div>
-                      <div className="col-span-2 text-gray-600">{e.client}</div>
-                      <div className="col-span-2 text-gray-600">{e.position}</div>
-                      <div className="col-span-2 text-gray-600">{e.employeeType}</div>
-                      <div className="col-span-1 text-gray-600">{e.department}</div>
-                      <div className="col-span-2 flex items-center justify-center space-x-3">
+                      <div className="col-span-2 hidden md:block text-gray-600 truncate">{e.client}</div>
+                      <div className="col-span-2 hidden lg:block text-gray-600 truncate">{e.position}</div>
+                      <div className="col-span-2 hidden lg:block text-gray-600 truncate">{e.employeeType}</div>
+                      <div className="col-span-1 hidden xl:block text-gray-600 truncate">{e.department}</div>
+                      <div className="col-span-4 md:col-span-2 flex items-center justify-center space-x-3">
                         <button
                           onClick={() => openView(e)}
                           className="text-gray-400 hover:text-blue-500 transition-colors"
+                          title="View"
                         >
                           <Eye className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => openEdit(e)}
                           className="text-gray-400 hover:text-blue-500 transition-colors"
+                          title="Edit"
                         >
                           <Pencil className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => openDelete(e)}
                           className="text-gray-400 hover:text-red-500 transition-colors"
+                          title="Delete"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -1338,13 +1344,13 @@ const EmployeePage = () => {
 
         {/* View Modal */}
         {viewing && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/20" onClick={closeView} />
-            <div className="relative bg-white rounded-3xl shadow-2xl w-[600px] max-w-[95vw] max-h-[90vh] overflow-y-auto p-6 border border-gray-200">
+            <div className="relative bg-white rounded-2xl md:rounded-3xl shadow-2xl w-full sm:w-[90%] md:w-[600px] lg:w-[700px] max-w-[95vw] max-h-[90vh] overflow-y-auto p-4 md:p-6 border border-gray-200">
               <button onClick={closeView} className="sticky top-0 float-right text-gray-400 hover:text-gray-600 text-xl z-10 bg-white rounded-full w-8 h-8 flex items-center justify-center -mt-2 -mr-2 mb-2">✕</button>
-              <h3 className="text-2xl font-semibold text-blue-600 mb-8">Employee Details</h3>
+              <h3 className="text-xl md:text-2xl font-semibold text-blue-600 mb-6 md:mb-8">Employee Details</h3>
 
-              <div className="grid grid-cols-2 gap-6 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-6">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-2">First Name</label>
                   <div className="bg-gray-100 rounded-lg p-3 text-gray-900 w-full">
@@ -1433,9 +1439,9 @@ const EmployeePage = () => {
                     </label>
                     <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
                       <div className="bg-gray-100 px-4 py-3 border-b border-gray-300">
-                        <div className="grid grid-cols-2 gap-4 text-sm font-bold text-gray-800">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs md:text-sm font-bold text-gray-800">
                           <div>Equipment</div>
-                          <div>Serial Number</div>
+                          <div className="hidden sm:block">Serial Number</div>
                         </div>
                       </div>
                       <div className="max-h-60 overflow-y-auto">
@@ -1443,7 +1449,7 @@ const EmployeePage = () => {
                           {viewing.issuedEquipment && viewing.issuedEquipment.length > 0 ? (
                             viewing.issuedEquipment.map((item, index) => (
                               <div key={index} className="px-4 py-3 hover:bg-gray-50">
-                                <div className="grid grid-cols-2 gap-4 items-center">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
                                   <div className="text-blue-600 font-medium">
                                     {item.name || item.brand || 'N/A'}
                                   </div>
@@ -1471,13 +1477,13 @@ const EmployeePage = () => {
 
         {/* Add Modal */}
         {isAddOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/20" onClick={closeModal} />
-            <div className="relative bg-white rounded-2xl shadow-2xl w-[600px] max-w-[95vw] max-h-[70vh] overflow-y-auto modal-scrollbar p-6 border border-gray-200">
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full sm:w-[90%] md:w-[600px] lg:w-[700px] max-w-[95vw] max-h-[85vh] md:max-h-[70vh] overflow-y-auto modal-scrollbar p-4 md:p-6 border border-gray-200">
               <button onClick={closeModal} className="sticky top-0 float-right text-gray-400 hover:text-gray-600 text-xl z-10 bg-white rounded-full w-8 h-8 flex items-center justify-center -mt-2 -mr-2 mb-2">✕</button>
-              <h3 className="text-xl font-semibold text-blue-500 text-center mb-8">Add employee</h3>
+              <h3 className="text-lg md:text-xl font-semibold text-blue-500 text-center mb-6 md:mb-8">Add employee</h3>
 
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                 {/* LEFT SIDE - Z-pattern: 1, 3, 5, 7, 9 */}
                 <div className="space-y-6">
                   <ValidatedInput
@@ -1584,98 +1590,98 @@ const EmployeePage = () => {
                 const employeeTypeName = getLabelFromValue(form.employeeType, dropdownOptions.employeeTypes);
                 return (employeeTypeName === 'New hire' || employeeTypeName === 'Probationary');
               })() && (
-                <div className="mt-6 mb-6">
-                  <div className="space-y-4">
-                    <label className="block text-sm text-gray-700 font-medium mb-2">
-                      Issued Item
-                    </label>
-                    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                      <div className="bg-gray-100 px-4 py-3 border-b border-gray-300">
-                        <div className="grid grid-cols-2 gap-4 text-sm font-bold text-gray-800">
-                          <div>Equipment</div>
-                          <div>Serial Number</div>
+                  <div className="mt-6 mb-6">
+                    <div className="space-y-4">
+                      <label className="block text-sm text-gray-700 font-medium mb-2">
+                        Issued Item
+                      </label>
+                      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                        <div className="bg-gray-100 px-4 py-3 border-b border-gray-300">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs md:text-sm font-bold text-gray-800">
+                            <div>Equipment</div>
+                            <div className="hidden sm:block">Serial Number</div>
+                          </div>
                         </div>
-                      </div>
-                      <div className="max-h-60 overflow-y-auto">
-                        <div className="divide-y divide-gray-200">
-                          {issuedEquipment.length === 0 ? (
-                            <div className="px-4 py-6 text-center text-gray-400 text-sm">
-                              No equipment issued yet. Click "Add New" to assign equipment.
-                            </div>
-                          ) : (
-                            issuedEquipment.map((equipment, index) => (
-                              <div key={equipment.specKey || equipment.id || index} className="px-4 py-3 hover:bg-gray-50 transition-colors">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center space-x-3 flex-1">
-                                    {/* Equipment Image */}
-                                    {equipment.item_image ? (
-                                      <img
-                                        src={`/storage/${equipment.item_image}`}
-                                        alt={equipment.name}
-                                        className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
-                                      />
-                                    ) : (
-                                      <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-                                        <span className="text-gray-400 text-xs">No img</span>
-                                      </div>
-                                    )}
-                                    <div className="min-w-0 flex-1">
-                                      <h5 className="text-blue-600 font-medium text-sm truncate">
-                                        {equipment.name || equipment.brand}
-                                      </h5>
-                                      <p className="text-gray-600 text-xs mt-1">
-                                        <span className="font-mono font-medium">{equipment.serial_number || 'N/A'}</span>
-                                      </p>
-                                      {equipment.specifications && (
-                                        <p className="text-gray-500 text-xs leading-tight mt-0.5">
-                                          {equipment.specifications}
-                                        </p>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => removeEquipmentFromIssued(equipment)}
-                                    className="ml-4 text-red-500 hover:text-red-700 text-xs font-medium flex-shrink-0 px-2 py-1 rounded hover:bg-red-50"
-                                  >
-                                    Remove
-                                  </button>
-                                </div>
+                        <div className="max-h-60 overflow-y-auto">
+                          <div className="divide-y divide-gray-200">
+                            {issuedEquipment.length === 0 ? (
+                              <div className="px-4 py-6 text-center text-gray-400 text-xs md:text-sm">
+                                No equipment issued yet. Click "Add New" to assign equipment.
                               </div>
-                            ))
-                          )}
+                            ) : (
+                              issuedEquipment.map((equipment, index) => (
+                                <div key={equipment.specKey || equipment.id || index} className="px-4 py-3 hover:bg-gray-50 transition-colors">
+                                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                                    <div className="flex items-center space-x-3 flex-1 min-w-0">
+                                      {/* Equipment Image */}
+                                      {equipment.item_image ? (
+                                        <img
+                                          src={`/storage/${equipment.item_image}`}
+                                          alt={equipment.name}
+                                          className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
+                                        />
+                                      ) : (
+                                        <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                          <span className="text-gray-400 text-xs">No img</span>
+                                        </div>
+                                      )}
+                                      <div className="min-w-0 flex-1">
+                                        <h5 className="text-blue-600 font-medium text-sm truncate">
+                                          {equipment.name || equipment.brand}
+                                        </h5>
+                                        <p className="text-gray-600 text-xs mt-1">
+                                          <span className="font-mono font-medium">{equipment.serial_number || 'N/A'}</span>
+                                        </p>
+                                        {equipment.specifications && (
+                                          <p className="text-gray-500 text-xs leading-tight mt-0.5">
+                                            {equipment.specifications}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => removeEquipmentFromIssued(equipment)}
+                                      className="sm:ml-4 text-red-500 hover:text-red-700 text-xs font-medium flex-shrink-0 px-2 py-1 rounded hover:bg-red-50 self-start sm:self-center"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </div>
                         </div>
-                      </div>
-                      <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
-                        <button
-                          type="button"
-                          onClick={openEquipmentModal}
-                          className="px-4 py-2 bg-blue-500 border border-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
-                          tabIndex={10}
-                        >
-                          Add New
-                        </button>
-                        <button
-                          type="button"
-                          onClick={openPrintModal}
-                          disabled={issuedEquipment.length === 0}
-                          className={`p-2 rounded transition-colors ${issuedEquipment.length === 0
+                        <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                          <button
+                            type="button"
+                            onClick={openEquipmentModal}
+                            className="px-4 py-2 bg-blue-500 border border-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
+                            tabIndex={10}
+                          >
+                            Add New
+                          </button>
+                          <button
+                            type="button"
+                            onClick={openPrintModal}
+                            disabled={issuedEquipment.length === 0}
+                            className={`p-2 rounded transition-colors ${issuedEquipment.length === 0
                               ? 'text-gray-300 cursor-not-allowed'
                               : 'text-gray-600 hover:text-gray-800'
-                            }`}
-                          title={issuedEquipment.length === 0 ? 'No equipment selected' : 'Print'}
-                        >
-                          <Printer className="h-4 w-4" />
-                        </button>
+                              }`}
+                            title={issuedEquipment.length === 0 ? 'No equipment selected' : 'Print'}
+                          >
+                            <Printer className="h-4 w-4" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              <div className="mt-8 flex items-center justify-between">
-                <button onClick={resetAll} className="text-blue-500 hover:text-blue-600 font-medium" tabIndex={12}>Reset all</button>
-                <button onClick={saveEmployee} className="px-8 py-3 rounded-full bg-blue-500 text-white hover:bg-blue-600 font-medium transition-colors" tabIndex={11}>Save →</button>
+              <div className="mt-6 md:mt-8 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                <button onClick={resetAll} className="text-blue-500 hover:text-blue-600 font-medium order-2 sm:order-1" tabIndex={12}>Reset all</button>
+                <button onClick={saveEmployee} className="px-6 md:px-8 py-2 md:py-3 rounded-full bg-blue-500 text-white hover:bg-blue-600 font-medium transition-colors order-1 sm:order-2" tabIndex={11}>Save →</button>
               </div>
             </div>
           </div>
@@ -1683,12 +1689,12 @@ const EmployeePage = () => {
 
         {/* Edit Modal */}
         {editing && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/20" onClick={closeEdit} />
-            <div className="relative bg-white rounded-2xl shadow-2xl w-[600px] max-w-[95vw] max-h-[70vh] overflow-y-auto modal-scrollbar p-6 border border-gray-200">
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full sm:w-[90%] md:w-[600px] lg:w-[700px] max-w-[95vw] max-h-[85vh] md:max-h-[70vh] overflow-y-auto modal-scrollbar p-4 md:p-6 border border-gray-200">
               <button onClick={closeEdit} className="sticky top-0 float-right text-gray-400 hover:text-gray-600 text-xl z-10 bg-white rounded-full w-8 h-8 flex items-center justify-center -mt-2 -mr-2 mb-2">✕</button>
-              <h3 className="text-xl font-semibold text-blue-500 text-center mb-8">Edit employee</h3>
-              <div className="grid grid-cols-2 gap-6">
+              <h3 className="text-lg md:text-xl font-semibold text-blue-500 text-center mb-6 md:mb-8">Edit employee</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                 {/* LEFT SIDE - Z-pattern: 1, 3, 5, 7, 9 */}
                 <div className="space-y-6">
                   <ValidatedInput
@@ -1795,98 +1801,98 @@ const EmployeePage = () => {
                 const employeeTypeName = getLabelFromValue(form.employeeType, dropdownOptions.employeeTypes);
                 return (employeeTypeName === 'New hire' || employeeTypeName === 'Probationary');
               })() && (
-                <div className="mt-6">
-                  <div className="space-y-4">
-                    <label className="block text-sm text-gray-700 font-medium mb-2">
-                      Issued Item
-                    </label>
-                    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                      <div className="bg-gray-100 px-4 py-3 border-b border-gray-300">
-                        <div className="grid grid-cols-2 gap-4 text-sm font-bold text-gray-800">
-                          <div>Equipment</div>
-                          <div>Serial Number</div>
+                  <div className="mt-6">
+                    <div className="space-y-4">
+                      <label className="block text-sm text-gray-700 font-medium mb-2">
+                        Issued Item
+                      </label>
+                      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                        <div className="bg-gray-100 px-4 py-3 border-b border-gray-300">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs md:text-sm font-bold text-gray-800">
+                            <div>Equipment</div>
+                            <div className="hidden sm:block">Serial Number</div>
+                          </div>
                         </div>
-                      </div>
-                      <div className="max-h-60 overflow-y-auto">
-                        <div className="divide-y divide-gray-200">
-                          {issuedEquipment.length === 0 ? (
-                            <div className="px-4 py-6 text-center text-gray-400 text-sm">
-                              No equipment issued yet. Click "Add New" to assign equipment.
-                            </div>
-                          ) : (
-                            issuedEquipment.map((equipment, index) => (
-                              <div key={equipment.specKey || equipment.id || index} className="px-4 py-3 hover:bg-gray-50 transition-colors">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center space-x-3 flex-1">
-                                    {/* Equipment Image */}
-                                    {equipment.item_image ? (
-                                      <img
-                                        src={`/storage/${equipment.item_image}`}
-                                        alt={equipment.name}
-                                        className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
-                                      />
-                                    ) : (
-                                      <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-                                        <span className="text-gray-400 text-xs">No img</span>
-                                      </div>
-                                    )}
-                                    <div className="min-w-0 flex-1">
-                                      <h5 className="text-blue-600 font-medium text-sm truncate">
-                                        {equipment.name || equipment.brand}
-                                      </h5>
-                                      <p className="text-gray-600 text-xs mt-1">
-                                        <span className="font-mono font-medium">{equipment.serial_number || 'N/A'}</span>
-                                      </p>
-                                      {equipment.specifications && (
-                                        <p className="text-gray-500 text-xs leading-tight mt-0.5">
-                                          {equipment.specifications}
-                                        </p>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => removeEquipmentFromIssued(equipment)}
-                                    className="ml-4 text-red-500 hover:text-red-700 text-xs font-medium flex-shrink-0 px-2 py-1 rounded hover:bg-red-50"
-                                  >
-                                    Remove
-                                  </button>
-                                </div>
+                        <div className="max-h-60 overflow-y-auto">
+                          <div className="divide-y divide-gray-200">
+                            {issuedEquipment.length === 0 ? (
+                              <div className="px-4 py-6 text-center text-gray-400 text-xs md:text-sm">
+                                No equipment issued yet. Click "Add New" to assign equipment.
                               </div>
-                            ))
-                          )}
+                            ) : (
+                              issuedEquipment.map((equipment, index) => (
+                                <div key={equipment.specKey || equipment.id || index} className="px-4 py-3 hover:bg-gray-50 transition-colors">
+                                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                                    <div className="flex items-center space-x-3 flex-1 min-w-0">
+                                      {/* Equipment Image */}
+                                      {equipment.item_image ? (
+                                        <img
+                                          src={`/storage/${equipment.item_image}`}
+                                          alt={equipment.name}
+                                          className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
+                                        />
+                                      ) : (
+                                        <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                          <span className="text-gray-400 text-xs">No img</span>
+                                        </div>
+                                      )}
+                                      <div className="min-w-0 flex-1">
+                                        <h5 className="text-blue-600 font-medium text-sm truncate">
+                                          {equipment.name || equipment.brand}
+                                        </h5>
+                                        <p className="text-gray-600 text-xs mt-1">
+                                          <span className="font-mono font-medium">{equipment.serial_number || 'N/A'}</span>
+                                        </p>
+                                        {equipment.specifications && (
+                                          <p className="text-gray-500 text-xs leading-tight mt-0.5">
+                                            {equipment.specifications}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => removeEquipmentFromIssued(equipment)}
+                                      className="sm:ml-4 text-red-500 hover:text-red-700 text-xs font-medium flex-shrink-0 px-2 py-1 rounded hover:bg-red-50 self-start sm:self-center"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </div>
                         </div>
-                      </div>
-                      <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
-                        <button
-                          type="button"
-                          onClick={openEquipmentModal}
-                          className="px-4 py-2 bg-blue-500 border border-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
-                          tabIndex={10}
-                        >
-                          Add New
-                        </button>
-                        <button
-                          type="button"
-                          onClick={openPrintModal}
-                          disabled={issuedEquipment.length === 0}
-                          className={`p-2 rounded transition-colors ${issuedEquipment.length === 0
+                        <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                          <button
+                            type="button"
+                            onClick={openEquipmentModal}
+                            className="px-4 py-2 bg-blue-500 border border-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
+                            tabIndex={10}
+                          >
+                            Add New
+                          </button>
+                          <button
+                            type="button"
+                            onClick={openPrintModal}
+                            disabled={issuedEquipment.length === 0}
+                            className={`p-2 rounded transition-colors ${issuedEquipment.length === 0
                               ? 'text-gray-300 cursor-not-allowed'
                               : 'text-gray-600 hover:text-gray-800'
-                            }`}
-                          title={issuedEquipment.length === 0 ? 'No equipment selected' : 'Print'}
-                        >
-                          <Printer className="h-4 w-4" />
-                        </button>
+                              }`}
+                            title={issuedEquipment.length === 0 ? 'No equipment selected' : 'Print'}
+                          >
+                            <Printer className="h-4 w-4" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              <div className="mt-8 flex items-center justify-between">
-                <button onClick={resetAll} className="text-blue-500 hover:text-blue-600 font-medium" tabIndex={12}>Reset</button>
-                <button onClick={updateEmployee} className="px-8 py-3 rounded-full bg-blue-500 text-white hover:bg-blue-600 font-medium transition-colors" tabIndex={11}>Update →</button>
+              <div className="mt-6 md:mt-8 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                <button onClick={resetAll} className="text-blue-500 hover:text-blue-600 font-medium order-2 sm:order-1" tabIndex={12}>Reset</button>
+                <button onClick={updateEmployee} className="px-6 md:px-8 py-2 md:py-3 rounded-full bg-blue-500 text-white hover:bg-blue-600 font-medium transition-colors order-1 sm:order-2" tabIndex={11}>Update →</button>
               </div>
             </div>
           </div>
@@ -1894,9 +1900,9 @@ const EmployeePage = () => {
 
         {/* Delete Modal */}
         {deleting && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/50" onClick={closeDelete} />
-            <div className="relative bg-white rounded-2xl shadow-2xl w-[400px] max-w-[95vw] p-6 border border-gray-200">
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full sm:w-[400px] max-w-[95vw] p-4 md:p-6 border border-gray-200">
               <div className="text-center">
                 <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
                   <Trash2 className="h-6 w-6 text-red-600" />
@@ -1929,14 +1935,14 @@ const EmployeePage = () => {
 
         {/* Equipment Selection Modal */}
         {isEquipmentModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/30" onClick={closeEquipmentModal} />
-            <div className="relative bg-white rounded-2xl shadow-2xl w-[900px] max-w-[95vw] max-h-[90vh] overflow-hidden border border-gray-200">
+            <div className="relative bg-white rounded-2xl shadow-2xl w-full sm:w-[95%] md:w-[800px] lg:w-[900px] max-w-[95vw] max-h-[90vh] overflow-hidden border border-gray-200">
               {/* Header */}
-              <div className="p-6 border-b border-gray-200">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-2xl font-bold text-gray-800">Select Equipment</h3>
-                  <div className="flex items-center space-x-2">
+              <div className="p-4 md:p-6 border-b border-gray-200">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 md:mb-6 gap-4">
+                  <h3 className="text-xl md:text-2xl font-bold text-gray-800">Select Equipment</h3>
+                  <div className="flex items-center space-x-2 w-full sm:w-auto">
                     <button
                       onClick={() => setViewMode('grid')}
                       className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${viewMode === 'grid'
@@ -1966,13 +1972,13 @@ const EmployeePage = () => {
                     placeholder="Search"
                     value={equipmentSearchTerm}
                     onChange={(e) => setEquipmentSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full pl-10 pr-4 py-2 md:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm md:text-base"
                     tabIndex={1}
                   />
                 </div>
 
                 {/* Category Filters */}
-                <div className="flex items-center space-x-3 flex-wrap">
+                <div className="flex items-center space-x-2 md:space-x-3 flex-wrap gap-2">
                   <button
                     onClick={() => setSelectedCategory('all')}
                     className={`px-4 py-2 rounded-full text-sm font-medium transition-colors mb-2 ${selectedCategory === 'all'
@@ -1998,9 +2004,9 @@ const EmployeePage = () => {
               </div>
 
               {/* Equipment Display */}
-              <div className="p-6 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 300px)' }}>
+              <div className="p-4 md:p-6 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 300px)' }}>
                 {viewMode === 'grid' ? (
-                  <div className="grid grid-cols-4 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
                     {getUniqueEquipment()
                       .filter(eq => {
                         if (!eq) return false;
@@ -2029,97 +2035,115 @@ const EmployeePage = () => {
                         const availability = getEquipmentAvailability(equipment);
                         const isExpanded = expandedEquipment.has(specKey);
                         const serialNumbers = equipment.serial_numbers || [];
+                        const isAdded = issuedEquipment.find(eq => eq.specKey === specKey);
 
                         return (
                           <div
                             key={specKey}
-                            className="bg-white border-2 rounded-xl p-4 transition-all hover:shadow-lg border-gray-200 hover:border-blue-300"
+                            onClick={() => {
+                              if (availability > 0 && !isAdded) {
+                                addEquipmentToIssued(equipment);
+                              } else if (isAdded) {
+                                removeEquipmentFromIssued(equipment);
+                              }
+                            }}
+                            className={`bg-white border-2 rounded-xl overflow-hidden transition-all relative cursor-pointer ${
+                              isAdded 
+                                ? 'border-blue-500 bg-blue-50 shadow-[0_0_20px_rgba(59,130,246,0.5)] hover:shadow-[0_0_25px_rgba(59,130,246,0.6)]' 
+                                : 'border-gray-200 hover:border-blue-300 hover:shadow-lg'
+                            }`}
+                            style={isAdded ? {
+                              boxShadow: '0 0 20px rgba(59, 130, 246, 0.5), 0 0 40px rgba(59, 130, 246, 0.3)',
+                            } : {}}
                           >
-                            {/* Equipment Image */}
-                            <div className="mb-4">
-                              {equipment.item_image ? (
-                                <img
-                                  src={`/storage/${equipment.item_image}`}
-                                  alt={equipment.name}
-                                  className="w-full h-32 rounded-lg object-cover"
-                                />
-                              ) : (
-                                <div className="w-full h-32 rounded-lg bg-gray-100 flex items-center justify-center">
-                                  <span className="text-gray-400 text-sm">No Image</span>
-                                </div>
-                              )}
+                            <div className="p-4">
+                              {/* Equipment Image */}
+                              <div className="mb-4">
+                                {equipment.item_image ? (
+                                  <img
+                                    src={`/storage/${equipment.item_image}`}
+                                    alt={equipment.name}
+                                    className="w-full h-32 rounded-lg object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-full h-32 rounded-lg bg-gray-100 flex items-center justify-center">
+                                    <span className="text-gray-400 text-sm">No Image</span>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Equipment Details */}
+                              <div className="space-y-2">
+                                <h4 className="font-semibold text-gray-900 text-sm truncate">
+                                  {equipment.brand || equipment.name}
+                                </h4>
+                                <p className="text-xs text-gray-600">
+                                  Available: {availability} / {equipment.available_count}
+                                </p>
+                              </div>
+
+                              {/* Show Button */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleEquipmentExpansion(specKey);
+                                }}
+                                className="w-full mt-4 py-2 rounded-lg font-medium text-sm transition-colors bg-blue-500 text-white hover:bg-blue-600"
+                              >
+                                Show
+                              </button>
                             </div>
 
-                            {/* Equipment Details */}
-                            <div className="space-y-2">
-                              <h4 className="font-semibold text-gray-900 text-sm truncate">
-                                {equipment.brand || equipment.name}
-                              </h4>
-                              <p className="text-xs text-gray-600">
-                                Available: {availability} / {equipment.available_count}
-                              </p>
-                            </div>
-
-                            {/* Expand/Collapse Button */}
-                            <button
-                              onClick={() => toggleEquipmentExpansion(specKey)}
-                              className="w-full mt-4 py-2 rounded-lg font-medium text-sm transition-colors bg-blue-500 text-white hover:bg-blue-600 flex items-center justify-center gap-2"
-                            >
-                              {isExpanded ? '▼ Hide Units' : '▶ Show Units'}
-                            </button>
-
-                            {/* Serial Numbers List */}
+                            {/* Slide Up Details Panel */}
                             {isExpanded && (
-                              <div className="mt-3 border-t pt-3">
-                                {/* Select All / Deselect All Buttons */}
-                                <div className="flex gap-2 mb-2">
+                              <div 
+                                className="absolute bottom-0 left-0 right-0 bg-blue-50 border-t-2 border-blue-200 rounded-t-2xl shadow-lg"
+                                style={{
+                                  animation: 'slideUpInCard 0.3s ease-out',
+                                  maxHeight: '200px',
+                                  overflowY: 'auto'
+                                }}
+                              >
+                                <style jsx>{`
+                                  @keyframes slideUpInCard {
+                                    from {
+                                      transform: translateY(100%);
+                                      opacity: 0;
+                                    }
+                                    to {
+                                      transform: translateY(0);
+                                      opacity: 1;
+                                    }
+                                  }
+                                `}</style>
+                                
+                                <div className="p-4">
+                                  {/* Close button */}
                                   <button
-                                    onClick={() => {
-                                      serialNumbers.forEach(serial => {
-                                        if (!isSerialSelected(equipment, serial)) {
-                                          addEquipmentToIssued(equipment, serial);
-                                        }
-                                      });
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleEquipmentExpansion(specKey);
                                     }}
-                                    className="flex-1 px-2 py-1 bg-blue-500 text-white rounded text-xs font-medium hover:bg-blue-600"
+                                    className="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
                                   >
-                                    Select All
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
                                   </button>
-                                  <button
-                                    onClick={() => {
-                                      serialNumbers.forEach(serial => {
-                                        const unitKey = `${equipment.brand || equipment.name}-${equipment.specifications}-${serial}`;
-                                        removeEquipmentFromIssued({ unitKey });
-                                      });
-                                    }}
-                                    className="flex-1 px-2 py-1 bg-gray-500 text-white rounded text-xs font-medium hover:bg-gray-600"
-                                  >
-                                    Deselect All
-                                  </button>
-                                </div>
 
-                                {/* Individual Serial Numbers */}
-                                <div className="space-y-2 max-h-48 overflow-y-auto">
-                                  {serialNumbers.map((serial, idx) => {
-                                    const isSelected = isSerialSelected(equipment, serial);
-                                    return (
-                                      <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                                        <span className="text-xs font-mono">{serial}</span>
-                                        <button
-                                          onClick={() => isSelected
-                                            ? removeEquipmentFromIssued({ unitKey: `${equipment.brand || equipment.name}-${equipment.specifications}-${serial}` })
-                                            : addEquipmentToIssued(equipment, serial)
-                                          }
-                                          className={`px-3 py-1 rounded text-xs font-medium ${isSelected
-                                            ? 'bg-red-500 text-white hover:bg-red-600'
-                                            : 'bg-green-500 text-white hover:bg-green-600'
-                                            }`}
-                                        >
-                                          {isSelected ? 'Remove' : 'Add'}
-                                        </button>
-                                      </div>
-                                    );
-                                  })}
+                                  <div className="space-y-3 mt-2">
+                                    <div>
+                                      <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Brand</label>
+                                      <p className="text-sm text-gray-900">{equipment.brand || 'N/A'}</p>
+                                    </div>
+                                    
+                                    <div>
+                                      <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Specifications</label>
+                                      <p className="text-sm text-gray-900">
+                                        {equipment.specifications || equipment.description || 'N/A'}
+                                      </p>
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
                             )}
@@ -2292,6 +2316,8 @@ const EmployeePage = () => {
             </div>
           </div>
         )}
+
+
       </div>
     </div>
   );

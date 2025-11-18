@@ -53,7 +53,7 @@ class ReportController extends Controller
 
             // Requests per department
             $byDepartment = (clone $requestsQuery)
-                ->selectRaw('COALESCE(employees.department, "Unknown") as department, COUNT(*) as requests')
+                ->selectRaw('COALESCE(employees.department, "Unknown") as department, COUNT(DISTINCT requests.employee_id) as requests')
                 ->groupBy('employees.department')
                 ->orderByDesc('requests')
                 ->limit(12)
@@ -61,7 +61,7 @@ class ReportController extends Controller
 
             // Item distribution by category
             $byCategory = (clone $requestsQuery)
-                ->selectRaw('COALESCE(categories.name, "Uncategorized") as category, COUNT(*) as count')
+                ->selectRaw('COALESCE(categories.name, "Uncategorized") as category, COUNT(DISTINCT requests.employee_id) as count')
                 ->groupBy('categories.name')
                 ->orderByDesc('count')
                 ->limit(12)
@@ -69,7 +69,7 @@ class ReportController extends Controller
 
             // Monthly trend (requests vs fulfilled)
             $monthlyRequests = (clone $requestsQuery)
-                ->selectRaw("DATE_FORMAT(requests.created_at, '%Y-%m') as month, COUNT(*) as requests")
+                ->selectRaw("DATE_FORMAT(requests.created_at, '%Y-%m') as month, COUNT(DISTINCT requests.employee_id) as requests")
                 ->groupBy('month')
                 ->orderBy('month')
                 ->get();
@@ -93,7 +93,7 @@ class ReportController extends Controller
             }
 
             $monthlyFulfilled = $fulfilledQuery
-                ->selectRaw("DATE_FORMAT(requests.created_at, '%Y-%m') as month, COUNT(*) as completed")
+                ->selectRaw("DATE_FORMAT(requests.created_at, '%Y-%m') as month, COUNT(DISTINCT requests.employee_id) as completed")
                 ->groupBy('month')
                 ->orderBy('month')
                 ->get();
@@ -341,7 +341,7 @@ class ReportController extends Controller
 
             // ========== REQUESTS BY DEPARTMENT SECTION ==========
             fputcsv($handle, ['=== REQUESTS BY DEPARTMENT ===']);
-            fputcsv($handle, ['Department', 'Request Count']);
+            fputcsv($handle, ['Department', 'Employee Count']);
             
             $requestsQuery = DB::table('requests')
                 ->leftJoin('employees', 'requests.employee_id', '=', 'employees.id')
@@ -364,7 +364,7 @@ class ReportController extends Controller
             }
 
             $byDepartment = (clone $requestsQuery)
-                ->selectRaw('COALESCE(employees.department, "Unknown") as department, COUNT(*) as requests')
+                ->selectRaw('COALESCE(employees.department, "Unknown") as department, COUNT(DISTINCT requests.employee_id) as requests')
                 ->groupBy('employees.department')
                 ->orderByDesc('requests')
                 ->limit(12)
@@ -377,10 +377,10 @@ class ReportController extends Controller
 
             // ========== REQUESTS BY CATEGORY SECTION ==========
             fputcsv($handle, ['=== REQUESTS BY CATEGORY ===']);
-            fputcsv($handle, ['Category', 'Request Count']);
+            fputcsv($handle, ['Category', 'Employee Count']);
             
             $byCategory = (clone $requestsQuery)
-                ->selectRaw('COALESCE(categories.name, "Uncategorized") as category, COUNT(*) as count')
+                ->selectRaw('COALESCE(categories.name, "Uncategorized") as category, COUNT(DISTINCT requests.employee_id) as count')
                 ->groupBy('categories.name')
                 ->orderByDesc('count')
                 ->limit(12)
@@ -393,10 +393,10 @@ class ReportController extends Controller
 
             // ========== MONTHLY TREND SECTION ==========
             fputcsv($handle, ['=== MONTHLY TREND ===']);
-            fputcsv($handle, ['Month', 'Total Requests', 'Fulfilled Requests']);
+            fputcsv($handle, ['Month', 'Unique Employees', 'Fulfilled Employees']);
             
             $monthlyRequests = (clone $requestsQuery)
-                ->selectRaw("DATE_FORMAT(requests.created_at, '%Y-%m') as month, COUNT(*) as requests")
+                ->selectRaw("DATE_FORMAT(requests.created_at, '%Y-%m') as month, COUNT(DISTINCT requests.employee_id) as requests")
                 ->groupBy('month')
                 ->orderBy('month')
                 ->get();
@@ -420,7 +420,7 @@ class ReportController extends Controller
             }
 
             $monthlyFulfilled = $fulfilledQuery
-                ->selectRaw("DATE_FORMAT(requests.created_at, '%Y-%m') as month, COUNT(*) as completed")
+                ->selectRaw("DATE_FORMAT(requests.created_at, '%Y-%m') as month, COUNT(DISTINCT requests.employee_id) as completed")
                 ->groupBy('month')
                 ->orderBy('month')
                 ->get();

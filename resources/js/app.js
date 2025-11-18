@@ -487,6 +487,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    
     // Check for root element (for other pages)
     const rootContainer = document.getElementById('root');
     console.log('root element found:', rootContainer);

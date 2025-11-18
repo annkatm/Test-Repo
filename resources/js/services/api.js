@@ -18,11 +18,14 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
     
-    // Add CSRF token for state-changing requests
+    // Add CSRF token for ALL requests when using web middleware
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-    if (csrfToken && ['post', 'put', 'patch', 'delete'].includes(config.method?.toLowerCase())) {
+    if (csrfToken) {
       config.headers['X-CSRF-TOKEN'] = csrfToken;
     }
+    
+    // Enable credentials for session-based auth
+    config.withCredentials = true;
     
     return config;
   },
@@ -35,12 +38,29 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Log detailed error information for debugging
+    if (error.response) {
+      console.error('API Error:', {
+        status: error.response.status,
+        url: error.config?.url,
+        method: error.config?.method,
+        data: error.response.data,
+        message: error.response.data?.message || error.message
+      });
+    }
+    
     if (error.response?.status === 401) {
       // Session/token invalid: send to root (our login route is GET /)
       localStorage.removeItem('auth_token');
       localStorage.removeItem('user');
       window.location.href = '/';
     }
+    
+    if (error.response?.status === 422) {
+      // Validation error - log details
+      console.error('Validation Error Details:', error.response.data);
+    }
+    
     return Promise.reject(error);
   }
 );

@@ -1509,6 +1509,7 @@ const ViewApproved = () => {
                           <th className="py-2 px-3">Name</th>
                           <th className="py-2 px-3">Position</th>
                           <th className="py-2 px-3">Item</th>
+                          <th className="py-2 px-3">Condition</th>
                           <th className="py-2 px-3">End Date</th>
                           <th className="py-2 px-3 text-right">Actions</th>
                         </tr>
@@ -1547,6 +1548,32 @@ const ViewApproved = () => {
                                     ? group.items[0].equipment_name
                                     : `${group.items.length} items`}
                                 </span>
+                              </td>
+                              <td className="py-3 px-3">
+                                {(() => {
+                                  const codes = (group.items || []).map(i => (i.return_condition || '').toString().toLowerCase()).filter(Boolean);
+                                  const unique = Array.from(new Set(codes));
+                                  const code = unique.length === 1 ? unique[0] : (unique.length > 1 ? 'mixed' : '');
+                                  const label = code === 'good_condition' ? 'Good Condition'
+                                    : code === 'damaged' ? 'Damaged'
+                                    : code === 'has_defect' ? 'Has Defect'
+                                    : code === 'mixed' ? 'Mixed'
+                                    : 'N/A';
+                                  const cls = code === 'good_condition'
+                                    ? 'bg-green-100 text-green-700'
+                                    : code === 'damaged'
+                                    ? 'bg-red-100 text-red-700'
+                                    : code === 'has_defect'
+                                    ? 'bg-amber-100 text-amber-700'
+                                    : code === 'mixed'
+                                    ? 'bg-blue-100 text-blue-700'
+                                    : 'bg-gray-100 text-gray-700';
+                                  return (
+                                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${cls}`}>
+                                      {label}
+                                    </span>
+                                  );
+                                })()}
                               </td>
                               <td className="py-3 px-3 text-red-600">{group.return_date || 'N/A'}</td>
                               <td className="py-3 px-3">

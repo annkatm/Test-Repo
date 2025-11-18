@@ -295,6 +295,7 @@ const HomeSidebar = ({ onSelect }) => {
                       </div>
                     </li>
                   )}
+                  
                 </ul>
               )}
             </div>
