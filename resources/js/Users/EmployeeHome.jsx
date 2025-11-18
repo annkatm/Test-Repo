@@ -137,6 +137,11 @@ const EmployeeHome = () => {
     }
   };
 
+  // Clear borrowed items on component mount
+  useEffect(() => {
+    setBorrowedItems([]);
+  }, []);
+
   // Ensure denied requests are loaded so Recent Activities shows them
   useEffect(() => {
     (async () => {
@@ -977,8 +982,16 @@ const EmployeeHome = () => {
 
         <StatsCards 
           transactionStats={transactionStats} 
-          onBorrowedClick={async () => { await fetchBorrowedItems(); setIsBorrowedOpen(true); }} 
-          onOverdueClick={async () => { await fetchDeniedRequests(); setSelectedDeniedId(null); setIsOverdueOpen(true); }} 
+          onBorrowedClick={async () => { 
+            setBorrowedItems([]); // Clear items first
+            await fetchBorrowedItems(); 
+            setIsBorrowedOpen(true); 
+          }} 
+          onOverdueClick={async () => { 
+            await fetchDeniedRequests(); 
+            setSelectedDeniedId(null); 
+            setIsOverdueOpen(true); 
+          }} 
         />
 
 
@@ -1105,19 +1118,6 @@ const EmployeeHome = () => {
         </div>
 
               </div>
-
-      <div className="col-span-12 md:col-span-2 space-y-6">
-        <div className="space-y-3 max-h-96 overflow-y-auto">
-                {(borrowedItems || []).map((it, i) => (
-                  <div key={it.id || i} className="border border-gray-200 rounded-lg p-3">
-                    <div className="font-semibold text-gray-900">{it.equipment_name || it.item || '-'}</div>
-                    <div className="text-sm text-gray-600 mt-1">
-                      Serial: {it.serial_number || it.serial || 'N/A'}
-                    </div>
-                  </div>
-                ))}
-        </div>
-      </div>
       {isBorrowedOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm">
           <div className="relative w-full max-w-lg bg-white rounded-xl shadow-2xl overflow-hidden">
