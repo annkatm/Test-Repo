@@ -33,10 +33,27 @@ const UsersPage = () => {
     password: "",
     confirmPassword: "",
     accountType: "",
-    position: ""
+    position: "",
+    employeeType: "Regular"
   });
 
   const [errors, setErrors] = useState({});
+
+  // Helper to normalize employee type
+  const getEmployeeTypeLabel = (employeeType) => {
+    if (!employeeType) return 'Regular';
+    if (typeof employeeType === 'string') return employeeType;
+    if (typeof employeeType === 'object') {
+      return (
+        employeeType.name ||
+        employeeType.display_name ||
+        employeeType.label ||
+        employeeType.status ||
+        'Regular'
+      );
+    }
+    return 'Regular';
+  };
 
   // Validation functions
   const validateEmail = (email) => {
@@ -181,19 +198,23 @@ const UsersPage = () => {
               is_active: user.is_active
             }));
           
-          const employeeUsers = json.data.employees.map(user => ({
-            id: user.id,
-            name: user.name,
-            username: user.employee_id || user.email.split('@')[0],
-            email: user.email,
-            accountType: user.role ? user.role.display_name : 'Employee',
-            employeeType: user.employee_type || 'Regular',
-            role: user.role,
-            position: user.position,
-            department: user.department,
-            phone: user.phone,
-            is_active: user.is_active
-          }));
+          const employeeUsers = json.data.employees.map(user => {
+            const employeeType = getEmployeeTypeLabel(user.employee_type || user.employeeType);
+            
+            return {
+              id: user.id,
+              name: user.name,
+              username: user.employee_id || user.email.split('@')[0],
+              email: user.email,
+              accountType: user.role ? user.role.display_name : 'Employee',
+              employeeType: employeeType,
+              role: user.role,
+              position: user.position,
+              department: user.department,
+              phone: user.phone,
+              is_active: user.is_active
+            };
+          });
           
           setAdmins(adminUsers);
           setEmployees(employeeUsers);
@@ -220,14 +241,27 @@ const UsersPage = () => {
           // Filter out employees who already have user accounts connected
           const employeesData = json.data
             .filter(emp => !emp.user_id) // Only show employees without user connections
-            .map(emp => ({
-              id: emp.id,
-              name: `${emp.first_name} ${emp.last_name}`.trim(),
-              email: emp.email,
-              employeeType: emp.employee_type || 'Regular',
-              position: emp.position,
-              department: emp.department
-            }));
+            .map(emp => {
+              const employeeType = getEmployeeTypeLabel(emp.employee_type || emp.employeeType);
+              // Safely extract position as a string
+              let position = '';
+              if (emp.position) {
+                if (typeof emp.position === 'string') {
+                  position = emp.position;
+                } else if (typeof emp.position === 'object' && emp.position.name) {
+                  position = emp.position.name;
+                }
+              }
+              
+              return {
+                id: emp.id,
+                name: `${emp.first_name} ${emp.last_name}`.trim(),
+                email: emp.email,
+                employeeType: employeeType,
+                position: position,
+                department: emp.department
+              };
+            });
           setEmployeesList(employeesData);
         }
       } catch (err) {
@@ -246,7 +280,8 @@ const UsersPage = () => {
       name: employee.name,
       email: employee.email,
       position: employee.position || '', // Use position from employee data
-      username: employee.email.split('@')[0] // Auto-generate username from email
+      username: employee.email.split('@')[0], // Auto-generate username from email
+      employeeType: getEmployeeTypeLabel(employee.employeeType || employee.employee_type)
     }));
     setShowEmployeeDropdown(false);
     setEmployeeSearchTerm(employee.name);
@@ -281,6 +316,10 @@ const UsersPage = () => {
           position: newUser.position.trim() || selectedEmployee?.position || "Employee",
           department: selectedEmployee?.department || null,
           phone: null,
+          // Preserve the employee's actual type; don't silently default to "Regular"
+          employee_type: selectedEmployee
+            ? (selectedEmployee.employeeType || selectedEmployee.employee_type || null)
+            : (newUser.employeeType || null),
         }),
       });
 
@@ -350,6 +389,11 @@ const UsersPage = () => {
             position: newUser.position.trim() || selectedUser.position || "Employee",
             department: selectedUser.department || null,
             phone: selectedUser.phone || null,
+            // For edits, prefer explicitly chosen employee, then any value set in the form,
+            // finally fall back to the existing user's type; never force "Regular".
+            employee_type: selectedEmployee
+              ? (selectedEmployee.employeeType || selectedEmployee.employee_type || null)
+              : (newUser.employeeType || selectedUser.employeeType || null),
           })),
         });
 
@@ -433,7 +477,8 @@ const UsersPage = () => {
       password: "",
       confirmPassword: "",
       accountType: "",
-      position: ""
+      position: "",
+      employeeType: "Regular"
     });
     setSelectedEmployee(null);
     setEmployeeSearchTerm("");
@@ -456,7 +501,8 @@ const UsersPage = () => {
       password: "",
       confirmPassword: "",
       accountType: user.accountType,
-      position: user.position || ""
+      position: user.position || "",
+      employeeType: user.employeeType || "Regular"
     });
     setErrors({});
     setShowPassword(false);
@@ -807,7 +853,7 @@ const UsersPage = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-1">Position</label>
                       <input
                         type="text"
-                        value={newUser.position || (selectedEmployee ? selectedEmployee.position : '')}
+                        value={newUser.position || (selectedEmployee ? (typeof selectedEmployee.position === 'string' ? selectedEmployee.position : '') : '')}
                         readOnly
                         tabIndex={-1}
                         className="w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-50 text-gray-600"
@@ -825,7 +871,11 @@ const UsersPage = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-1">Employee Type</label>
                       <input
                         type="text"
-                        value={selectedEmployee ? (selectedEmployee.employeeType || selectedEmployee.position || '') : ''}
+                        value={
+                          selectedEmployee
+                            ? getEmployeeTypeLabel(selectedEmployee.employeeType || selectedEmployee.employee_type)
+                            : getEmployeeTypeLabel(newUser.employeeType)
+                        }
                         readOnly
                         tabIndex={-1}
                         className="w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-50 text-gray-600"
