@@ -25,6 +25,7 @@ const ControlPanel = () => {
   const [showSuccess, setShowSuccess] = React.useState(false);
   const [categoryItems, setCategoryItems] = React.useState([]);
   const [showExisting, setShowExisting] = React.useState(true);
+  const [fileUploadKey, setFileUploadKey] = React.useState(0);
 
   // Generic dropdown management states
   const [activeModal, setActiveModal] = React.useState(null);
@@ -260,10 +261,27 @@ const ControlPanel = () => {
         return;
       }
       if (data.success) {
-        setShowCategoryModal(false);
-        setCatName(''); setCatImage(null); setCatError('');
+        // Keep modal open, just clear form and show success
+        setCatName(''); 
+        setCatImage(null); 
+        setCatError('');
         setShowSuccess(true);
         setTimeout(() => setShowSuccess(false), 3000); // Hide after 3 seconds
+        
+        // Reset file upload widget
+        setFileUploadKey(prev => prev + 1);
+        
+        // Refresh categories list
+        try {
+          const res = await api.get('/categories');
+          if (res?.data?.success && Array.isArray(res.data.data)) {
+            setCategoryItems(res.data.data.map(c => ({ id: c.id, name: c.name })));
+          }
+          // Notify other screens to refresh
+          window.dispatchEvent(new CustomEvent('categories:updated'));
+        } catch (err) {
+          console.error('Failed to refresh categories:', err);
+        }
       } else {
         // Show detailed validation errors if present
         if (data.errors) {
@@ -351,7 +369,7 @@ const ControlPanel = () => {
                   {showExisting && (
                   <div className="mb-5">
                     <div className="w-full rounded-xl border border-blue-100 bg-white shadow-[0_6px_16px_rgba(29,78,216,0.15)]">
-                      <div className="max-h-40 overflow-y-auto divide-y divide-gray-100">
+                      <div className={`${categoryItems.length > 4 ? 'max-h-40 overflow-y-auto' : ''} divide-y divide-gray-100`}>
                         {categoryItems.map((item, idx) => (
                           <div key={item.id ?? idx} className="flex items-center justify-between px-4 py-2 text-sm hover:bg-blue-50">
                             <span className="text-gray-700">{item.name}</span>
@@ -368,6 +386,7 @@ const ControlPanel = () => {
                   </div>
                   )}
                   <FileUploadWidget
+                    key={fileUploadKey}
                     label="Image"
                     onFileSelect={file => setCatImage(file)}
                     error="Category image is required."

@@ -119,7 +119,6 @@ const rows = [
 
 const AddStocks = () => {
   const [isAddStocksOpen, setIsAddStocksOpen] = useState(false);
-  const [isAddItemOpen, setIsAddItemOpen] = useState(false);
   const [equipment, setEquipment] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -590,7 +589,6 @@ const AddStocks = () => {
         item_image: null,
         receipt_image: null
       });
-      setIsAddItemOpen(false);
 
     } catch (error) {
       setErrors({ submit: error.message });
@@ -599,7 +597,11 @@ const AddStocks = () => {
     }
   };
 
-  const closeModal = () => setIsAddStocksOpen(false);
+  const closeModal = () => {
+    setIsAddStocksOpen(false);
+    // Clear any error states when closing modal
+    setErrors({});
+  };
 
   return (
     <div className="h-screen bg-white flex overflow-hidden">
@@ -644,12 +646,6 @@ const AddStocks = () => {
               >
                 Add Stocks
               </button>
-              <button
-                onClick={() => setIsAddItemOpen(true)}
-                className="px-4 py-2 rounded-md bg-blue-100 text-blue-700 text-sm hover:bg-blue-600 hover:text-white"
-              >
-                Add Item
-              </button>
             </div>
           </div>
 
@@ -673,22 +669,14 @@ const AddStocks = () => {
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200">
                       <th
-                        onClick={() => {
-                          const direction = sortConfig.key === 'name' && sortConfig.direction === 'asc' ? 'desc' : 'asc';
-                          setSortConfig({ key: 'name', direction });
-                        }}
-                        className="text-left py-4 px-6 font-semibold text-gray-700 cursor-pointer hover:bg-gray-100"
+                        className="text-left py-4 px-6 font-semibold text-gray-700"
                       >
-                        <div className="flex items-center">Items{sortConfig.key === 'name' && (<span className="ml-2">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>)}</div>
+                        <div className="flex items-center">Items</div>
                       </th>
                       <th
-                        onClick={() => {
-                          const direction = sortConfig.key === 'category' && sortConfig.direction === 'asc' ? 'desc' : 'asc';
-                          setSortConfig({ key: 'category', direction });
-                        }}
-                        className="text-left py-4 px-6 font-semibold text-gray-700 cursor-pointer hover:bg-gray-100"
+                        className="text-left py-4 px-6 font-semibold text-gray-700"
                       >
-                        <div className="flex items-center">Category{sortConfig.key === 'category' && (<span className="ml-2">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>)}</div>
+                        <div className="flex items-center">Category</div>
                       </th>
                       <th className="text-right py-4 px-6 font-semibold text-gray-700">Total</th>
                     </tr>
@@ -908,13 +896,6 @@ const AddStocks = () => {
               // Refresh equipment to get the newly added items
               fetchEquipment();
             }}
-          />
-        )}
-        {isAddItemOpen && (
-          <AddItemModal
-            onClose={() => setIsAddItemOpen(false)}
-            categories={categories}
-            onSuccess={fetchEquipment}
           />
         )}
 
@@ -1176,7 +1157,20 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
       }
 
       if (onSuccess) onSuccess();
-      onClose();
+      
+      // Call onAdded callback to update the parent component
+      if (onAdded && selectedProduct) {
+        const productKey = `${selectedProduct.name}_${selectedProduct.brand}`;
+        onAdded(productKey, serialNumbers.length, {
+          category: selectedCategory?.name,
+          product: selectedProduct.name,
+          brand: selectedProduct.brand,
+          serialNumbers: serialNumbers,
+          receiptUrl: receiptPreview || null,
+        });
+      }
+      
+      handleClose();
     } catch (error) {
       setErrors({ submit: error.message });
     } finally {
@@ -1188,10 +1182,17 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
     if (currentMode === 'product') {
       setCurrentMode('category');
       setSelectedCategory(null);
+      setErrors({});
     } else if (currentMode === 'serial') {
       setCurrentMode('product');
       setSelectedProduct(null);
+      setErrors({});
     }
+  };
+
+  const handleClose = () => {
+    setErrors({});
+    onClose();
   };
 
   const filteredProducts = products.filter(product =>
@@ -1202,9 +1203,9 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/30" onClick={handleClose} />
       <div className="relative bg-white rounded-2xl shadow-xl w-[700px] max-w-[92vw] p-6 max-h-[90vh] overflow-y-auto">
-        <button onClick={onClose} className="absolute right-4 top-4 text-gray-500 hover:text-blue-600">
+        <button onClick={handleClose} className="absolute right-4 top-4 text-gray-500 hover:text-blue-600">
           <X className="h-6 w-6" />
         </button>
         <h3 className="text-xl font-bold text-blue-600 text-center">Add Stocks</h3>
@@ -1275,13 +1276,6 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {loading ? (
                 <div className="text-center py-4 text-gray-500">Loading products...</div>
-              ) : filteredProducts.length === 0 ? (
-                <div className="bg-gray-800 rounded-lg p-6 text-center">
-                  <p className="text-white text-lg font-medium mb-3">Click any item to view details</p>
-                  <svg className="w-6 h-6 text-white mx-auto arrow-down-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
               ) : (
                 filteredProducts.map((product) => (
                   <div

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import HomeSidebar from './HomeSidebar';
 import GlobalHeader from './components/GlobalHeader';
 import api from './services/api';
+import { X, Plus } from 'lucide-react';
 
 const Card = ({ selected, name, qty, image, onClick }) => {
   return (
@@ -57,6 +58,8 @@ const Equipment = () => {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedItemDetails, setSelectedItemDetails] = useState(null);
   const [imagePreview, setImagePreview] = useState(null); // { src, alt }
+  const [isAddItemOpen, setIsAddItemOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState(null);
 
   // Helper function to format price with commas
   const formatPrice = (price) => {
@@ -378,7 +381,18 @@ const Equipment = () => {
                 <div className="mt-6 flex flex-col items-start w-full">
                   {categories.filter(cat => cat.name === selected).map(cat => (
                     <div key={cat.id} className="w-full">
-                      <div className="mb-6 text-2xl font-semibold text-gray-800">Inventory / {selected}</div>
+                      <div className="mb-6 flex items-center justify-between">
+                        <div className="text-2xl font-semibold text-gray-800">Inventory / {selected}</div>
+                        <button
+                          onClick={() => {
+                            setSelectedCategory(cat.id);
+                            setIsAddItemOpen(true);
+                          }}
+                          className="px-4 py-2 rounded-md bg-blue-100 text-blue-700 text-sm hover:bg-blue-600 hover:text-white transition-colors"
+                        >
+                          Add Item
+                        </button>
+                      </div>
                       
                       <div className="grid grid-cols-3 gap-4 mb-4 text-gray-700 font-semibold text-sm">
                         <div className="text-left">Items</div>
@@ -1028,7 +1042,558 @@ const Equipment = () => {
           </div>
         </div>
       )}
+      
+      {/* Add Item Modal */}
+      {isAddItemOpen && (
+        <AddItemModal
+          onClose={() => setIsAddItemOpen(false)}
+          categories={categories}
+          preSelectedCategory={selectedCategory}
+          onSuccess={() => {
+            // Refresh equipment data after adding
+            fetchEquipment();
+            setIsAddItemOpen(false);
+          }}
+        />
+      )}
     </div>
+  );
+};
+
+const AddItemModal = ({ onClose, categories = [], onSuccess, preSelectedCategory = null }) => {
+  const [formData, setFormData] = useState({
+    category: preSelectedCategory || '',
+    brand: '',
+    model: '',
+    supplier: '',
+    description: '',
+    price: '',
+    item_image: null,
+    receipt_image: null
+  });
+  const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [preview, setPreview] = useState({
+    item_image: null,
+    receipt_image: null
+  });
+
+  // Update category when preSelectedCategory changes
+  useEffect(() => {
+    if (preSelectedCategory) {
+      setFormData(prev => ({
+        ...prev,
+        category: preSelectedCategory
+      }));
+    }
+  }, [preSelectedCategory]);
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: null }));
+    }
+  };
+
+  const formatPrice = (value) => {
+    if (!value || value === '' || value === null || value === undefined) return '';
+    // Convert to string and remove all non-digit characters except decimal point
+    const numericValue = value.toString().replace(/[^\d.]/g, '');
+    if (numericValue === '' || numericValue === '.') return '';
+
+    // Split by decimal point
+    const parts = numericValue.split('.');
+    // Format the integer part with commas
+    const integerPart = parts[0] ? parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '0';
+    // Keep decimal part if exists (max 2 decimal places)
+    const decimalPart = parts[1] ? '.' + parts[1].slice(0, 2) : '';
+
+    return integerPart + decimalPart;
+  };
+
+  const parsePrice = (value) => {
+    if (!value || value === '') return '';
+    // Remove commas and keep only numbers and decimal point
+    return value.toString().replace(/,/g, '');
+  };
+
+  const handlePriceChange = (e) => {
+    const value = e.target.value;
+    // Parse the input to get raw numeric value
+    const rawValue = parsePrice(value);
+
+    // Allow empty string, numbers, and decimal points
+    if (rawValue === '' || /^\d*\.?\d*$/.test(rawValue)) {
+      // Store raw value in formData
+      setFormData(prev => ({
+        ...prev,
+        price: rawValue
+      }));
+    }
+    if (errors.price) {
+      setErrors(prev => ({ ...prev, price: null }));
+    }
+  };
+
+  const handlePriceBlur = (e) => {
+    // Format the price on blur - ensure 2 decimal places
+    const rawValue = parsePrice(e.target.value);
+    if (rawValue && rawValue !== '' && !isNaN(rawValue)) {
+      const numValue = parseFloat(rawValue);
+      if (!isNaN(numValue)) {
+        const formattedValue = numValue.toFixed(2);
+        setFormData(prev => ({
+          ...prev,
+          price: formattedValue
+        }));
+      }
+    } else if (rawValue === '') {
+      setFormData(prev => ({
+        ...prev,
+        price: ''
+      }));
+    }
+  };
+
+  const handlePriceIncrement = () => {
+    const currentPrice = parseFloat(formData.price) || 0;
+    // Use larger step for larger values, smaller step for smaller values
+    const step = currentPrice >= 100 ? 1 : 0.01;
+    const newPrice = (currentPrice + step).toFixed(2);
+    setFormData(prev => ({
+      ...prev,
+      price: newPrice
+    }));
+    if (errors.price) {
+      setErrors(prev => ({ ...prev, price: null }));
+    }
+  };
+
+  const handlePriceDecrement = () => {
+    const currentPrice = parseFloat(formData.price) || 0;
+    // Use larger step for larger values, smaller step for smaller values
+    const step = currentPrice >= 100 ? 1 : 0.01;
+    const newPrice = Math.max(0, currentPrice - step).toFixed(2);
+    setFormData(prev => ({
+      ...prev,
+      price: newPrice
+    }));
+    if (errors.price) {
+      setErrors(prev => ({ ...prev, price: null }));
+    }
+  };
+
+  const handleFileChange = (e) => {
+    const { name, files } = e.target;
+    if (files && files[0]) {
+      if (files[0].size > 5 * 1024 * 1024) {
+        setErrors(prev => ({
+          ...prev,
+          [name]: 'File size must be less than 5MB'
+        }));
+        return;
+      }
+
+      // Create preview URL
+      const url = URL.createObjectURL(files[0]);
+      setPreview(prev => ({
+        ...prev,
+        [name]: url
+      }));
+
+      setFormData(prev => ({
+        ...prev,
+        [name]: files[0]
+      }));
+
+      if (errors[name]) {
+        setErrors(prev => ({ ...prev, [name]: null }));
+      }
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setErrors({});
+
+    // Validation
+    const requiredFields = ['category', 'brand', 'model', 'supplier', 'description'];
+    const newErrors = {};
+    requiredFields.forEach(field => {
+      if (!formData[field]) {
+        newErrors[field] = 'This field is required';
+      }
+    });
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const formDataToSend = new FormData();
+
+      // Special handling for category - convert to category_id
+      if (formData.category) {
+        formDataToSend.append('category_id', formData.category);
+      }
+
+      // Add other form fields
+      const fieldsToAdd = ['brand', 'model', 'supplier', 'description', 'price'];
+      fieldsToAdd.forEach(key => {
+        if (formData[key] !== null && formData[key] !== '') {
+          formDataToSend.append(key, formData[key]);
+        }
+      });
+
+      // Add files if they exist
+      if (formData.item_image) {
+        formDataToSend.append('item_image', formData.item_image);
+      }
+      if (formData.receipt_image) {
+        formDataToSend.append('receipt_image', formData.receipt_image);
+      }
+
+      // Add CSRF token for Laravel
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      if (csrfToken) {
+        formDataToSend.append('_token', csrfToken);
+      }
+
+      const response = await fetch('/api/equipment', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+        },
+        body: formDataToSend,
+      });
+
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get('content-type');
+      let data;
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        // If not JSON, it's likely an HTML error page
+        const text = await response.text();
+        throw new Error(`Server returned an error (${response.status}). Please check your connection and try again.`);
+      }
+
+      if (!response.ok) {
+        throw new Error(data.message || data.error || 'Error adding equipment');
+      }
+
+      // Trigger equipment update event for dynamic refresh
+      window.dispatchEvent(new Event('equipment:updated'));
+
+      // Reset form and close modal on success
+      setFormData({
+        category: '',
+        brand: '',
+        model: '',
+        supplier: '',
+        description: '',
+        price: '',
+        item_image: null,
+        receipt_image: null
+      });
+      setPreview({
+        item_image: null,
+        receipt_image: null
+      });
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000); // Hide after 3 seconds
+
+      if (onSuccess) onSuccess();
+
+    } catch (error) {
+      setErrors({ submit: error.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+        <div className="relative bg-white rounded-2xl shadow-xl w-[880px] max-w-[95vw] p-8">
+          <button
+            onClick={onClose}
+            className="absolute right-4 top-4 text-gray-500 hover:text-blue-600"
+            type="button"
+          >
+            <X className="h-6 w-6" />
+          </button>
+          <h3 className="text-xl font-bold text-blue-600 text-center">Add Equipment</h3>
+
+          <form onSubmit={handleSubmit} className="mt-6">
+            <div className="grid grid-cols-2 gap-8">
+              {/* First Row: Category (left), Brand (right) */}
+              <div>
+                <label className="text-sm text-gray-600">Category*</label>
+                <div className="mt-2">
+                  <div className="relative">
+                    {/* Dropdown trigger button */}
+                    <div
+                      onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                      className={`w-full px-3 py-2 rounded-md bg-gray-100 cursor-pointer ${errors.category ? 'border-red-500' : 'border-transparent'
+                        } border hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                    >
+                      <span className={!formData.category ? 'text-gray-500' : ''}>
+                        {formData.category ?
+                          categories.find(c => c.id === formData.category)?.name
+                          : 'Select a category'}
+                      </span>
+                    </div>
+
+                    {/* Dropdown menu */}
+                    {isDropdownOpen && (
+                      <div className="absolute z-50 w-full mt-1 bg-white rounded-md shadow-lg border border-gray-200">
+                        <div
+                          className="max-h-48 overflow-y-auto select-scrollbar"
+                        >
+                          {categories && categories.map(category => (
+                            <div
+                              key={category.id}
+                              onClick={() => {
+                                setFormData(prev => ({ ...prev, category: category.id }));
+                                setIsDropdownOpen(false);
+                                if (errors.category) {
+                                  setErrors(prev => ({ ...prev, category: null }));
+                                }
+                              }}
+                              className="px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                            >
+                              {category.name}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {errors.category && <p className="mt-1 text-sm text-red-500">{errors.category}</p>}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-600">Brand*</label>
+                <div className="mt-2">
+                  <input
+                    type="text"
+                    name="brand"
+                    value={formData.brand}
+                    onChange={handleInputChange}
+                    className={`w-full px-3 py-2 rounded-md bg-gray-100 ${errors.brand ? 'border-red-500' : 'border-transparent'
+                      } border hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  />
+                  {errors.brand && <p className="mt-1 text-sm text-red-500">{errors.brand}</p>}
+                </div>
+              </div>
+
+              {/* Second Row: Model (left), Supplier (right) */}
+              <div>
+                <label className="text-sm text-gray-600">Model*</label>
+                <div className="mt-2">
+                  <input
+                    type="text"
+                    name="model"
+                    value={formData.model}
+                    onChange={handleInputChange}
+                    className={`w-full px-3 py-2 rounded-md bg-gray-100 ${errors.model ? 'border-red-500' : 'border-transparent'
+                      } border hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  />
+                  {errors.model && <p className="mt-1 text-sm text-red-500">{errors.model}</p>}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-600">Supplier*</label>
+                <div className="mt-2">
+                  <input
+                    type="text"
+                    name="supplier"
+                    value={formData.supplier}
+                    onChange={handleInputChange}
+                    className={`w-full px-3 py-2 rounded-md bg-gray-100 ${errors.supplier ? 'border-red-500' : 'border-transparent'
+                      } border hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  />
+                  {errors.supplier && <p className="mt-1 text-sm text-red-500">{errors.supplier}</p>}
+                </div>
+              </div>
+
+              {/* Third Row: Description (left), Price (right) */}
+              <div>
+                <label className="text-sm text-gray-600">Description*</label>
+                <div className="mt-2">
+                  <textarea
+                    name="description"
+                    rows="3"
+                    value={formData.description}
+                    onChange={handleInputChange}
+                    className={`w-full px-3 py-2 rounded-md bg-gray-100 ${errors.description ? 'border-red-500' : 'border-transparent'
+                      } border hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                  />
+                  {errors.description && <p className="mt-1 text-sm text-red-500">{errors.description}</p>}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-600">Price (₱)</label>
+                <div className="mt-2">
+                  <div className="flex rounded-md bg-gray-100 border border-transparent hover:border-blue-500 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500">
+                    <input
+                      type="text"
+                      name="price"
+                      value={formatPrice(formData.price)}
+                      onChange={handlePriceChange}
+                      onBlur={handlePriceBlur}
+                      className="flex-1 px-3 py-2 rounded-l-md bg-transparent focus:outline-none"
+                      placeholder="0.00"
+                    />
+                    <div className="flex">
+                      <button
+                        type="button"
+                        onClick={handlePriceDecrement}
+                        className="flex-1 px-2 flex items-center justify-center text-gray-600 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                        aria-label="Decrease price"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handlePriceIncrement}
+                        className="flex-1 px-2 flex items-center justify-center text-gray-600 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                        aria-label="Increase price"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  {errors.price && <p className="mt-1 text-sm text-red-500">{errors.price}</p>}
+                </div>
+              </div>
+            </div>
+
+            {/* Image Upload Sections */}
+            <div className="grid grid-cols-2 gap-8 mt-8">
+              <div>
+                <label className="text-sm text-gray-600">Item image</label>
+                <div className="mt-2">
+                  <div
+                    className={`h-36 w-full border-2 border-dashed rounded-lg ${formData.item_image ? 'border-blue-300' : 'border-gray-300'
+                      } ${errors.item_image ? 'border-red-500' : ''
+                      } hover:border-blue-400 transition-colors relative overflow-hidden`}
+                  >
+                    <input
+                      type="file"
+                      name="item_image"
+                      onChange={handleFileChange}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      accept="image/*"
+                    />
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      {formData.item_image ? (
+                        <div className="relative">
+                          <img
+                            src={URL.createObjectURL(formData.item_image)}
+                            alt="Item preview"
+                            className="h-full w-full object-cover rounded-md"
+                          />
+                          <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                            <span className="text-white text-xs">Click to change</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                          </svg>
+                          <p className="text-xs text-gray-500">Click or drag to upload</p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  {errors.item_image && <p className="mt-1 text-sm text-red-500">{errors.item_image}</p>}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-600">Receipt image</label>
+                <div className="mt-2">
+                  <div
+                    className={`h-36 w-full border-2 border-dashed rounded-lg ${formData.receipt_image ? 'border-blue-300' : 'border-gray-300'
+                      } ${errors.receipt_image ? 'border-red-500' : ''
+                      } hover:border-blue-400 transition-colors relative overflow-hidden`}
+                  >
+                    <input
+                      type="file"
+                      name="receipt_image"
+                      onChange={handleFileChange}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      accept="image/*"
+                    />
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      {formData.receipt_image ? (
+                        <div className="relative">
+                          <img
+                            src={URL.createObjectURL(formData.receipt_image)}
+                            alt="Receipt preview"
+                            className="h-full w-full object-cover rounded-md"
+                          />
+                          <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                            <span className="text-white text-xs">Click to change</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                          </svg>
+                          <p className="text-xs text-gray-500">Click or drag to upload</p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  {errors.receipt_image && <p className="mt-1 text-sm text-red-500">{errors.receipt_image}</p>}
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex justify-end space-x-3 mt-8">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-6 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-6 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                disabled={loading}
+              >
+                {loading ? 'Adding...' : 'Add Item'}
+              </button>
+            </div>
+            {errors.submit && <p className="mt-3 text-sm text-red-500 text-center">{errors.submit}</p>}
+          </form>
+        </div>
+      </div>
+    </>
   );
 };
 

@@ -319,7 +319,7 @@ const Reports = () => {
             {/* Filters */}
             <div className="flex flex-wrap gap-3 items-center">
             <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-gray-500" />
+                <span className="text-sm text-gray-600 font-medium">From:</span>
               <input
                 type="date"
                 value={startDate}
@@ -328,7 +328,7 @@ const Reports = () => {
               />
             </div>
             <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-gray-500" />
+                <span className="text-sm text-gray-600 font-medium">To:</span>
               <input
                 type="date"
                 value={endDate}
