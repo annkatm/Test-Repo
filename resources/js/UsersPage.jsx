@@ -39,6 +39,10 @@ const UsersPage = () => {
 
   const [errors, setErrors] = useState({});
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
   // Helper to normalize employee type
   const getEmployeeTypeLabel = (employeeType) => {
     if (!employeeType) return 'Regular';
@@ -520,6 +524,18 @@ const UsersPage = () => {
     setShowViewModal(true);
   };
 
+  // Pagination logic
+  const currentUsersList = activeFilter === "ADMIN" ? admins : employees;
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentUsers = currentUsersList.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(currentUsersList.length / itemsPerPage);
+
+  // Reset to page 1 when filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeFilter]);
+
   const viewAsEmployee = (user) => {
     try {
       const email = encodeURIComponent(user.email || '');
@@ -649,7 +665,7 @@ const UsersPage = () => {
                       <td colSpan="4" className="px-6 py-4 text-sm text-red-600 text-center">{usersError}</td>
                     </tr>
                   )}
-                  {!loadingUsers && !usersError && (activeFilter === "ADMIN" ? admins : employees).map((user) => (
+                  {!loadingUsers && !usersError && currentUsers.map((user) => (
                     <tr key={user.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         {user.name}
@@ -691,6 +707,57 @@ const UsersPage = () => {
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination Controls */}
+            {!loadingUsers && !usersError && currentUsers.length > 0 && (
+              <div className="mt-6 flex items-center justify-between px-6">
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-gray-600">Total: {(activeFilter === "ADMIN" ? admins : employees).length} items</span>
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                    className={`p-1 ${
+                      currentPage === 1
+                        ? 'text-gray-300 cursor-not-allowed'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                    className={`p-1 ${
+                      currentPage === totalPages
+                        ? 'text-gray-300 cursor-not-allowed'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-gray-600">Items per page:</span>
+                  <select
+                    value={itemsPerPage}
+                    onChange={(e) => {
+                      setItemsPerPage(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

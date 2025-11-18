@@ -161,6 +161,9 @@ const EmployeePage = () => {
     setToast({ show: true, message, type });
     setTimeout(() => setToast(prev => ({ ...prev, show: false })), 3000);
   };
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Validation functions
   const validateEmail = (email) => {
@@ -1169,6 +1172,17 @@ const EmployeePage = () => {
   // Use employees directly since filtering is now done on the backend
   const filteredEmployees = employees;
 
+  // Pagination logic
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentEmployees = filteredEmployees.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredEmployees.length / itemsPerPage);
+
+  // Reset to page 1 when filters or search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filters]);
+
   const handleFilterChange = (newFilters) => {
     setFilters(newFilters);
     fetchEmployees(searchTerm, newFilters);
@@ -1288,7 +1302,7 @@ const EmployeePage = () => {
               ) : filteredEmployees.length === 0 ? (
                 <div className="py-8 text-center text-gray-500">No employees found.</div>
               ) : (
-                filteredEmployees.map((e) => (
+                currentEmployees.map((e) => (
                   <div key={e.id} className="px-4 md:px-6 py-4 hover:bg-blue-50 transition-colors">
                     <div className="grid grid-cols-12 gap-2 md:gap-4 items-center">
                       <div className="col-span-4 md:col-span-3 flex items-center space-x-3 min-w-0">
@@ -1340,6 +1354,57 @@ const EmployeePage = () => {
               )}
             </div>
           </div>
+
+          {/* Pagination Controls */}
+          {filteredEmployees.length > 0 && (
+            <div className="mt-6 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-gray-600">Total: {filteredEmployees.length} items</span>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className={`p-1 ${
+                    currentPage === 1
+                      ? 'text-gray-300 cursor-not-allowed'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className={`p-1 ${
+                    currentPage === totalPages
+                      ? 'text-gray-300 cursor-not-allowed'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-gray-600">Items per page:</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => {
+                    setItemsPerPage(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* View Modal */}
