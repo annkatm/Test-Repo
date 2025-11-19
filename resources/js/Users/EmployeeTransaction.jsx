@@ -627,6 +627,8 @@ const EmployeeTransaction = () => {
       // Submit each item as a separate request, skipping duplicates and unavailable items
       const seen = new Set();
       const results = [];
+      const wl = (workLocation || '').toLowerCase();
+      const requestMode = wl.includes('home') ? 'work_from_home' : 'on_site';
       for (const group of cartItems) {
         for (const unit of group.units) {
           if (unit.status && unit.status !== 'available') {
@@ -640,7 +642,7 @@ const EmployeeTransaction = () => {
             employee_id: currentEmployee.id,
             equipment_id: unit.id,
             request_type: 'new_assignment',
-            request_mode: 'on_site',
+            request_mode: requestMode,
             reason: `Request for 1 unit of ${group.name || group.brand}`,
             expected_start_date: startDate
           };
@@ -690,6 +692,7 @@ const EmployeeTransaction = () => {
                 equipment_name: group.name || unit.name || unit.brand || 'Item',
                 created_at: new Date().toISOString(),
                 expected_start_date: startDate,
+                request_mode: requestMode,
                 status: 'Pending',
               };
               window.dispatchEvent(new CustomEvent('ireply:request:created', { detail: newReq }));
@@ -782,7 +785,7 @@ const EmployeeTransaction = () => {
         <h1 className="text-4xl font-bold text-[#2262C6] transition-all duration-300">Transaction</h1>
       </div>
 
-      <div className="pl-5 grid grid-cols-1 md:grid-cols-12 gap-8 items-start bg-white ">
+      <div className="pl-5 grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
         <ItemCategories
           categories={categories}
           selectedCategory={selectedCategory}

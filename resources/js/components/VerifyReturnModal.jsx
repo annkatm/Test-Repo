@@ -225,7 +225,7 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
                         <div className="overflow-hidden">
                           {/* Table Header */}
                           <div className="bg-gray-100 border-b border-gray-200">
-                            <div className="grid grid-cols-4">
+                            <div className="grid grid-cols-5">
                               <div className="px-3 py-1.5 border-r border-gray-200">
                                 <span className="text-xs font-medium text-gray-700">Model</span>
                               </div>
@@ -234,6 +234,9 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
                               </div>
                               <div className="px-3 py-1.5 border-r border-gray-200">
                                 <span className="text-xs font-medium text-gray-700">Specs</span>
+                              </div>
+                              <div className="px-3 py-1.5 border-r border-gray-200">
+                                <span className="text-xs font-medium text-gray-700">Employee Notes</span>
                               </div>
                               <div className="px-3 py-1.5">
                                 <span className="text-xs font-medium text-gray-700">Condition</span>
@@ -253,7 +256,7 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
                               return (
                                 <div 
                                   key={item.id || itemIndex} 
-                                  className={`grid grid-cols-4 ${itemIndex < group.items.length - 1 ? 'border-b border-gray-200' : ''}`}
+                                  className={`grid grid-cols-5 ${itemIndex < group.items.length - 1 ? 'border-b border-gray-200' : ''}`}
                                 >
                                   <div className="px-3 py-2 border-r border-gray-200">
                                     <span className="text-xs text-gray-700">{model}</span>
@@ -263,6 +266,14 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
                                   </div>
                                   <div className="px-3 py-2 border-r border-gray-200">
                                     <span className="text-xs text-gray-700">{specs || 'N/A'}</span>
+                                  </div>
+                                  <div className="px-3 py-2 border-r border-gray-200">
+                                    <span
+                                      className="text-xs text-gray-700 line-clamp-2"
+                                      title={(item.return_notes || item.employee_notes || '')}
+                                    >
+                                      {item.return_notes || item.employee_notes || '—'}
+                                    </span>
                                   </div>
                                   <div className="px-3 py-2">
                                     {(() => {

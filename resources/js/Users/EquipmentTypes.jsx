@@ -4,7 +4,7 @@ import { Plus } from 'lucide-react';
 const EquipmentTypes = ({ groups = [], onAdd, isAtLimit, selectedCategory, hasEquipment }) => {
   return (
     <div className="rounded-xl col-span-12 md:col-span-5 bg-white">
-      <div className="rounded-xl shadow-md shadow-gray-300 p-6 overflow-y-auto h-138 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" data-employee-search-target>
+      <div className="bg-white rounded-xl shadow-md shadow-gray-300 p-6 overflow-y-auto h-138 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" data-employee-search-target>
         <h2 className="text-lg font-semibold text-gray-900 mb-6">
           {selectedCategory ? `${selectedCategory} Types` : 'Equipment Types'}
         </h2>

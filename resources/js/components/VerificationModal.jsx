@@ -107,6 +107,13 @@ const VerificationModal = ({
 
   const avatarUrl = getAvatarUrl(requestData);
   const employeeName = requestData?.employee_name || requestData?.full_name || requestData?.name || 'Employee';
+  const deriveMode = (m) => {
+    const s = String(m || '').toLowerCase();
+    if (s === 'work_from_home' || s.includes('home') || s === 'wfh') return 'Work From Home';
+    if (s === 'on_site' || s.includes('site') || s === 'onsite') return 'On Site';
+    return 'Not selected';
+  };
+  const requestModeLabel = deriveMode(requestData?.request_mode || requestData?.requestMode || (requestData?.requests?.[0]?.request_mode || requestData?.requests?.[0]?.requestMode));
 
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
@@ -199,6 +206,18 @@ const VerificationModal = ({
                 />
                 <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               </div>
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Request Settings</label>
+              <input
+                type="text"
+                value={requestModeLabel}
+                readOnly
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 text-sm"
+              />
             </div>
           </div>
 

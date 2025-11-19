@@ -13,6 +13,27 @@ const Items = ({
   setStartDate,
   isAtLimit
 }) => {
+  const [modeOptions, setModeOptions] = React.useState([
+    { value: 'Work From Home', label: 'Work From Home' },
+    { value: 'On Site', label: 'On Site' },
+  ]);
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/request-modes', { credentials: 'same-origin' });
+        if (!res.ok) return;
+        const j = await res.json();
+        const arr = Array.isArray(j?.data) ? j.data : (Array.isArray(j) ? j : []);
+        const normalized = arr.map((x) => {
+          if (typeof x === 'string') return { value: x, label: x };
+          const value = x.value || x.code || x.name || x.title || '';
+          const label = x.label || x.name || x.title || value;
+          return { value, label };
+        }).filter(o => o.value && o.label);
+        if (normalized.length) setModeOptions(normalized);
+      } catch (_) {}
+    })();
+  }, []);
   return (
     <div id="items-section" className="shadow-md shadow-gray-300 rounded-xl col-span-12 md:col-span-4 w-full md:w-auto mb-4 bg-white md:h-[552px] h-auto flex flex-col">
       <div className="rounded-xl shadow-sm shadow-gray-200 w-full h-full flex flex-col">
@@ -90,8 +111,9 @@ const Items = ({
                     className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-gray-300 bg-white"
                   >
                     <option value="">Select</option>
-                    <option value="Work From Home">Work From Home</option>
-                    <option value="On Site">On Site</option>
+                    {modeOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -108,6 +130,17 @@ const Items = ({
                   <span className="text-gray-600 text-sm">Total Items</span>
                   <span className="font-semibold text-gray-900 text-sm">x{cartItems.reduce((sum, item) => sum + item.quantity, 0)}</span>
                 </div>
+                
+                {/* Items List */}
+                <div className="pt-1 mt-1 border-t border-gray-200 space-y-1">
+                  {cartItems.map((item) => (
+                    <div key={item.groupKey} className="flex justify-between text-xs">
+                      <span className="text-gray-600">{item.name || item.brand}</span>
+                      <span className="font-medium text-gray-900">{item.units?.[0]?.model || item.model || 'N/A'}</span>
+                    </div>
+                  ))}
+                </div>
+                
                 <div className="pt-1 mt-1 border-t border-gray-200 space-y-0.5">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Work Location</span>
