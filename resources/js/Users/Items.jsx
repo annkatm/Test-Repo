@@ -7,6 +7,8 @@ const Items = ({
   onCancel,
   onSubmit,
   loading,
+  workLocation,
+  setWorkLocation,
   startDate,
   setStartDate,
   isAtLimit
@@ -78,15 +80,20 @@ const Items = ({
 
         {cartItems.length > 0 && (
           <div className="px-6 pt-2 pb-2 border-t border-gray-200 flex-shrink-0">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-              <div className="relative">
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-gray-300"
-                />
+            <div className="flex-1 space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Request Settings</label>
+                <div className="relative">
+                  <select
+                    value={workLocation}
+                    onChange={(e) => setWorkLocation(e.target.value)}
+                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-gray-300 bg-white"
+                  >
+                    <option value="">Select</option>
+                    <option value="Work From Home">Work From Home</option>
+                    <option value="On Site">On Site</option>
+                  </select>
+                </div>
               </div>
             </div>
           </div>
@@ -103,9 +110,15 @@ const Items = ({
                 </div>
                 <div className="pt-1 mt-1 border-t border-gray-200 space-y-0.5">
                   <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Work Location</span>
+                    <span className="font-medium text-gray-900">
+                      {workLocation || 'Not selected'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Request Date</span>
                     <span className="font-medium text-gray-900">
-                      {new Date(startDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
+                      {startDate ? new Date(startDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : 'Not selected'}
                     </span>
                   </div>
                 </div>
