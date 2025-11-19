@@ -1137,6 +1137,15 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
       return;
     }
 
+    // Check for duplicate serial numbers
+    const trimmedSerials = serialNumbers.map(s => s.trim());
+    const uniqueSerials = new Set(trimmedSerials);
+    if (trimmedSerials.length !== uniqueSerials.size) {
+      setErrors({ serials: 'Duplicate serial numbers are not allowed' });
+      setLoading(false);
+      return;
+    }
+
     // Validate receipt
     if (!receipt) {
       setErrors({ receipt: 'Receipt image is required' });
