@@ -13,6 +13,7 @@ const EmployeeTransaction = () => {
   const [categories, setCategories] = useState([]);
   const [cartItems, setCartItems] = useState([]);
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [workLocation, setWorkLocation] = useState('');
 
   // Per-user localStorage helpers
   const getUserTag = () => {
@@ -803,6 +804,8 @@ const EmployeeTransaction = () => {
           onCancel={handleCancel}
           onSubmit={submitRequest}
           loading={loading}
+          workLocation={workLocation}
+          setWorkLocation={setWorkLocation}
           startDate={startDate}
           setStartDate={setStartDate}
           isAtLimit={isAtLimitForCategoryId}

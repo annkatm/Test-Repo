@@ -94,7 +94,7 @@ const Items = ({
                     <option value="On Site">On Site</option>
                   </select>
                 </div>
-              </div>sd
+              </div>
             </div>
           </div>
         )}
@@ -133,7 +133,7 @@ const Items = ({
               </button>
               <button
                 onClick={onSubmit}
-                disabled={loading || cartItems.length === 0}
+                disabled={loading || cartItems.length === 0 || !workLocation}
                 className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white py-2 px-4 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1"
               >
                 {loading ? 'Submitting...' : (
