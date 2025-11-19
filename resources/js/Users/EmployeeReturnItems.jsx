@@ -252,6 +252,8 @@ const ReturnItems = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [returnRemarks, setReturnRemarks] = useState("");
   const [itemCondition, setItemCondition] = useState("Good Condition");
+  const [damageEvidence, setDamageEvidence] = useState(null);
+  const [previewImage, setPreviewImage] = useState(null);
   
   // Exchange states
   const [showExchangeModal, setShowExchangeModal] = useState(false);
@@ -270,11 +272,20 @@ const ReturnItems = () => {
     setSelectedItem(item);
     setReturnRemarks("");
     setItemCondition("Good Condition");
+    setDamageEvidence(null);
+    setPreviewImage(null);
     setShowReturnModal(true);
   };
 
   const handleConfirmReturn = async () => {
     if (!selectedItem) return;
+    
+    // Validate evidence upload for damaged/defective items
+    if ((itemCondition === "Damaged" || itemCondition === "Has Defect") && !damageEvidence) {
+      alert('Please upload evidence photo for damaged or defective items');
+      return;
+    }
+    
     setActionLoading(true);
     
     try {
@@ -297,18 +308,23 @@ const ReturnItems = () => {
       const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
       
       // Call the return API
+      const formData = new FormData();
+      formData.append('return_condition', returnCondition);
+      if (returnRemarks) {
+        formData.append('return_notes', returnRemarks);
+      }
+      if (damageEvidence) {
+        formData.append('damage_evidence', damageEvidence);
+      }
+      
       const response = await fetch(`/api/transactions/${transactionId}/return`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           'Accept': 'application/json',
           'X-CSRF-TOKEN': csrfToken || ''
         },
         credentials: 'same-origin',
-        body: JSON.stringify({
-          return_condition: returnCondition,
-          return_notes: returnRemarks || null
-        })
+        body: formData
       });
       
       const data = await response.json();
@@ -342,6 +358,8 @@ const ReturnItems = () => {
       setSelectedItem(null);
       setReturnRemarks("");
       setItemCondition("Good Condition");
+      setDamageEvidence(null);
+      setPreviewImage(null);
       
       // Show success message
       alert('Item returned successfully! It is now pending admin verification.');
@@ -378,6 +396,31 @@ const ReturnItems = () => {
         return;
       }
       setExchangeEvidence(file);
+    }
+  };
+
+  const handleDamageEvidenceUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        alert('File size must be less than 10MB');
+        return;
+      }
+      
+      // Check if file is an image
+      if (!file.type.startsWith('image/')) {
+        alert('Please upload an image file');
+        return;
+      }
+      
+      setDamageEvidence(file);
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setPreviewImage(e.target.result);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -913,6 +956,68 @@ const ReturnItems = () => {
                     <option>Has Defect</option>
                   </select>
                 </div>
+
+                {/* Damage Evidence Upload - Only show when Damaged or Has Defect */}
+                {(itemCondition === "Damaged" || itemCondition === "Has Defect") && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Upload Evidence Photo <span className="text-red-500">*</span>
+                    </label>
+                    <label className="block cursor-pointer">
+                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-blue-400 transition-colors">
+                        {previewImage ? (
+                          <div className="space-y-3">
+                            <div className="relative">
+                              <img 
+                                src={previewImage} 
+                                alt="Damage evidence" 
+                                className="w-full h-48 object-cover rounded-lg"
+                              />
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  setDamageEvidence(null);
+                                  setPreviewImage(null);
+                                }}
+                                className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full hover:bg-red-600 transition-colors"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </div>
+                            <p className="text-sm text-gray-600 text-center">
+                              {damageEvidence?.name || 'Evidence image'}
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="text-center py-6">
+                            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <div className="mt-4">
+                              <span className="mt-2 block text-sm font-medium text-gray-900">
+                                Click to upload or drag and drop
+                              </span>
+                              <span className="mt-1 block text-xs text-gray-500">
+                                PNG, JPG, GIF up to 10MB
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <input
+                        type="file"
+                        className="sr-only"
+                        accept="image/*"
+                        onChange={handleDamageEvidenceUpload}
+                      />
+                    </label>
+                    <p className="mt-2 text-xs text-gray-500">
+                      Please upload a photo showing the damage or defect as evidence.
+                    </p>
+                  </div>
+                )}
 
                 {/* Equipment Details */}
                 <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
