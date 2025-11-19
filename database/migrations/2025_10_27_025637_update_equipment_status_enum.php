@@ -19,7 +19,7 @@ return new class extends Migration
         DB::table('equipment')->whereIn('status', ['maintenance', 'retired'])->update(['status' => 'available']);
         
         // Change the status enum values to match what the application expects
-        DB::statement("ALTER TABLE equipment MODIFY COLUMN status ENUM('available', 'borrowed', 'issued') DEFAULT 'available'");
+        DB::statement("ALTER TABLE equipment MODIFY COLUMN status ENUM('available', 'borrowed', 'issued', 'reserved') DEFAULT 'available'");
     }
 
     /**

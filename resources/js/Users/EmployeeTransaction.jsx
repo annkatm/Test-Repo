@@ -84,54 +84,7 @@ const EmployeeTransaction = () => {
     } catch (_) {}
   };
 
-  // Keep a per-user local list of reserved equipment IDs so they stay hidden after request submission
-  const getReservedIds = () => {
-    try {
-      migrateKeyIfNeeded('employee_reserved_equipment_ids');
-      const raw = localStorage.getItem(userKey('employee_reserved_equipment_ids')) || '[]';
-      const arr = JSON.parse(raw);
-      return Array.isArray(arr) ? new Set(arr.map(String)) : new Set();
-    } catch (_) { return new Set(); }
-  };
-  const addReservedIds = (ids) => {
-    try {
-      const cur = getReservedIds();
-      for (const id of ids) cur.add(String(id));
-      localStorage.setItem(userKey('employee_reserved_equipment_ids'), JSON.stringify(Array.from(cur)));
-    } catch (_) {}
-  };
-  const removeReservedId = (id) => {
-    try {
-      const cur = getReservedIds();
-      cur.delete(String(id));
-      localStorage.setItem(userKey('employee_reserved_equipment_ids'), JSON.stringify(Array.from(cur)));
-    } catch (_) {}
-  };
-  const cleanupReservedIds = (equipmentData) => {
-    try {
-      const reservedIds = getReservedIds();
-      const availableIds = new Set(equipmentData.map(eq => String(eq.id)));
-      let needsCleanup = false;
-      reservedIds.forEach(id => {
-        if (availableIds.has(id)) {
-          reservedIds.delete(id);
-          needsCleanup = true;
-        }
-      });
-      if (needsCleanup) {
-        localStorage.setItem(userKey('employee_reserved_equipment_ids'), JSON.stringify(Array.from(reservedIds)));
-      }
-    } catch (_) {}
-  };
-  
-  const filterOutReserved = (list) => {
-    try {
-      const cur = getReservedIds();
-      return (Array.isArray(list) ? list : []).filter((eq) => !cur.has(String(eq.id)));
-    } catch (_) {
-      return Array.isArray(list) ? list : [];
-    }
-  };
+
 
   // Load data on component mount
   useEffect(() => {
@@ -186,10 +139,8 @@ const EmployeeTransaction = () => {
           })));
         }
         
-        // Clean up reserved list: remove IDs that are now available
-        cleanupReservedIds(equipmentData);
-        
-        setEquipment(filterOutReserved(equipmentData));
+        // Backend filters by status='available', so we get only truly available equipment
+        setEquipment(equipmentData);
       } catch (e) {
         if (e.name !== 'AbortError') setError('Failed to load data');
       } finally {
@@ -201,83 +152,22 @@ const EmployeeTransaction = () => {
     return () => controller.abort();
   }, []);
 
-  // Listen for restore events from other parts of the app (e.g., EmployeeTransaction)
+  // Listen for restore events (when admin cancels/rejects a request)
   useEffect(() => {
-    const handler = async (e) => {
+    const handler = async () => {
       try {
-        const eqId = e?.detail?.equipment_id;
-        if (eqId) {
-          // Allow this unit to reappear by removing it from reserved list
-          try { removeReservedId(eqId); } catch (_) {}
-          // Try to fetch a single equipment unit and add it back if available
-          try {
-            const res = await fetch(`/api/equipment/${eqId}`);
-            const data = await res.json();
-            const item = data?.data || data;
-            if (item && (!item.status || item.status === 'available')) {
-              setEquipment((prev) => {
-                if (Array.isArray(prev) && prev.some((x) => String(x.id) === String(item.id))) return prev;
-                return [item, ...(Array.isArray(prev) ? prev : [])];
-              });
-            }
-          } catch (_err) {
-            // If single fetch fails, fall back to refreshing available list
-            const res = await fetch('/api/equipment?per_page=100&status=available');
-            const data = await res.json();
-            let equipmentData = [];
-            if (Array.isArray(data)) equipmentData = data; else if (data?.data?.data) equipmentData = data.data.data; else if (Array.isArray(data?.data)) equipmentData = data.data;
-            setEquipment(equipmentData || []);
-          }
-        } else {
-          // No id provided: refresh available equipment
-          const res = await fetch('/api/equipment?per_page=100&status=available');
-          const data = await res.json();
-          let equipmentData = [];
-          if (Array.isArray(data)) equipmentData = data; else if (data?.data?.data) equipmentData = data.data.data; else if (Array.isArray(data?.data)) equipmentData = data.data;
-          setEquipment(equipmentData || []);
-        }
+        // Refresh equipment list from API - backend will return only truly available items
+        const res = await fetch('/api/equipment?per_page=100&status=available');
+        const data = await res.json();
+        let equipmentData = [];
+        if (Array.isArray(data)) equipmentData = data;
+        else if (data?.data?.data) equipmentData = data.data.data;
+        else if (Array.isArray(data?.data)) equipmentData = data.data;
+        setEquipment(equipmentData || []);
       } catch (_e) { /* ignore */ }
     };
     window.addEventListener('ireply:equipment:restore', handler);
     return () => window.removeEventListener('ireply:equipment:restore', handler);
-  }, []);
-
-  // On mount, process any queued restore requests from other views (e.g., OnProcessTransactions cancel)
-  useEffect(() => {
-    (async () => {
-      try {
-        const key = 'ireply_restore_queue';
-        const raw = localStorage.getItem(key);
-        const arr = Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : [];
-        if (!arr || arr.length === 0) return;
-        // Clear queue first to avoid double-processing if anything throws below
-        try { localStorage.setItem(key, JSON.stringify([])); } catch (_) {}
-
-        for (const id of arr) {
-          try { removeReservedId(id); } catch (_) {}
-          try {
-            const res = await fetch(`/api/equipment/${id}`);
-            const data = await res.json();
-            const item = data?.data || data;
-            if (item && (!item.status || item.status === 'available')) {
-              setEquipment((prev) => {
-                if (Array.isArray(prev) && prev.some((x) => String(x.id) === String(item.id))) return prev;
-                return [item, ...(Array.isArray(prev) ? prev : [])];
-              });
-            }
-          } catch (_e) {
-            // If single fetch fails, refresh available list once
-            try {
-              const res = await fetch('/api/equipment?per_page=100&status=available');
-              const data = await res.json();
-              let equipmentData = [];
-              if (Array.isArray(data)) equipmentData = data; else if (data?.data?.data) equipmentData = data.data.data; else if (Array.isArray(data?.data)) equipmentData = data.data;
-              setEquipment(equipmentData || []);
-            } catch (_) {}
-          }
-        }
-      } catch (_) { /* ignore */ }
-    })();
   }, []);
 
   // Group equipment units into products (same brand/name/specs)
@@ -299,11 +189,20 @@ const EmployeeTransaction = () => {
       groups[key].items.push(eq);
     }
     return Object.values(groups)
-      .map(g => ({
-        ...g,
-        availableCount: g.items.filter(i => !i.status || i.status === 'available').length,
-        representative: g.items[0] || null,
-      }));
+      .map(g => {
+        // Count available items
+        const availableItems = g.items.filter(i => !i.status || i.status === 'available');
+        // Count items in cart for this group
+        const cartGroup = cartItems.find(ci => ci.groupKey === g.key);
+        const cartCount = cartGroup ? cartGroup.quantity : 0;
+        // Available count = total available - in cart
+        const availableCount = Math.max(0, availableItems.length - cartCount);
+        return {
+          ...g,
+          availableCount,
+          representative: g.items[0] || null,
+        };
+      });
   };
 
   const handleItemTableClick = async (category) => {
@@ -340,10 +239,8 @@ const EmployeeTransaction = () => {
         })));
       }
       
-      // Clean up reserved list: remove IDs that are now available
-      cleanupReservedIds(equipmentData);
-      
-      setEquipment(filterOutReserved(equipmentData));
+      // Backend filters by status='available'
+      setEquipment(equipmentData);
     } catch (e) {
       setError('Failed to load equipment for category');
     } finally {
@@ -366,10 +263,8 @@ const EmployeeTransaction = () => {
         equipmentData = data.data;
       }
       
-      // Clean up reserved list: remove IDs that are now available
-      cleanupReservedIds(equipmentData);
-      
-      setEquipment(filterOutReserved(equipmentData));
+      // Backend filters by status='available'
+      setEquipment(equipmentData);
     } catch (e) {
       setError('Failed to load all equipment');
     } finally {
@@ -412,10 +307,6 @@ const EmployeeTransaction = () => {
       ]);
     }
 
-    // Remove the added item from the visible equipment list so it vanishes
-    // This reflects that this specific unit is now taken/reserved in the cart
-    setEquipment(prev => prev.filter(eq => eq.id !== item.id));
-
     logActivity(`Added to cart: ${(item.name || item.brand || 'Item')} (${item.id})`, 'success');
 
     const itemsSection = document.getElementById('items-section');
@@ -431,12 +322,6 @@ const EmployeeTransaction = () => {
   const handleRemoveFromCart = (groupKey) => {
     const group = cartItems.find(ci => ci.groupKey === groupKey);
     if (group) {
-      // Return all units in this group back to the equipment list if not already there
-      setEquipment(prev => {
-        const existingIds = new Set(prev.map(eq => eq.id));
-        const toAdd = group.units.filter(u => !existingIds.has(u.id));
-        return [...toAdd, ...prev];
-      });
       logActivity(`Removed from cart: ${group.name} (x${group.quantity})`, 'warning');
     }
     setCartItems(cartItems.filter(ci => ci.groupKey !== groupKey));
@@ -450,14 +335,7 @@ const EmployeeTransaction = () => {
       return;
     }
     if (newQuantity < group.quantity) {
-      // Decrement: return one unit to equipment
-      const unit = group.units[group.units.length - 1];
-      if (unit) {
-        setEquipment(prev => {
-          if (getReservedIds().has(String(unit.id))) return prev; // keep hidden if reserved
-          return prev.some(eq => eq.id === unit.id) ? prev : [unit, ...prev];
-        });
-      }
+      // Decrement: just remove units from cart
       setCartItems(cartItems.map(ci => 
         ci.groupKey === groupKey ? { ...ci, quantity: newQuantity, units: ci.units.slice(0, -1) } : ci
       ));
@@ -470,13 +348,15 @@ const EmployeeTransaction = () => {
         alert(`You can only add up to ${limit} ${name}${limit > 1 ? 's' : ''}.`);
         return;
       }
-      // Increment: try to take one matching available unit from equipment
-      const matchIndex = equipment.findIndex(eq => (
-        `${(eq.name || eq.brand || 'Unknown').toLowerCase()}||${(eq.specifications || '').toLowerCase()}||${eq.category_id || ''}` === groupKey
-      ));
-      if (matchIndex === -1) return; // no more stock available
-      const unit = equipment[matchIndex];
-      setEquipment(prev => prev.filter((_, idx) => idx !== matchIndex));
+      // Increment: check if we have enough available items
+      const grouped = getGroupedEquipment();
+      const groupData = grouped.find(g => g.key === groupKey);
+      if (!groupData || groupData.availableCount <= 0) {
+        alert('No more items available to add.');
+        return;
+      }
+      // Add a dummy unit to the cart (will be marked as reserved on submit)
+      const unit = group.units[0]; // Use existing unit as template
       setCartItems(cartItems.map(ci => 
         ci.groupKey === groupKey ? { ...ci, quantity: newQuantity, units: [...ci.units, unit] } : ci
       ));
@@ -485,14 +365,6 @@ const EmployeeTransaction = () => {
   };
 
   const handleCancel = () => {
-    if (cartItems.length > 0) {
-      setEquipment(prev => {
-        // Add back any unit from all groups that's not already present in the equipment list
-        const existingIds = new Set(prev.map(eq => eq.id));
-        const toAdd = cartItems.flatMap(ci => ci.units || []).filter(u => !existingIds.has(u.id) && !getReservedIds().has(String(u.id)));
-        return [...toAdd, ...prev];
-      });
-    }
     setCartItems([]);
     logActivity('Canceled cart and reset selection', 'warning');
     // Reset selection and reload default available equipment
@@ -714,10 +586,43 @@ const EmployeeTransaction = () => {
       const successIds = new Set(results.filter(r => r.success).map(r => r.unitId));
 
       if (successCount > 0) {
-        // Optimistically remove successful units from the Equipment Types list so they vanish immediately
-        // Persistently hide these units for this user
-        addReservedIds(Array.from(successIds));
+        // Immediately remove successful items from the equipment list
         setEquipment(prev => prev.filter(eq => !successIds.has(eq.id)));
+        
+        // Add a longer delay to ensure database transaction completes
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        // Refresh equipment list from API to get updated database state
+        try {
+          const selectedCat = selectedCategory;
+          let url = '/api/equipment?per_page=100&status=available';
+          
+          // If a category is selected, maintain the filter
+          if (selectedCat) {
+            const cat = categories.find(c => c.name === selectedCat);
+            if (cat && cat.id) {
+              url += `&category_id=${cat.id}`;
+            }
+          }
+          
+          const res = await fetch(url);
+          const data = await res.json();
+          let equipmentData = [];
+          if (Array.isArray(data)) {
+            equipmentData = data;
+          } else if (data && data.data && Array.isArray(data.data.data)) {
+            equipmentData = data.data.data;
+          } else if (Array.isArray(data.data)) {
+            equipmentData = data.data;
+          }
+          console.log('Equipment after request:', equipmentData.length, 'items');
+          console.log('Requested equipment IDs:', Array.from(successIds));
+          console.log('Equipment contains requested IDs?', equipmentData.some(eq => successIds.has(eq.id)));
+          setEquipment(equipmentData);
+        } catch (e) {
+          console.error('Failed to refresh equipment list:', e);
+          // Keep the already-filtered list if API fails
+        }
 
         if (failedCount === 0) {
           alert(`✓ All ${successCount} request(s) submitted successfully!\n\nYour requests have been sent to the Super Admin for approval.`);

@@ -24,7 +24,7 @@ class EquipmentController extends Controller
             // Filter by status (validate allowed values)
             if ($request->has('status')) {
                 $status = (string) $request->input('status');
-                $allowedStatus = ['available', 'borrowed', 'issued'];
+                $allowedStatus = ['available', 'borrowed', 'issued', 'reserved'];
                 if (in_array($status, $allowedStatus, true)) {
                     $query->where('status', $status);
                 }
