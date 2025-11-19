@@ -781,7 +781,7 @@ const EmployeeTransaction = () => {
         <h1 className="text-4xl font-bold text-[#2262C6] transition-all duration-300">Transaction</h1>
       </div>
 
-      <div className="pl-5 grid grid-cols-1 md:grid-cols-12 gap-8 items-start bg-white ">
+      <div className="pl-5 grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
         <ItemCategories
           categories={categories}
           selectedCategory={selectedCategory}

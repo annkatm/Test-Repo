@@ -122,6 +122,16 @@ const EmployeeDashboard = ({
   return (
     <AppProvider>
     <div className="min-h-screen overflow-x-hidden bg-white w-full pl-0 md:pl-60">
+      <style jsx>{`
+        .grid-background {
+          background-color: #ffffff;
+          background-image: 
+            linear-gradient(rgba(0, 0, 0, 0.03) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(0, 0, 0, 0.03) 1px, transparent 1px);
+          background-size: 20px 20px;
+          background-position: -1px -1px;
+        }
+      `}</style>
       {/* Employee Sidebar Component */}
       <EmployeeSidebar 
         activeMenu={activeMenu}
@@ -140,7 +150,7 @@ const EmployeeDashboard = ({
           onLogoutClick={handleLogoutClick}
         />
   
-        <div className="flex-1 min-h-0 overflow-auto p-4 sm:p-6 bg-white">
+        <div className={`flex-1 min-h-0 overflow-auto p-4 sm:p-6 bg-white ${activeMenu === 'Transaction' ? 'grid-background' : ''}`}>
           {renderContent()}
         </div>
       </div>
