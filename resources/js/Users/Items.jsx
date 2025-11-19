@@ -130,6 +130,17 @@ const Items = ({
                   <span className="text-gray-600 text-sm">Total Items</span>
                   <span className="font-semibold text-gray-900 text-sm">x{cartItems.reduce((sum, item) => sum + item.quantity, 0)}</span>
                 </div>
+                
+                {/* Items List */}
+                <div className="pt-1 mt-1 border-t border-gray-200 space-y-1">
+                  {cartItems.map((item) => (
+                    <div key={item.groupKey} className="flex justify-between text-xs">
+                      <span className="text-gray-600">{item.name || item.brand}</span>
+                      <span className="font-medium text-gray-900">{item.units?.[0]?.model || item.model || 'N/A'}</span>
+                    </div>
+                  ))}
+                </div>
+                
                 <div className="pt-1 mt-1 border-t border-gray-200 space-y-0.5">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Work Location</span>
