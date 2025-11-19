@@ -13,6 +13,27 @@ const Items = ({
   setStartDate,
   isAtLimit
 }) => {
+  const [modeOptions, setModeOptions] = React.useState([
+    { value: 'Work From Home', label: 'Work From Home' },
+    { value: 'On Site', label: 'On Site' },
+  ]);
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/request-modes', { credentials: 'same-origin' });
+        if (!res.ok) return;
+        const j = await res.json();
+        const arr = Array.isArray(j?.data) ? j.data : (Array.isArray(j) ? j : []);
+        const normalized = arr.map((x) => {
+          if (typeof x === 'string') return { value: x, label: x };
+          const value = x.value || x.code || x.name || x.title || '';
+          const label = x.label || x.name || x.title || value;
+          return { value, label };
+        }).filter(o => o.value && o.label);
+        if (normalized.length) setModeOptions(normalized);
+      } catch (_) {}
+    })();
+  }, []);
   return (
     <div id="items-section" className="shadow-md shadow-gray-300 rounded-xl col-span-12 md:col-span-4 w-full md:w-auto mb-4 bg-white md:h-[552px] h-auto flex flex-col">
       <div className="rounded-xl shadow-sm shadow-gray-200 w-full h-full flex flex-col">
@@ -90,8 +111,9 @@ const Items = ({
                     className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-gray-300 bg-white"
                   >
                     <option value="">Select</option>
-                    <option value="Work From Home">Work From Home</option>
-                    <option value="On Site">On Site</option>
+                    {modeOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
                   </select>
                 </div>
               </div>
