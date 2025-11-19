@@ -2,14 +2,31 @@ import React, { useState, useMemo, useEffect } from "react";
 import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 
 const ReturnItems = () => {
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(5);
+  const [currentPage, setCurrentPage] = useState(() => {
+    try {
+      const v = Number(sessionStorage.getItem('employee_returns_current_page') || '1');
+      return Number.isFinite(v) && v >= 1 ? v : 1;
+    } catch (_) { return 1; }
+  });
+  const [itemsPerPage, setItemsPerPage] = useState(() => {
+    try {
+      const v = Number(sessionStorage.getItem('employee_returns_items_per_page') || '5');
+      return Number.isFinite(v) && v > 0 ? v : 5;
+    } catch (_) { return 5; }
+  });
   const [sortOption, setSortOption] = useState("date-desc");
   const [searchTerm, setSearchTerm] = useState("");
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expandedItem, setExpandedItem] = useState(null);
+
+  useEffect(() => {
+    try { sessionStorage.setItem('employee_returns_current_page', String(currentPage)); } catch (_) {}
+  }, [currentPage]);
+  useEffect(() => {
+    try { sessionStorage.setItem('employee_returns_items_per_page', String(itemsPerPage)); } catch (_) {}
+  }, [itemsPerPage]);
 
   // Combine returned and approved items
   const historyData = useMemo(() => {
@@ -244,6 +261,14 @@ const ReturnItems = () => {
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = sortedData.slice(indexOfFirstItem, indexOfLastItem);
+
+  useEffect(() => {
+    if (totalPages > 0 && currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    } else if (currentPage < 1) {
+      setCurrentPage(1);
+    }
+  }, [totalPages, currentPage]);
 
   const handleChangePage = (page) => setCurrentPage(page);
 

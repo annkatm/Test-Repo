@@ -107,7 +107,7 @@ class EmployeeTypeController extends Controller
                 "Deleted employee type: {$employeeType->name}"
             );
             
-            $employeeType->delete();
+            $employeeType->forceDelete(); // Permanent delete
 
             return response()->json([
                 'success' => true,

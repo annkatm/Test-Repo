@@ -99,7 +99,7 @@ class ClientController extends Controller
                 "Deleted client: {$client->name}"
             );
             
-            $client->delete();
+            $client->forceDelete(); // Permanent delete
 
             return response()->json([
                 'success' => true,

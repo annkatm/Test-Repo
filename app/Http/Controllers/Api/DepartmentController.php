@@ -99,7 +99,7 @@ class DepartmentController extends Controller
                 "Deleted department: {$department->name}"
             );
             
-            $department->delete();
+            $department->forceDelete(); // Permanent delete
 
             return response()->json([
                 'success' => true,
