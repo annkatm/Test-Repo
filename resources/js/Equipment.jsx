@@ -266,10 +266,10 @@ const Equipment = () => {
         if (eqRes?.data?.success && eqRes.data.data && Array.isArray(eqRes.data.data.data)) {
           const equipmentData = eqRes.data.data.data;
           
-          const assignedEquipment = equipmentData.filter(eq => eq.category_id);
+          const assignedEquipment = equipmentData.filter(eq => eq.category_id && eq.serial_number);
           
           const categoriesWithCount = categoriesData.map(cat => {
-            const categoryEquipment = assignedEquipment.filter(eq => eq.category_id === cat.id);
+            const categoryEquipment = assignedEquipment.filter(eq => Number(eq.category_id) === Number(cat.id));
             const available = categoryEquipment.filter(eq => eq.status === 'available').length;
             const borrowed = categoryEquipment.filter(eq => eq.status === 'borrowed').length;
             const issued = categoryEquipment.filter(eq => eq.status === 'issued').length;
@@ -285,7 +285,8 @@ const Equipment = () => {
             };
           });
           setCategories(categoriesWithCount);
-          setEquipment(assignedEquipment);
+          // Keep all items (including product-only) for grouping/display; counts still use assignedEquipment
+          setEquipment(equipmentData);
           
           const individualData = {};
           assignedEquipment.forEach(eq => {
@@ -402,7 +403,7 @@ const Equipment = () => {
                       
                       <div className="space-y-3">
                         {(() => {
-                          const categoryEquipment = equipment.filter(eq => eq.category_id === cat.id);
+                          const categoryEquipment = equipment.filter(eq => Number(eq.category_id) === Number(cat.id));
                           
                           if (categoryEquipment.length === 0) {
                             return <div className="text-gray-400 text-sm">No equipment found for this category.</div>;
@@ -419,7 +420,8 @@ const Equipment = () => {
                                 price: eq.purchase_price || 0
                               };
                             }
-                            if (eq.status === 'available' || eq.status === 'borrowed' || eq.status === 'issued') {
+                            // Only count real units (must have serial number)
+                            if (eq.serial_number && (eq.status === 'available' || eq.status === 'borrowed' || eq.status === 'issued')) {
                               acc[key].total += 1;
                               if (eq.status === 'available') {
                                 acc[key].available += 1;
@@ -1051,7 +1053,7 @@ const Equipment = () => {
           preSelectedCategory={selectedCategory}
           onSuccess={() => {
             // Refresh equipment data after adding
-            fetchEquipment();
+            fetchData();
             setIsAddItemOpen(false);
           }}
         />
@@ -1273,6 +1275,7 @@ const AddItemModal = ({ onClose, categories = [], onSuccess, preSelectedCategory
         headers: {
           'Accept': 'application/json',
         },
+        credentials: 'same-origin',
         body: formDataToSend,
       });
 
