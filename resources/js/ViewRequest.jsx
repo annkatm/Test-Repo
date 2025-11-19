@@ -241,7 +241,9 @@ const ViewRequest = () => {
         specs: returnItem.specifications || returnItem.specs || [returnItem.brand, returnItem.model].filter(Boolean).join(' ') || returnItem.category_name || '',
         // pass through return condition and notes
         return_condition: returnItem.return_condition || null,
-        return_notes: returnItem.return_notes || null
+        return_notes: returnItem.return_notes || null,
+        return_evidence: returnItem.return_evidence || null,
+        return_evidence_mime: returnItem.return_evidence_mime || null
       });
     });
     return Object.values(grouped);

@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use App\Models\Transaction;
 use App\Models\Equipment;
 use App\Models\Employee;
@@ -399,7 +400,8 @@ class TransactionController extends Controller
 
             $validatedData = $request->validate([
                 'return_condition' => 'required|in:good_condition,damaged,has_defect,lost',
-                'return_notes' => 'nullable|string|max:500'
+                'return_notes' => 'nullable|string|max:500',
+                'damage_evidence' => 'nullable|file|mimes:jpg,jpeg,png,gif,webp,mp4,mov,avi,mkv|max:10240'
             ]);
 
             $updateData = [
@@ -410,6 +412,13 @@ class TransactionController extends Controller
                 'received_by' => auth()->id(),
                 'updated_at' => now()
             ];
+
+            if ($request->hasFile('damage_evidence')) {
+                $file = $request->file('damage_evidence');
+                $path = $file->store('returns/evidence', 'public');
+                $updateData['return_evidence'] = $path;
+                $updateData['return_evidence_mime'] = $file->getClientMimeType();
+            }
 
             DB::table('transactions')->where('id', $id)->update($updateData);
 
