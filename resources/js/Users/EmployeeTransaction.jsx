@@ -113,7 +113,10 @@ const EmployeeTransaction = () => {
       const availableIds = new Set(equipmentData.map(eq => String(eq.id)));
       let needsCleanup = false;
       reservedIds.forEach(id => {
-        if (availableIds.has(id)) {
+        // Only clean up IDs that no longer exist in the equipment list at all.
+        // This keeps reserved items hidden (deducted) across refresh/logout/login
+        // until an explicit restore event removes them.
+        if (!availableIds.has(id)) {
           reservedIds.delete(id);
           needsCleanup = true;
         }
