@@ -255,62 +255,25 @@ class RequestController extends Controller
                 'updated_at' => now(),
             ];
 
-            // Use transaction to ensure both request creation and equipment update succeed together
-            $requestId = DB::transaction(function () use ($requestData, $validated) {
-                try {
-                    $id = DB::table('requests')->insertGetId($requestData);
-                } catch (QueryException $e) {
-                    if ($this->isPendingDuplicateException($e)) {
-                        throw new \Exception('Duplicate pending request');
-                    }
+            try {
+                $requestId = DB::table('requests')->insertGetId($requestData);
+            } catch (QueryException $e) {
+                if ($this->isPendingDuplicateException($e)) {
+                    $existing = $this->getPendingRequest($validated['employee_id'], $validated['equipment_id']);
 
-                    if ($this->isRequestNumberDuplicate($e)) {
-                        $requestData['request_number'] = $this->generateRequestNumber();
-                        $id = DB::table('requests')->insertGetId($requestData);
-                    } else {
-                        throw $e;
-                    }
-                }
-
-                // Mark equipment as 'reserved' immediately after request is created
-                // Force a fresh query to ensure we're updating the right record
-                $equipmentExists = DB::table('equipment')
-                    ->where('id', $validated['equipment_id'])
-                    ->exists();
-                
-                if (!$equipmentExists) {
-                    throw new \Exception('Equipment not found: ' . $validated['equipment_id']);
-                }
-                
-                $updateCount = DB::table('equipment')
-                    ->where('id', $validated['equipment_id'])
-                    ->update([
-                        'status' => 'reserved',
-                        'updated_at' => now()
+                    return response()->json([
+                        'success' => true,
+                        'data' => $existing,
+                        'message' => 'A pending request for this equipment already exists. Returning existing record.'
                     ]);
-                
-                \Log::info('Equipment status update attempted', [
-                    'equipment_id' => $validated['equipment_id'],
-                    'equipment_exists' => $equipmentExists,
-                    'rows_updated' => $updateCount,
-                    'new_status' => DB::table('equipment')->where('id', $validated['equipment_id'])->value('status')
-                ]);
-                
-                if ($updateCount === 0) {
-                    throw new \Exception('Failed to update equipment status - no rows affected');
                 }
 
-                return $id;
-            }, 3); // 3 attempts
-
-            // Check if transaction returned an error
-            if (!$requestId) {
-                $existing = $this->getPendingRequest($validated['employee_id'], $validated['equipment_id']);
-                return response()->json([
-                    'success' => true,
-                    'data' => $existing,
-                    'message' => 'A pending request for this equipment already exists. Returning existing record.'
-                ]);
+                if ($this->isRequestNumberDuplicate($e)) {
+                    $requestData['request_number'] = $this->generateRequestNumber();
+                    $requestId = DB::table('requests')->insertGetId($requestData);
+                } else {
+                    throw $e;
+                }
             }
 
             // Fetch the created request with related data
@@ -700,21 +663,13 @@ class RequestController extends Controller
                 'rejection_reason' => 'required|string',
             ]);
 
-            // Use transaction to ensure both equipment restore and request update succeed together
-            DB::transaction(function () use ($equipmentRequest, $id, $validated) {
-                // Restore equipment status to 'available' when request is rejected
-                DB::table('equipment')
-                    ->where('id', $equipmentRequest->equipment_id)
-                    ->update(['status' => 'available', 'updated_at' => now()]);
-
-                DB::table('requests')->where('id', $id)->update([
-                    'status' => 'rejected',
-                    'approved_by' => Auth::id(), // Use currently authenticated user's ID
-                    'approved_at' => now(),
-                    'rejection_reason' => $validated['rejection_reason'],
-                    'updated_at' => now(),
-                ]);
-            });
+            DB::table('requests')->where('id', $id)->update([
+                'status' => 'rejected',
+                'approved_by' => Auth::id(), // Use currently authenticated user's ID
+                'approved_at' => now(),
+                'rejection_reason' => $validated['rejection_reason'],
+                'updated_at' => now(),
+            ]);
 
             // Fetch updated request with related data
             $updatedRequest = DB::table('requests')
@@ -864,18 +819,10 @@ class RequestController extends Controller
                 ], 422);
             }
 
-            // Use transaction to ensure both equipment restore and request update succeed together
-            DB::transaction(function () use ($equipmentRequest, $id) {
-                // Restore equipment status to 'available' when request is cancelled
-                DB::table('equipment')
-                    ->where('id', $equipmentRequest->equipment_id)
-                    ->update(['status' => 'available', 'updated_at' => now()]);
-
-                DB::table('requests')->where('id', $id)->update([
-                    'status' => 'cancelled',
-                    'updated_at' => now(),
-                ]);
-            });
+            DB::table('requests')->where('id', $id)->update([
+                'status' => 'cancelled',
+                'updated_at' => now(),
+            ]);
 
             // Log the activity
             ActivityLogService::logSystemActivity(
