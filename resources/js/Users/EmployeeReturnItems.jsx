@@ -295,45 +295,6 @@ const ReturnItems = () => {
       ];
 
       const mapped = (allItems || []).map((r, idx) => normalize(r, idx));
-      
-      // Deduplicate by transaction_id and serial_number to prevent showing same item multiple times
-      const deduped = [];
-      const seen = new Set();
-      for (const item of mapped) {
-        // Create unique key from transaction_id, equipment_id, and serial_number
-        const txId = item.transaction_id || item.id || '';
-        const eqId = item.equipment_id || '';
-        const serial = item.serialNo || item.serial_number || '';
-        const key = `${txId}::${eqId}::${serial}`;
-        
-        if (!seen.has(key)) {
-          seen.add(key);
-          deduped.push(item);
-        } else {
-          // If duplicate found, keep the one with more complete status (completed > returned > approved)
-          const existingIndex = deduped.findIndex(d => {
-            const dKey = `${d.transaction_id || d.id || ''}::${d.equipment_id || ''}::${d.serialNo || d.serial_number || ''}`;
-            return dKey === key;
-          });
-          
-          if (existingIndex >= 0) {
-            const existing = deduped[existingIndex];
-            const existingStatus = String(existing.status || '').toLowerCase();
-            const newStatus = String(item.status || '').toLowerCase();
-            
-            // Priority: completed > returned > approved
-            const shouldReplace = (
-              (newStatus.includes('completed') && !existingStatus.includes('completed')) ||
-              (newStatus.includes('returned') && !existingStatus.includes('completed') && !existingStatus.includes('returned'))
-            );
-            
-            if (shouldReplace) {
-              deduped[existingIndex] = item;
-            }
-          }
-        }
-      }
-      
       // Merge with previous to avoid temporary drops when API returns partial sets
       setData((prev) => {
         const prevArr = Array.isArray(prev) ? prev : [];
@@ -361,7 +322,7 @@ const ReturnItems = () => {
           if (weight(rec.status) > weight(cur.status)) byKey.set(k, rec);
         };
         prevArr.forEach(add);
-        deduped.forEach(add);
+        mapped.forEach(add);
         return Array.from(byKey.values());
       });
     } catch (e) {
@@ -609,7 +570,6 @@ const ReturnItems = () => {
   const [itemCondition, setItemCondition] = useState("Good Condition");
   const [damageEvidence, setDamageEvidence] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
-  const [isDamageEvidenceVideo, setIsDamageEvidenceVideo] = useState(false);
 
   // Exchange states
   const [showExchangeModal, setShowExchangeModal] = useState(false);
@@ -631,7 +591,6 @@ const ReturnItems = () => {
     setDamageEvidence(null);
     setPreviewImage(null);
     setShowReturnModal(true);
-    setIsDamageEvidenceVideo(false);
   };
 
   const handleConfirmReturn = async () => {
@@ -639,7 +598,7 @@ const ReturnItems = () => {
 
     // Validate evidence upload for damaged/defective items
     if ((itemCondition === "Damaged" || itemCondition === "Has Defect") && !damageEvidence) {
-      alert('Please upload evidence photo or video for damaged or defective items');
+      alert('Please upload evidence photo for damaged or defective items');
       return;
     }
 
@@ -718,7 +677,6 @@ const ReturnItems = () => {
       setItemCondition("Good Condition");
       setDamageEvidence(null);
       setPreviewImage(null);
-      setIsDamageEvidenceVideo(false);
 
       // Show success message
       alert('Item returned successfully! It is now pending admin verification.');
@@ -766,12 +724,20 @@ const ReturnItems = () => {
         return;
       }
 
-      // Accept image or video
-      const isVideo = file.type.startsWith('video/');
-      const previewUrl = URL.createObjectURL(file);
-      setIsDamageEvidenceVideo(isVideo);
+      // Check if file is an image
+      if (!file.type.startsWith('image/')) {
+        alert('Please upload an image file');
+        return;
+      }
+
       setDamageEvidence(file);
-      setPreviewImage(previewUrl);
+
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setPreviewImage(e.target.result);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -1310,28 +1276,23 @@ const ReturnItems = () => {
                 {(itemCondition === "Damaged" || itemCondition === "Has Defect") && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Upload Evidence Photo/Video <span className="text-red-500">*</span>
+                      Upload Evidence Photo <span className="text-red-500">*</span>
                     </label>
                     <label className="block cursor-pointer">
                       <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-blue-400 transition-colors">
                         {previewImage ? (
                           <div className="space-y-3">
                             <div className="relative">
-                              {isDamageEvidenceVideo ? (
-                                <video src={previewImage} controls className="w-full h-48 object-cover rounded-lg" />
-                              ) : (
-                                <img
-                                  src={previewImage}
-                                  alt="Damage evidence"
-                                  className="w-full h-48 object-cover rounded-lg"
-                                />
-                              )}
+                              <img
+                                src={previewImage}
+                                alt="Damage evidence"
+                                className="w-full h-48 object-cover rounded-lg"
+                              />
                               <button
                                 onClick={(e) => {
                                   e.preventDefault();
                                   setDamageEvidence(null);
                                   setPreviewImage(null);
-                                  setIsDamageEvidenceVideo(false);
                                 }}
                                 className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full hover:bg-red-600 transition-colors"
                               >
@@ -1354,7 +1315,7 @@ const ReturnItems = () => {
                                 Click to upload or drag and drop
                               </span>
                               <span className="mt-1 block text-xs text-gray-500">
-                                PNG, JPG, GIF, MP4 up to 10MB
+                                PNG, JPG, GIF up to 10MB
                               </span>
                             </div>
                           </div>
@@ -1363,12 +1324,12 @@ const ReturnItems = () => {
                       <input
                         type="file"
                         className="sr-only"
-                        accept="image/*,video/*"
+                        accept="image/*"
                         onChange={handleDamageEvidenceUpload}
                       />
                     </label>
                     <p className="mt-2 text-xs text-gray-500">
-                      Please upload a photo or video showing the damage or defect as evidence.
+                      Please upload a photo showing the damage or defect as evidence.
                     </p>
                   </div>
                 )}

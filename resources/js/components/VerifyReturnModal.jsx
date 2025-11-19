@@ -111,12 +111,6 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
   const avatarUrl = getAvatarUrl(data);
   const employeeName = data.full_name || data.employee_name || 'N/A';
 
-  const getStorageUrl = (path) => {
-    if (!path) return null;
-    if (typeof path === 'string' && (path.startsWith('http') || path.startsWith('/storage/'))) return path;
-    return `/storage/${path}`;
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <style jsx>{`
@@ -231,7 +225,7 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
                         <div className="overflow-hidden">
                           {/* Table Header */}
                           <div className="bg-gray-100 border-b border-gray-200">
-                            <div className="grid grid-cols-6">
+                            <div className="grid grid-cols-5">
                               <div className="px-3 py-1.5 border-r border-gray-200">
                                 <span className="text-xs font-medium text-gray-700">Model</span>
                               </div>
@@ -243,9 +237,6 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
                               </div>
                               <div className="px-3 py-1.5 border-r border-gray-200">
                                 <span className="text-xs font-medium text-gray-700">Employee Notes</span>
-                              </div>
-                              <div className="px-3 py-1.5 border-r border-gray-200">
-                                <span className="text-xs font-medium text-gray-700">Evidence</span>
                               </div>
                               <div className="px-3 py-1.5">
                                 <span className="text-xs font-medium text-gray-700">Condition</span>
@@ -265,7 +256,7 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
                               return (
                                 <div 
                                   key={item.id || itemIndex} 
-                                  className={`grid grid-cols-6 ${itemIndex < group.items.length - 1 ? 'border-b border-gray-200' : ''}`}
+                                  className={`grid grid-cols-5 ${itemIndex < group.items.length - 1 ? 'border-b border-gray-200' : ''}`}
                                 >
                                   <div className="px-3 py-2 border-r border-gray-200">
                                     <span className="text-xs text-gray-700">{model}</span>
@@ -283,19 +274,6 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
                                     >
                                       {item.return_notes || item.employee_notes || '—'}
                                     </span>
-                                  </div>
-                                  <div className="px-3 py-2 border-r border-gray-200">
-                                    {(() => {
-                                      const url = getStorageUrl(item.return_evidence);
-                                      const mime = (item.return_evidence_mime || '').toString();
-                                      const isVideo = mime.startsWith('video/');
-                                      if (!url) return (<span className="text-xs text-gray-500">—</span>);
-                                      return isVideo ? (
-                                        <video src={url} className="h-12 w-20 rounded" controls preload="metadata" />
-                                      ) : (
-                                        <img src={url} alt="Evidence" className="h-12 w-20 object-cover rounded" />
-                                      );
-                                    })()}
                                   </div>
                                   <div className="px-3 py-2">
                                     {(() => {
