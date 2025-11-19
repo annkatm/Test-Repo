@@ -109,8 +109,7 @@ const ControlPanel = () => {
     3: 'Terminated',
     4: 'Independent Contractor',
     5: 'Benched',
-    6: 'Separated',
-    7: 'End of Service'
+    6: 'Separated'
   };
 
   const addNewItem = async () => {
@@ -140,14 +139,23 @@ const ControlPanel = () => {
         const inputValue = newItemName.trim();
         const codeNumber = parseInt(inputValue);
         
-        // If user entered a number (0-7), map it to the predefined name
+        // If user entered a number (0-6), map it to the predefined name
         if (!isNaN(codeNumber) && employeeTypeMapping[codeNumber]) {
           payload.name = employeeTypeMapping[codeNumber];
           payload.code = codeNumber;
         } else {
-          // User entered a custom name, auto-generate next code
-          const maxCode = Math.max(...dropdownItems[activeModal].map(item => item.code || 0), -1);
-          payload.code = maxCode + 1;
+          // User entered a custom name, auto-generate next available code within 0–6
+          const usedCodes = new Set((dropdownItems[activeModal] || []).map(item => item.code));
+          let nextCode = null;
+          for (let i = 0; i <= 6; i++) {
+            if (!usedCodes.has(i)) { nextCode = i; break; }
+          }
+          if (nextCode === null) {
+            setItemError('Maximum limit reached. Codes 0–6 are all taken.');
+            setItemLoading(false);
+            return;
+          }
+          payload.code = nextCode;
         }
       }
       
@@ -182,8 +190,9 @@ const ControlPanel = () => {
     }
   };
 
-  const removeItem = async (idx) => {
-    const item = dropdownItems[activeModal][idx];
+  const removeItem = async (target) => {
+    const list = dropdownItems[activeModal] || [];
+    const item = typeof target === 'number' ? list[target] : list.find(i => i.id === target);
     if (!item) return;
 
     try {
@@ -422,7 +431,7 @@ const ControlPanel = () => {
                       onChange={(e) => setNewItemName(e.target.value)}
                       onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (!itemLoading) { addNewItem(); } } }}
                       className="flex-1 px-3 py-2 rounded-md bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder={`Enter ${getDisplayName(activeModal).toLowerCase()} name`}
+                      placeholder={activeModal === 'employee type' ? 'Enter 0–6 (or type a name)' : `Enter ${getDisplayName(activeModal).toLowerCase()} name`}
                     />
                     <button
                       type="button"
@@ -433,6 +442,11 @@ const ControlPanel = () => {
                       {itemLoading ? 'Adding...' : 'Add'}
                     </button>
                   </div>
+                  {activeModal === 'employee type' && (
+                    <p className="mt-1 text-[11px] text-gray-500">
+                      Enter a number 0–6 to organi. 0-Regular, 1-New hire, 2-Probationary, 3-Terminated, 4-Independent Contractor, 5-Benched, 6-Separated.
+                    </p>
+                  )}
                 </div>
 
                 {/* Existing items list */}
@@ -443,12 +457,12 @@ const ControlPanel = () => {
                 <div className="mb-5">
                   <div className="w-full rounded-xl border border-blue-100 bg-white shadow-[0_6px_16px_rgba(29,78,216,0.15)]">
                     <div className="max-h-40 overflow-y-auto divide-y divide-gray-100">
-                      {dropdownItems[activeModal]?.map((item, idx) => (
+                      {(dropdownItems[activeModal] || []).map((item, idx) => (
                         <div key={item.id ?? idx} className="flex items-center justify-between px-4 py-2 text-sm hover:bg-blue-50">
                           <div className="flex items-center space-x-2">
                             <span className="text-gray-700">{item.name}</span>
                           </div>
-                          <button type="button" onClick={() => removeItem(idx)} className="text-red-500 hover:text-red-600">
+                          <button type="button" onClick={() => removeItem(item.id)} className="text-red-500 hover:text-red-600">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M6 7h12l-1 12a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 7Zm3-3h6l1 2H8l1-2Z"/></svg>
                           </button>
                         </div>

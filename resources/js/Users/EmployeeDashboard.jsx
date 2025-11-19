@@ -11,7 +11,11 @@ const EmployeeDashboard = ({
   employeeName: propEmployeeName,
   notifications: propNotifications = 3
 }) => {
-  const [activeMenu, setActiveMenu] = useState('Home');
+  const [activeMenu, setActiveMenu] = useState(() => {
+    try {
+      return sessionStorage.getItem('employee_active_menu') || 'Home';
+    } catch (_) { return 'Home'; }
+  });
   const [userData, setUserData] = useState(null);
   const [employeeName, setEmployeeName] = useState(propEmployeeName || 'Employee User');
   const [userRole, setUserRole] = useState('employee');
@@ -45,6 +49,23 @@ const EmployeeDashboard = ({
 
     fetchUserData();
   }, []);
+  useEffect(() => {
+    try {
+      let isReload = false;
+      if (performance && typeof performance.getEntriesByType === 'function') {
+        const entries = performance.getEntriesByType('navigation');
+        if (entries && entries.length > 0) {
+          isReload = entries[0].type === 'reload';
+        }
+      } else if (performance && performance.navigation) {
+        isReload = performance.navigation.type === 1;
+      }
+      if (!isReload) {
+        setActiveMenu('Home');
+        try { sessionStorage.setItem('employee_active_menu', 'Home'); } catch (_) {}
+      }
+    } catch (_) {}
+  }, []);
 
   // Listen for navigation events (e.g., from ApprovedTransactions after return)
   useEffect(() => {
@@ -57,6 +78,10 @@ const EmployeeDashboard = ({
     window.addEventListener('ireply:navigate', onNavigate);
     return () => window.removeEventListener('ireply:navigate', onNavigate);
   }, []);
+
+  useEffect(() => {
+    try { sessionStorage.setItem('employee_active_menu', activeMenu); } catch (_) {}
+  }, [activeMenu]);
 
   const handleMenuClick = (label) => {
     setActiveMenu(label);

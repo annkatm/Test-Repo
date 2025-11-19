@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Echo from '../echo';
 import { X, RefreshCcw, ClipboardList, Mouse, FilePlus2 } from 'lucide-react';
 import StatsCards from './StatsCards';
@@ -43,6 +43,8 @@ const EmployeeHome = () => {
   });
   // Equipment details cache for type detection
   const [equipmentDetails, setEquipmentDetails] = useState({});
+  const pendingDelayTimerRef = useRef(null);
+  const [delayShowPending, setDelayShowPending] = useState(true);
 
   // Fetch equipment details by ID
   const fetchEquipmentDetails = async (equipmentId) => {
@@ -140,6 +142,22 @@ const EmployeeHome = () => {
   // Clear borrowed items on component mount
   useEffect(() => {
     setBorrowedItems([]);
+  }, []);
+
+  const startPendingDelay = () => {
+    if (pendingDelayTimerRef.current) clearTimeout(pendingDelayTimerRef.current);
+    setDelayShowPending(true);
+    pendingDelayTimerRef.current = setTimeout(() => {
+      setDelayShowPending(false);
+      pendingDelayTimerRef.current = null;
+    }, 100);
+  };
+
+  useEffect(() => {
+    startPendingDelay();
+    return () => {
+      if (pendingDelayTimerRef.current) clearTimeout(pendingDelayTimerRef.current);
+    };
   }, []);
 
   // Ensure denied requests are loaded so Recent Activities shows them
@@ -284,7 +302,7 @@ const EmployeeHome = () => {
       try { showToast('Request cancelled successfully', 'success'); } catch (_) {}
       
       // Refresh pending from server to ensure consistency
-      setTimeout(() => { try { fetchPendingTransactions(); } catch (_) {} }, 500);
+      setTimeout(() => { try { fetchPendingTransactions(); } catch (_) {} }, 100);
     };
     window.addEventListener('ireply:request:cancelled', onCancelled);
     const onCreated = (e) => {
@@ -345,7 +363,7 @@ const EmployeeHome = () => {
       setTimeout(() => {
         console.log('[EmployeeHome] Refreshing pending transactions from server');
         fetchPendingTransactions();
-      }, 1000);
+      }, 100);
     };
     
     const onApproved = (e) => {
@@ -923,6 +941,7 @@ const EmployeeHome = () => {
     if (refreshing) return;
     console.log('[EmployeeHome] Home refresh triggered');
     setRefreshing(true);
+    startPendingDelay();
     clearCancelledIds();
     Promise.all([
       (async () => { try { await fetchTransactionStats(); } catch (_) {} })(),
@@ -1017,61 +1036,65 @@ const EmployeeHome = () => {
               </div>
 
               <div className="divide-y divide-gray-100">
-                {[...pendingTransactions]
-                  .filter((t) => !cancelledReqIds.includes(String(t?.id)))
-                  .sort((a, b) => {
-                    const aDate = new Date(a.expected_start_date || a.requested_date || a.created_at || 0).getTime();
-                    const bDate = new Date(b.expected_start_date || b.requested_date || b.created_at || 0).getTime();
-                    return bDate - aDate; // newest first
-                  })
-                  .slice(0, 6)
-                  .map((transaction, index) => (
-                    <div
-                      key={transaction.id || index}
-                      className="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer text-[15px]"
-                      onClick={() => {
-                        setSelectedPendingId(transaction.id || index);
-                        logActivity(`Opened pending item inspect: ${transaction.equipment_name || transaction.item || 'Item'} (${transaction.id || index})`, 'info');
-                      }}
-                    >
-                      <div className="grid grid-cols-12 gap-4 items-center">
-                        <div className="col-span-3">
-                          <span className="text-[15px] text-gray-900">
-                            {(() => {
-                              const d = transaction.expected_start_date || transaction.requested_date || transaction.created_at;
-                              return d
-                                ? new Date(d).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" })
-                                : '-';
-                            })()}
-                          </span>
+                {delayShowPending ? null : (
+                  <>
+                    {[...pendingTransactions]
+                      .filter((t) => !cancelledReqIds.includes(String(t?.id)))
+                      .sort((a, b) => {
+                        const aDate = new Date(a.expected_start_date || a.requested_date || a.created_at || 0).getTime();
+                        const bDate = new Date(b.expected_start_date || b.requested_date || b.created_at || 0).getTime();
+                        return bDate - aDate; // newest first
+                      })
+                      .slice(0, 6)
+                      .map((transaction, index) => (
+                        <div
+                          key={transaction.id || index}
+                          className="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer text-[15px]"
+                          onClick={() => {
+                            setSelectedPendingId(transaction.id || index);
+                            logActivity(`Opened pending item inspect: ${transaction.equipment_name || transaction.item || 'Item'} (${transaction.id || index})`, 'info');
+                          }}
+                        >
+                          <div className="grid grid-cols-12 gap-4 items-center">
+                            <div className="col-span-3">
+                              <span className="text-[15px] text-gray-900">
+                                {(() => {
+                                  const d = transaction.expected_start_date || transaction.requested_date || transaction.created_at;
+                                  return d
+                                    ? new Date(d).toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" })
+                                    : '-';
+                                })()}
+                              </span>
+                            </div>
+                            <div className="col-span-3">
+                              <span className="text-[15px] text-gray-900 font-semibold">
+                                {transaction.equipment_name || transaction.item || 'Unknown'}
+                              </span>
+                            </div>
+                            <div className="col-span-3">
+                              <span className="text-sm text-gray-900">
+                                {transaction.equipment?.brand || transaction.brand || transaction.equipment_brand || '-'}
+                              </span>
+                            </div>
+                            <div className="col-span-3">
+                              {(() => {
+                                const s = String(transaction.status || '').toLowerCase();
+                                const isApproved = /approved|released|borrowed|active/.test(s);
+                                const cls = isApproved
+                                  ? 'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200'
+                                  : 'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200';
+                                const label = isApproved ? 'Approved' : (transaction.status || 'Pending');
+                                return <span className={cls}>{label}</span>;
+                              })()}
+                            </div>
+                          </div>
                         </div>
-                        <div className="col-span-3">
-                          <span className="text-[15px] text-gray-900 font-semibold">
-                            {transaction.equipment_name || transaction.item || 'Unknown'}
-                          </span>
-                        </div>
-                        <div className="col-span-3">
-                          <span className="text-sm text-gray-900">
-                            {transaction.equipment?.brand || transaction.brand || transaction.equipment_brand || '-'}
-                          </span>
-                        </div>
-                        <div className="col-span-3">
-                          {(() => {
-                            const s = String(transaction.status || '').toLowerCase();
-                            const isApproved = /approved|released|borrowed|active/.test(s);
-                            const cls = isApproved
-                              ? 'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200'
-                              : 'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200';
-                            const label = isApproved ? 'Approved' : (transaction.status || 'Pending');
-                            return <span className={cls}>{label}</span>;
-                          })()}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                      ))}
 
-                {(!pendingTransactions || pendingTransactions.filter((t) => !cancelledReqIds.includes(String(t?.id))).length === 0) && (
-                  <div className="px-6 py-6 text-sm text-gray-500">No requests are currently in process.</div>
+                    {(!pendingTransactions || pendingTransactions.filter((t) => !cancelledReqIds.includes(String(t?.id))).length === 0) && (
+                      <div className="px-6 py-6 text-sm text-gray-500">No requests are currently in process.</div>
+                    )}
+                  </>
                 )}
               </div>
             </div>

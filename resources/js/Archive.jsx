@@ -360,10 +360,6 @@ const Archive = () => {
                                     <option value="requests">Requests</option>
                                     <option value="transactions">Transactions</option>
                                     <option value="employees">Employees</option>
-                                    <option value="employee_types">Employee Types</option>
-                                    <option value="positions">Positions</option>
-                                    <option value="departments">Departments</option>
-                                    <option value="clients">Clients</option>
                                     <option value="users">Users</option>
                                 </select>
                             </div>

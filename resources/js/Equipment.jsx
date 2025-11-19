@@ -266,10 +266,10 @@ const Equipment = () => {
         if (eqRes?.data?.success && eqRes.data.data && Array.isArray(eqRes.data.data.data)) {
           const equipmentData = eqRes.data.data.data;
           
-          const assignedEquipment = equipmentData.filter(eq => eq.category_id);
+          const assignedEquipment = equipmentData.filter(eq => eq.category_id && eq.serial_number);
           
           const categoriesWithCount = categoriesData.map(cat => {
-            const categoryEquipment = assignedEquipment.filter(eq => eq.category_id === cat.id);
+            const categoryEquipment = assignedEquipment.filter(eq => Number(eq.category_id) === Number(cat.id));
             const available = categoryEquipment.filter(eq => eq.status === 'available').length;
             const borrowed = categoryEquipment.filter(eq => eq.status === 'borrowed').length;
             const issued = categoryEquipment.filter(eq => eq.status === 'issued').length;
@@ -285,7 +285,8 @@ const Equipment = () => {
             };
           });
           setCategories(categoriesWithCount);
-          setEquipment(assignedEquipment);
+          // Keep all items (including product-only) for grouping/display; counts still use assignedEquipment
+          setEquipment(equipmentData);
           
           const individualData = {};
           assignedEquipment.forEach(eq => {
@@ -402,7 +403,7 @@ const Equipment = () => {
                       
                       <div className="space-y-3">
                         {(() => {
-                          const categoryEquipment = equipment.filter(eq => eq.category_id === cat.id);
+                          const categoryEquipment = equipment.filter(eq => Number(eq.category_id) === Number(cat.id));
                           
                           if (categoryEquipment.length === 0) {
                             return <div className="text-gray-400 text-sm">No equipment found for this category.</div>;
@@ -419,7 +420,8 @@ const Equipment = () => {
                                 price: eq.purchase_price || 0
                               };
                             }
-                            if (eq.status === 'available' || eq.status === 'borrowed' || eq.status === 'issued') {
+                            // Only count real units (must have serial number)
+                            if (eq.serial_number && (eq.status === 'available' || eq.status === 'borrowed' || eq.status === 'issued')) {
                               acc[key].total += 1;
                               if (eq.status === 'available') {
                                 acc[key].available += 1;
@@ -656,9 +658,9 @@ const Equipment = () => {
                     />
                   </div>
 
-                  {/* Description */}
+                  {/* Specification */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Description*</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Specification*</label>
                     <textarea
                       value={selectedItemDetails.description || selectedItemDetails.category_description || ''}
                       rows={4}
@@ -1051,7 +1053,7 @@ const Equipment = () => {
           preSelectedCategory={selectedCategory}
           onSuccess={() => {
             // Refresh equipment data after adding
-            fetchEquipment();
+            fetchData();
             setIsAddItemOpen(false);
           }}
         />
@@ -1273,6 +1275,7 @@ const AddItemModal = ({ onClose, categories = [], onSuccess, preSelectedCategory
         headers: {
           'Accept': 'application/json',
         },
+        credentials: 'same-origin',
         body: formDataToSend,
       });
 
@@ -1430,9 +1433,9 @@ const AddItemModal = ({ onClose, categories = [], onSuccess, preSelectedCategory
                 </div>
               </div>
 
-              {/* Third Row: Description (left), Price (right) */}
+              {/* Third Row: Specification (left), Price (right) */}
               <div>
-                <label className="text-sm text-gray-600">Description*</label>
+                <label className="text-sm text-gray-600">Specification*</label>
                 <div className="mt-2">
                   <textarea
                     name="description"
@@ -1493,7 +1496,7 @@ const AddItemModal = ({ onClose, categories = [], onSuccess, preSelectedCategory
                 <label className="text-sm text-gray-600">Item image</label>
                 <div className="mt-2">
                   <div
-                    className={`h-36 w-full border-2 border-dashed rounded-lg ${formData.item_image ? 'border-blue-300' : 'border-gray-300'
+                    className={`h-32 w-full border border-dashed rounded-lg ${formData.item_image ? 'border-blue-300' : 'border-gray-300'
                       } ${errors.item_image ? 'border-red-500' : ''
                       } hover:border-blue-400 transition-colors relative overflow-hidden`}
                   >
@@ -1501,28 +1504,41 @@ const AddItemModal = ({ onClose, categories = [], onSuccess, preSelectedCategory
                       type="file"
                       name="item_image"
                       onChange={handleFileChange}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                       accept="image/*"
                     />
-                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <div className="relative p-1">
                       {formData.item_image ? (
-                        <div className="relative">
+                        <div className="relative flex justify-center h-28">
                           <img
                             src={URL.createObjectURL(formData.item_image)}
                             alt="Item preview"
-                            className="h-full w-full object-cover rounded-md"
+                            className="max-h-28 max-w-full object-contain pointer-events-none"
                           />
-                          <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                            <span className="text-white text-xs">Click to change</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setFormData(prev => ({ ...prev, item_image: null }));
+                              setPreview(prev => ({ ...prev, item_image: null }));
+                            }}
+                            className="absolute top-1 right-1 p-1 rounded-full bg-red-500 text-white hover:bg-red-600 pointer-events-auto z-20"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                          <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-30 flex items-center justify-center opacity-0 hover:opacity-100 transition-all pointer-events-none">
+                            <span className="text-white text-xs bg-black bg-opacity-50 px-2 py-1 rounded">Click to change</span>
                           </div>
                         </div>
                       ) : (
-                        <>
-                          <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div className="h-28 flex flex-col items-center justify-center pointer-events-none">
+                          <svg className="w-6 h-6 text-gray-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                           </svg>
                           <p className="text-xs text-gray-500">Click or drag to upload</p>
-                        </>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1534,7 +1550,7 @@ const AddItemModal = ({ onClose, categories = [], onSuccess, preSelectedCategory
                 <label className="text-sm text-gray-600">Receipt image</label>
                 <div className="mt-2">
                   <div
-                    className={`h-36 w-full border-2 border-dashed rounded-lg ${formData.receipt_image ? 'border-blue-300' : 'border-gray-300'
+                    className={`h-32 w-full border border-dashed rounded-lg ${formData.receipt_image ? 'border-blue-300' : 'border-gray-300'
                       } ${errors.receipt_image ? 'border-red-500' : ''
                       } hover:border-blue-400 transition-colors relative overflow-hidden`}
                   >
@@ -1542,28 +1558,41 @@ const AddItemModal = ({ onClose, categories = [], onSuccess, preSelectedCategory
                       type="file"
                       name="receipt_image"
                       onChange={handleFileChange}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                       accept="image/*"
                     />
-                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <div className="relative p-1">
                       {formData.receipt_image ? (
-                        <div className="relative">
+                        <div className="relative flex justify-center h-28">
                           <img
                             src={URL.createObjectURL(formData.receipt_image)}
                             alt="Receipt preview"
-                            className="h-full w-full object-cover rounded-md"
+                            className="max-h-28 max-w-full object-contain pointer-events-none"
                           />
-                          <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                            <span className="text-white text-xs">Click to change</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setFormData(prev => ({ ...prev, receipt_image: null }));
+                              setPreview(prev => ({ ...prev, receipt_image: null }));
+                            }}
+                            className="absolute top-1 right-1 p-1 rounded-full bg-red-500 text-white hover:bg-red-600 pointer-events-auto z-20"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                          <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-30 flex items-center justify-center opacity-0 hover:opacity-100 transition-all pointer-events-none">
+                            <span className="text-white text-xs bg-black bg-opacity-50 px-2 py-1 rounded">Click to change</span>
                           </div>
                         </div>
                       ) : (
-                        <>
-                          <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div className="h-28 flex flex-col items-center justify-center pointer-events-none">
+                          <svg className="w-6 h-6 text-gray-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                           </svg>
                           <p className="text-xs text-gray-500">Click or drag to upload</p>
-                        </>
+                        </div>
                       )}
                     </div>
                   </div>

@@ -2,14 +2,31 @@ import React, { useState, useMemo, useEffect } from "react";
 import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 
 const ReturnItems = () => {
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(5);
+  const [currentPage, setCurrentPage] = useState(() => {
+    try {
+      const v = Number(sessionStorage.getItem('employee_returns_current_page') || '1');
+      return Number.isFinite(v) && v >= 1 ? v : 1;
+    } catch (_) { return 1; }
+  });
+  const [itemsPerPage, setItemsPerPage] = useState(() => {
+    try {
+      const v = Number(sessionStorage.getItem('employee_returns_items_per_page') || '5');
+      return Number.isFinite(v) && v > 0 ? v : 5;
+    } catch (_) { return 5; }
+  });
   const [sortOption, setSortOption] = useState("date-desc");
   const [searchTerm, setSearchTerm] = useState("");
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expandedItem, setExpandedItem] = useState(null);
+
+  useEffect(() => {
+    try { sessionStorage.setItem('employee_returns_current_page', String(currentPage)); } catch (_) { }
+  }, [currentPage]);
+  useEffect(() => {
+    try { sessionStorage.setItem('employee_returns_items_per_page', String(itemsPerPage)); } catch (_) { }
+  }, [itemsPerPage]);
 
   // Combine returned and approved items
   const historyData = useMemo(() => {
@@ -19,17 +36,17 @@ const ReturnItems = () => {
       isApproved: item.status === 'approved',
       status: item.status || 'Approved',
       // Ensure all required fields have proper values
-      date: item.date || item.return_date || new Date().toLocaleDateString("en-US", { 
-        month: "2-digit", 
-        day: "2-digit", 
-        year: "numeric" 
+      date: item.date || item.return_date || new Date().toLocaleDateString("en-US", {
+        month: "2-digit",
+        day: "2-digit",
+        year: "numeric"
       }),
       serialNo: item.serial_number || item.serialNo || item.serial || `SN${Math.random().toString().substr(2, 6)}`,
       category: item.category || item.equipment_category || 'General',
       quantity: item.quantity || 1,
       item: item.item || item.equipment_name || 'Item'
     }));
-    
+
     return markedApproved;
   }, [data]);
 
@@ -42,7 +59,7 @@ const ReturnItems = () => {
     } catch (_) {
       dateStr = String(dateRaw || "");
     }
-    
+
     // Determine status - if returned but not completed, show as pending verification
     let status = r?.status || (r?.return_date ? "Returned" : "Approved");
     if (status === 'returned') {
@@ -50,7 +67,7 @@ const ReturnItems = () => {
     } else if (status === 'completed') {
       status = 'Returned - Verified';
     }
-    
+
     return {
       id: r?.id ?? r?.transaction_id ?? r?.request_id ?? r?.trx_id ?? r?.uuid ?? (idx + 1),
       transaction_id: r?.transaction_id || r?.id,
@@ -91,32 +108,32 @@ const ReturnItems = () => {
     try {
       // Fetch approved transactions (items that can be returned)
       const approvedItems = await fetchAllPages('/api/transactions/approved');
-      
+
       // Fetch returned items (both pending verification and completed)
       let returnedItems = await fetchAllPages('/api/transactions/history?status=returned');
-      
+
       // Also fetch completed transactions to show verified returns
       const completedItems = await fetchAllPages('/api/transactions/history?status=completed');
-      
+
       // If no returned items found, try to get them from other endpoints
       if (!Array.isArray(returnedItems) || returnedItems.length === 0) {
         const allHistory = await fetchAllPages('/api/transactions/history');
         returnedItems = (allHistory || []).filter(r => String(r?.status || '').toLowerCase() === 'returned' || !!r?.return_date);
       }
-      
+
       // If still no returned items, try the general transactions endpoint
       if (!Array.isArray(returnedItems) || returnedItems.length === 0) {
         const allTransactions = await fetchAllPages('/api/transactions');
         returnedItems = (allTransactions || []).filter(r => String(r?.status || '').toLowerCase() === 'returned' || !!r?.return_date);
       }
-      
+
       // Combine and normalize all items
       const allItems = [
         ...(approvedItems || []).map(item => ({ ...item, status: 'approved' })),
         ...(returnedItems || []).map(item => ({ ...item, status: 'returned' })),
         ...(completedItems || []).filter(item => item.return_date).map(item => ({ ...item, status: 'completed' }))
       ];
-      
+
       const mapped = (allItems || []).map((r, idx) => normalize(r, idx));
       setData(mapped);
     } catch (e) {
@@ -165,26 +182,26 @@ const ReturnItems = () => {
     const onReturnedAdd = (e) => {
       const d = e?.detail || {};
       console.log('[EmployeeReturnItems] Received ireply:returned:add event:', d);
-      
+
       // Extract equipment details if available
       const equipment = d.equipment || {};
       const serialNumber = d.serial_number || d.serial_no || d.serial || equipment.serial_number || '';
       const category = d.category || equipment.category_name || equipment.category?.name || 'General';
       const itemName = d.item || d.equipment_name || equipment.name || 'Item';
-      
+
       const entry = {
         id: d.id || `returned_${Date.now()}`,
-        date: d.date ? new Date(d.date).toLocaleDateString("en-US", { 
-          month: "2-digit", 
-          day: "2-digit", 
+        date: d.date ? new Date(d.date).toLocaleDateString("en-US", {
+          month: "2-digit",
+          day: "2-digit",
           year: "numeric",
           hour: '2-digit',
           minute: '2-digit',
           hour12: true
-        }) : new Date().toLocaleDateString("en-US", { 
-          month: "2-digit", 
-          day: "2-digit", 
-          year: "numeric" 
+        }) : new Date().toLocaleDateString("en-US", {
+          month: "2-digit",
+          day: "2-digit",
+          year: "numeric"
         }),
         item: itemName,
         status: d.status || "Returned",
@@ -245,6 +262,14 @@ const ReturnItems = () => {
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = sortedData.slice(indexOfFirstItem, indexOfLastItem);
 
+  useEffect(() => {
+    if (totalPages > 0 && currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    } else if (currentPage < 1) {
+      setCurrentPage(1);
+    }
+  }, [totalPages, currentPage]);
+
   const handleChangePage = (page) => setCurrentPage(page);
 
   const [selectedItem, setSelectedItem] = useState(null);
@@ -252,7 +277,9 @@ const ReturnItems = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [returnRemarks, setReturnRemarks] = useState("");
   const [itemCondition, setItemCondition] = useState("Good Condition");
-  
+  const [damageEvidence, setDamageEvidence] = useState(null);
+  const [previewImage, setPreviewImage] = useState(null);
+
   // Exchange states
   const [showExchangeModal, setShowExchangeModal] = useState(false);
   const [showBrowseModal, setShowBrowseModal] = useState(false);
@@ -270,13 +297,22 @@ const ReturnItems = () => {
     setSelectedItem(item);
     setReturnRemarks("");
     setItemCondition("Good Condition");
+    setDamageEvidence(null);
+    setPreviewImage(null);
     setShowReturnModal(true);
   };
 
   const handleConfirmReturn = async () => {
     if (!selectedItem) return;
+
+    // Validate evidence upload for damaged/defective items
+    if ((itemCondition === "Damaged" || itemCondition === "Has Defect") && !damageEvidence) {
+      alert('Please upload evidence photo for damaged or defective items');
+      return;
+    }
+
     setActionLoading(true);
-    
+
     try {
       // Map condition to API format
       const conditionMap = {
@@ -285,38 +321,43 @@ const ReturnItems = () => {
         'Has Defect': 'has_defect'
       };
       const returnCondition = conditionMap[itemCondition] || 'good_condition';
-      
+
       // Get transaction ID from the item
       const transactionId = selectedItem.id || selectedItem.transaction_id || selectedItem.originalData?.id;
-      
+
       if (!transactionId) {
         throw new Error('Transaction ID not found');
       }
-      
+
       // Get CSRF token
       const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-      
+
       // Call the return API
+      const formData = new FormData();
+      formData.append('return_condition', returnCondition);
+      if (returnRemarks) {
+        formData.append('return_notes', returnRemarks);
+      }
+      if (damageEvidence) {
+        formData.append('damage_evidence', damageEvidence);
+      }
+
       const response = await fetch(`/api/transactions/${transactionId}/return`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           'Accept': 'application/json',
           'X-CSRF-TOKEN': csrfToken || ''
         },
         credentials: 'same-origin',
-        body: JSON.stringify({
-          return_condition: returnCondition,
-          return_notes: returnRemarks || null
-        })
+        body: formData
       });
-      
+
       const data = await response.json();
-      
+
       if (!response.ok || !data.success) {
         throw new Error(data.message || 'Failed to return item');
       }
-      
+
       // Dispatch event to update the UI
       window.dispatchEvent(new CustomEvent('ireply:returned:add', {
         detail: {
@@ -333,16 +374,18 @@ const ReturnItems = () => {
           transaction_id: transactionId
         }
       }));
-      
+
       // Refresh the list to show updated status
       await loadAllReturns();
-      
+
       // Close modal and reset state
       setShowReturnModal(false);
       setSelectedItem(null);
       setReturnRemarks("");
       setItemCondition("Good Condition");
-      
+      setDamageEvidence(null);
+      setPreviewImage(null);
+
       // Show success message
       alert('Item returned successfully! It is now pending admin verification.');
     } catch (error) {
@@ -381,6 +424,31 @@ const ReturnItems = () => {
     }
   };
 
+  const handleDamageEvidenceUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        alert('File size must be less than 10MB');
+        return;
+      }
+
+      // Check if file is an image
+      if (!file.type.startsWith('image/')) {
+        alert('Please upload an image file');
+        return;
+      }
+
+      setDamageEvidence(file);
+
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setPreviewImage(e.target.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleBrandSelect = (brand) => {
     setSelectedBrand(brand);
     setShowBrowseModal(false);
@@ -397,9 +465,9 @@ const ReturnItems = () => {
     setActionLoading(true);
     try {
       await new Promise(resolve => setTimeout(resolve, 1500));
-      
+
       alert('Exchange request submitted successfully!');
-      
+
       // Reset all states
       setShowReviewModal(false);
       setSelectedItem(null);
@@ -463,23 +531,23 @@ const ReturnItems = () => {
     { id: 1, name: "Asus VivoBook 15", specs: "Core i5, 16GB RAM, 512GB SSD", brand: "Asus", category: "laptops", available: true },
     { id: 2, name: "HP Envy 13", specs: "Core i7, 16GB RAM, 1TB SSD", brand: "HP", category: "laptops", available: true },
     { id: 3, name: "Dell XPS 13", specs: "Core i7, 16GB RAM, 1TB SSD", brand: "Dell", category: "laptops", available: true },
-    
+
     // Projectors
     { id: 4, name: "Epson EB-1781W", specs: "WXGA, 3000 lumens", brand: "Epson", category: "projectors", available: true },
     { id: 5, name: "BenQ MH535FHD", specs: "Full HD, 3600 lumens", brand: "BenQ", category: "projectors", available: true },
-    
+
     // Headsets
     { id: 6, name: "Jabra Evolve 40", specs: "Over-ear, Noise-canceling", brand: "Jabra", category: "accessories", available: true },
     { id: 7, name: "Logitech H800", specs: "Wireless, USB", brand: "Logitech", category: "accessories", available: true },
-    
+
     // Mice
     { id: 8, name: "Logitech MX Master 3", specs: "Wireless, Ergonomic", brand: "Logitech", category: "accessories", available: true },
     { id: 9, name: "Razer DeathAdder", specs: "Gaming Mouse, 16000 DPI", brand: "Razer", category: "accessories", available: true },
-    
+
     // Keyboards
     { id: 10, name: "Logitech K380", specs: "Wireless, Multi-device", brand: "Logitech", category: "accessories", available: true },
     { id: 11, name: "Corsair K95 RGB", specs: "Mechanical, RGB", brand: "Corsair", category: "accessories", available: true },
-    
+
     // Cables
     { id: 12, name: "HDMI 2.1 Cable", specs: "8K, 48Gbps", brand: "Amazon Basics", category: "accessories", available: true },
     { id: 13, name: "USB-C to HDMI", specs: "4K, 60Hz", brand: "Anker", category: "accessories", available: true }
@@ -488,12 +556,12 @@ const ReturnItems = () => {
   const getFilteredBrands = () => {
     const categoryKey = selectedCategory === "All" ? "all" : selectedCategory.toLowerCase();
     const brands = equipmentBrands[categoryKey] || [];
-    
+
     if (!searchEquipment.trim()) {
       return brands;
     }
-    
-    return brands.filter(brand => 
+
+    return brands.filter(brand =>
       brand.name.toLowerCase().includes(searchEquipment.toLowerCase())
     );
   };
@@ -515,7 +583,7 @@ const ReturnItems = () => {
                 </svg>
               </button>
             </div>
-            
+
             <div className="p-6 space-y-5">
               {/* Reason for Exchange */}
               <div>
@@ -596,7 +664,7 @@ const ReturnItems = () => {
                 </svg>
               </button>
             </div>
-            
+
             <div className="p-6 flex-1 overflow-auto">
               {/* Search Bar */}
               <div className="mb-6">
@@ -618,11 +686,10 @@ const ReturnItems = () => {
                   <button
                     key={cat.id}
                     onClick={() => setSelectedCategory(cat.name)}
-                    className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
-                      selectedCategory === cat.name
+                    className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${selectedCategory === cat.name
                         ? "bg-blue-600 text-white"
                         : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }`}
+                      }`}
                   >
                     {cat.name}
                   </button>
@@ -690,7 +757,7 @@ const ReturnItems = () => {
                 </svg>
               </button>
             </div>
-            
+
             <div className="p-2 sm:p-4 flex-1 overflow-auto">
               {/* Category Tabs */}
               <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
@@ -698,11 +765,10 @@ const ReturnItems = () => {
                   <button
                     key={category}
                     onClick={() => setSelectedCategory(category)}
-                    className={`px-3 py-1.5 text-sm rounded-lg font-medium whitespace-nowrap ${
-                      selectedCategory === category
+                    className={`px-3 py-1.5 text-sm rounded-lg font-medium whitespace-nowrap ${selectedCategory === category
                         ? 'bg-blue-100 text-blue-700'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
+                      }`}
                   >
                     {category}
                   </button>
@@ -718,27 +784,27 @@ const ReturnItems = () => {
                     return unit.category === selectedCategory.toLowerCase();
                   })
                   .map((unit) => (
-                  <div
-                    key={unit.id}
-                    onClick={() => handleUnitSelect(unit)}
-                    className="border border-gray-200 rounded-lg p-2 sm:p-3 hover:border-blue-500 hover:shadow-md transition-all cursor-pointer"
-                  >
-                    <div className="flex items-start gap-2 sm:gap-3">
-                      <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-50 rounded flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <svg className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-sm sm:text-base font-medium text-gray-900 truncate">{unit.name}</h3>
-                        <p className="text-xs sm:text-sm text-gray-600 line-clamp-2">{unit.specs}</p>
-                        <span className="inline-block mt-1 px-1.5 py-0.5 bg-green-50 text-green-700 text-[10px] sm:text-xs rounded-full font-medium">
-                          Available
-                        </span>
+                    <div
+                      key={unit.id}
+                      onClick={() => handleUnitSelect(unit)}
+                      className="border border-gray-200 rounded-lg p-2 sm:p-3 hover:border-blue-500 hover:shadow-md transition-all cursor-pointer"
+                    >
+                      <div className="flex items-start gap-2 sm:gap-3">
+                        <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-50 rounded flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <svg className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                          </svg>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-sm sm:text-base font-medium text-gray-900 truncate">{unit.name}</h3>
+                          <p className="text-xs sm:text-sm text-gray-600 line-clamp-2">{unit.specs}</p>
+                          <span className="inline-block mt-1 px-1.5 py-0.5 bg-green-50 text-green-700 text-[10px] sm:text-xs rounded-full font-medium">
+                            Available
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             </div>
 
@@ -761,7 +827,7 @@ const ReturnItems = () => {
             <div className="bg-blue-600 text-white p-6 rounded-t-xl">
               <h2 className="text-xl font-semibold text-center">Please review your exchange details</h2>
             </div>
-            
+
             <div className="p-6 space-y-6">
               {/* Current Item */}
               <div>
@@ -825,9 +891,9 @@ const ReturnItems = () => {
                   <div className="flex justify-between">
                     <span className="text-gray-600">Exchange Date</span>
                     <span className="text-gray-900 font-medium">
-                      {new Date().toLocaleString('en-US', { 
-                        month: 'long', 
-                        day: 'numeric', 
+                      {new Date().toLocaleString('en-US', {
+                        month: 'long',
+                        day: 'numeric',
                         year: 'numeric',
                         hour: 'numeric',
                         minute: '2-digit',
@@ -882,7 +948,7 @@ const ReturnItems = () => {
               <h2 className="text-xl font-semibold text-gray-900 mb-6 text-center">
                 Return Confirmation
               </h2>
-              
+
               <div className="space-y-5">
                 {/* Remarks Textarea */}
                 <div>
@@ -903,7 +969,7 @@ const ReturnItems = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Item Condition
                   </label>
-                  <select 
+                  <select
                     value={itemCondition}
                     onChange={(e) => setItemCondition(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
@@ -913,6 +979,68 @@ const ReturnItems = () => {
                     <option>Has Defect</option>
                   </select>
                 </div>
+
+                {/* Damage Evidence Upload - Only show when Damaged or Has Defect */}
+                {(itemCondition === "Damaged" || itemCondition === "Has Defect") && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Upload Evidence Photo <span className="text-red-500">*</span>
+                    </label>
+                    <label className="block cursor-pointer">
+                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-blue-400 transition-colors">
+                        {previewImage ? (
+                          <div className="space-y-3">
+                            <div className="relative">
+                              <img
+                                src={previewImage}
+                                alt="Damage evidence"
+                                className="w-full h-48 object-cover rounded-lg"
+                              />
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  setDamageEvidence(null);
+                                  setPreviewImage(null);
+                                }}
+                                className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full hover:bg-red-600 transition-colors"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </div>
+                            <p className="text-sm text-gray-600 text-center">
+                              {damageEvidence?.name || 'Evidence image'}
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="text-center py-6">
+                            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <div className="mt-4">
+                              <span className="mt-2 block text-sm font-medium text-gray-900">
+                                Click to upload or drag and drop
+                              </span>
+                              <span className="mt-1 block text-xs text-gray-500">
+                                PNG, JPG, GIF up to 10MB
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <input
+                        type="file"
+                        className="sr-only"
+                        accept="image/*"
+                        onChange={handleDamageEvidenceUpload}
+                      />
+                    </label>
+                    <p className="mt-2 text-xs text-gray-500">
+                      Please upload a photo showing the damage or defect as evidence.
+                    </p>
+                  </div>
+                )}
 
                 {/* Equipment Details */}
                 <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
@@ -961,7 +1089,7 @@ const ReturnItems = () => {
           </div>
         </div>
       )}
-      
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-blue-600">Return Items</h1>
@@ -1086,21 +1214,20 @@ const ReturnItems = () => {
                     <div className="text-sm text-gray-700 font-medium">{item.serialNo}</div>
                     <div className="text-sm text-gray-700">{item.category}</div>
                     <div>
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
-                        item.status.includes('Pending') 
-                          ? 'bg-yellow-100 text-yellow-800' 
-                          : item.status.includes('Verified') 
-                          ? 'bg-green-100 text-green-800'
-                          : item.status === 'Approved' || item.status === 'approved'
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${item.status.includes('Pending')
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : item.status.includes('Verified')
+                            ? 'bg-green-100 text-green-800'
+                            : item.status === 'Approved' || item.status === 'approved'
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-gray-100 text-gray-800'
+                        }`}>
                         {item.status}
                       </span>
                     </div>
                     <div className="text-sm text-gray-700">{item.date}</div>
                   </div>
-                  
+
                   {/* Show return condition and notes if item was returned */}
                   {(item.return_condition || item.return_notes) && (
                     <div className="mt-4 pt-4 border-t border-gray-300">
@@ -1181,11 +1308,10 @@ const ReturnItems = () => {
                 <button
                   key={index}
                   onClick={() => handleChangePage(p)}
-                  className={`px-3 py-1 border rounded-md text-sm font-medium transition-colors ${
-                    currentPage === p
+                  className={`px-3 py-1 border rounded-md text-sm font-medium transition-colors ${currentPage === p
                       ? "bg-blue-600 text-white border-blue-600"
                       : "bg-white text-gray-700 border-gray-300 hover:bg-blue-100"
-                  }`}
+                    }`}
                 >
                   {p}
                 </button>
@@ -1228,4 +1354,4 @@ const ReturnItems = () => {
   );
 }
 
-export default ReturnItems;
+export default ReturnItems; 

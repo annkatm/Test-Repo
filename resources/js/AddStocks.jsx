@@ -131,7 +131,6 @@ const AddStocks = () => {
   const [itemsPerPage, setItemsPerPage] = useState(1000); // Show all items by default
   const [formData, setFormData] = useState({
     category: '',
-    serial_number: '',
     brand: '',
     supplier: '',
     description: '',
@@ -218,6 +217,7 @@ const AddStocks = () => {
         headers: {
           'Accept': 'application/json',
         },
+        credentials: 'same-origin',
       });
 
       const contentType = response.headers.get('content-type');
@@ -253,6 +253,7 @@ const AddStocks = () => {
         headers: {
           'Accept': 'application/json',
         },
+        credentials: 'same-origin',
       });
 
       const contentType = response.headers.get('content-type');
@@ -312,10 +313,13 @@ const AddStocks = () => {
           created_at: item.created_at || null,
         };
       }
-      acc[key].total_count += 1;
-      if (item.status === 'available') acc[key].available_count += 1;
-      if (item.status === 'borrowed') acc[key].borrowed_count += 1;
-      if (item.status === 'issued') acc[key].issued_count += 1;
+      // Count only real stock units (must have serial_number)
+      if (item.serial_number) {
+        acc[key].total_count += 1;
+        if (item.status === 'available') acc[key].available_count += 1;
+        if (item.status === 'borrowed') acc[key].borrowed_count += 1;
+        if (item.status === 'issued') acc[key].issued_count += 1;
+      }
       return acc;
     }, {});
 
@@ -391,10 +395,13 @@ const AddStocks = () => {
           created_at: item.created_at || null,
         };
       }
-      acc[key].total_count += 1;
-      if (item.status === 'available') acc[key].available_count += 1;
-      if (item.status === 'borrowed') acc[key].borrowed_count += 1;
-      if (item.status === 'issued') acc[key].issued_count += 1;
+      // Count only items with a serial number
+      if (item.serial_number) {
+        acc[key].total_count += 1;
+        if (item.status === 'available') acc[key].available_count += 1;
+        if (item.status === 'borrowed') acc[key].borrowed_count += 1;
+        if (item.status === 'issued') acc[key].issued_count += 1;
+      }
       return acc;
     }, {});
 
@@ -471,7 +478,7 @@ const AddStocks = () => {
       // Get all equipment items for this product
       let allItems = equipment.filter(eq => {
         const eqKey = `${eq.name || 'Unknown'}_${eq.brand || 'Unknown'}`;
-        return eqKey === p.key;
+        return eqKey === p.key && !!eq.serial_number; // Only show units with serials
       });
 
       // If search term exists, filter items by search criteria
@@ -564,8 +571,17 @@ const AddStocks = () => {
     try {
       const formDataToSend = new FormData();
       Object.keys(formData).forEach(key => {
-        if (formData[key] !== null) {
-          formDataToSend.append(key, formData[key]);
+        const value = formData[key];
+        if (value !== null) {
+          if (key === 'category' && value) {
+            formDataToSend.append('category_id', value);
+          } else if (key === 'price' && typeof value === 'string') {
+            // Normalize formatted price like "1,234.56" -> "1234.56"
+            const normalized = value.replace(/[,\s]/g, '');
+            if (normalized !== '') formDataToSend.append('price', normalized);
+          } else if (key !== 'category') {
+            formDataToSend.append(key, value);
+          }
         }
       });
 
@@ -580,6 +596,7 @@ const AddStocks = () => {
         headers: {
           'Accept': 'application/json',
         },
+        credentials: 'same-origin',
         body: formDataToSend
       });
 
@@ -607,7 +624,6 @@ const AddStocks = () => {
       // Reset form and close modal on success
       setFormData({
         category: '',
-        serial_number: '',
         brand: '',
         supplier: '',
         description: '',
@@ -1121,6 +1137,15 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
       return;
     }
 
+    // Check for duplicate serial numbers
+    const trimmedSerials = serialNumbers.map(s => s.trim());
+    const uniqueSerials = new Set(trimmedSerials);
+    if (trimmedSerials.length !== uniqueSerials.size) {
+      setErrors({ serials: 'Duplicate serial numbers are not allowed' });
+      setLoading(false);
+      return;
+    }
+
     // Validate receipt
     if (!receipt) {
       setErrors({ receipt: 'Receipt image is required' });
@@ -1502,7 +1527,6 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
 const AddItemModal = ({ onClose, categories = [], onSuccess }) => {
   const [formData, setFormData] = useState({
     category: '',
-    serial_number: '',
     brand: '',
     supplier: '',
     description: '',
@@ -1653,7 +1677,7 @@ const AddItemModal = ({ onClose, categories = [], onSuccess }) => {
     setErrors({});
 
     // Validation
-    const requiredFields = ['category', 'serial_number', 'brand', 'supplier', 'description'];
+    const requiredFields = ['category', 'brand', 'supplier', 'description'];
     const newErrors = {};
     requiredFields.forEach(field => {
       if (!formData[field]) {
@@ -1676,7 +1700,7 @@ const AddItemModal = ({ onClose, categories = [], onSuccess }) => {
       }
 
       // Add other form fields
-      const fieldsToAdd = ['serial_number', 'brand', 'supplier', 'description', 'price'];
+      const fieldsToAdd = ['brand', 'supplier', 'description', 'price'];
       fieldsToAdd.forEach(key => {
         if (formData[key] !== null && formData[key] !== '') {
           formDataToSend.append(key, formData[key]);
@@ -1748,7 +1772,6 @@ const AddItemModal = ({ onClose, categories = [], onSuccess }) => {
   const handleReset = () => {
     setFormData({
       category: '',
-      serial_number: '',
       brand: '',
       supplier: '',
       description: '',
@@ -1825,18 +1848,7 @@ const AddItemModal = ({ onClose, categories = [], onSuccess }) => {
                 </div>
               </div>
 
-              <div>
-                <label className="text-sm text-gray-600">Serial Number*</label>
-                <input
-                  name="serial_number"
-                  value={formData.serial_number}
-                  onChange={handleInputChange}
-                  className={`mt-2 w-full px-3 py-2 rounded-md bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.serial_number ? 'border-red-500' : ''
-                    }`}
-                  placeholder="4354354"
-                />
-                {errors.serial_number && <p className="mt-1 text-sm text-red-500">{errors.serial_number}</p>}
-              </div>
+              
 
               <div>
                 <label className="text-sm text-gray-600">Brand*</label>
