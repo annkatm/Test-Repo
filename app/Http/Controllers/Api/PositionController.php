@@ -126,7 +126,7 @@ class PositionController extends Controller
                 "Deleted position: {$position->name}"
             );
             
-            $position->delete(); // This will soft delete due to SoftDeletes trait
+            $position->forceDelete(); // Permanent delete
 
             return response()->json([
                 'success' => true,

@@ -154,8 +154,8 @@ class CategoryController extends Controller
             "Deleted category: {$category->name}"
         );
         
-        // Soft delete - allows restoration from Archive
-        $category->delete();
+        // Permanent delete
+        $category->forceDelete();
 
         return response()->json([
             'success' => true,
