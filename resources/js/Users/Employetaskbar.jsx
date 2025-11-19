@@ -637,7 +637,7 @@ const EmployeeTaskbar = ({
 
   return (
     <>
-      <header className="flex items-center justify-end px-4 sm:px-6 md:px-10 py-4 md:py-6">
+      <header className="flex items-center justify-end px-4 sm:px-6 md:px-10 py-4 md:py-6 bg-white" style={{ boxShadow: '0 4px 6px -2px rgba(0, 0, 0, 0.15)', position: 'relative', zIndex: 10 }}>
         <div className="flex items-center space-x-4">
           
 

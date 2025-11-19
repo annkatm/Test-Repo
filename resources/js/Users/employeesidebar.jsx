@@ -37,7 +37,7 @@ const EmployeeSidebar = ({ activeMenu, onMenuClick }) => {
       </header>
 
       {/* Sidebar Navigation - Fixed, starts below logo */}
-      <aside className="w-57 bg-gradient-to-b from-[#0064FF] to-[#053786] text-white fixed top-22 left-0 h-screen h-[calc(100vh-7rem)] overflow-hidden rounded-tr-[72px] flex flex-col">
+      <aside className="w-57 bg-gradient-to-b from-[#0064FF] to-[#053786] text-white fixed top-22 left-0 h-screen h-[calc(100vh-7rem)] overflow-hidden rounded-tr-[72px] flex flex-col" style={{ boxShadow: 'none' }}>
         {/* Navigation */}
         <nav className="flex-1 min-h-0 px-3 py-4 mt-4 space-y-2 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           {/* Home */}

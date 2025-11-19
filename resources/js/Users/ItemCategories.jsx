@@ -3,8 +3,8 @@ import { Laptop } from 'lucide-react';
 
 const ItemCategories = ({ categories = [], selectedCategory, onSelectAll, onSelectCategory }) => {
   return (
-    <div id="categories-section" className="rounded-xl shadow-md shadow-gray-300 col-span-12 md:col-span-3 overflow-y-auto h-138 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-      <div className="p-6 h-full">
+    <div id="categories-section" className="bg-white rounded-xl shadow-md shadow-gray-300 col-span-12 md:col-span-3 overflow-y-auto h-138 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+      <div className="p-6 h-full bg-white">
         <h2 className="text-lg font-semibold text-gray-900 mb-6">Item Categories</h2>
         <div className="grid grid-cols-2 gap-3">
           <button
@@ -21,12 +21,12 @@ const ItemCategories = ({ categories = [], selectedCategory, onSelectAll, onSele
             <button
               key={category.id}
               onClick={() => onSelectCategory(category)}
-              className={`aspect-square bg-gray-100 rounded-lg flex flex-col items-center justify-center hover:shadow transition-all cursor-pointer ${
+              className={`aspect-square bg-gray-100 rounded-lg flex flex-col items-center justify-end hover:shadow transition-all cursor-pointer overflow-hidden relative ${
                 selectedCategory === (category.name || category) ? 'ring-2 ring-blue-500' : ''
               }`}
             >
               {category.image ? (
-                <div className="w-16 h-16 rounded-lg flex items-center justify-center overflow-hidden mb-2">
+                <>
                   <img
                     src={
                       category.image.startsWith('http')
@@ -36,21 +36,27 @@ const ItemCategories = ({ categories = [], selectedCategory, onSelectAll, onSele
                         : `${window.location.origin}/storage/${category.image}`
                     }
                     alt={category.name || 'Category'}
-                    className="w-full h-full object-cover"
+                    className="absolute inset-0 w-full h-full object-cover"
                     onError={(e) => {
                       e.target.onerror = null;
                       e.target.style.display = 'none';
-                      e.target.nextElementSibling.style.display = 'flex';
+                      e.target.parentElement.classList.add('justify-center');
+                      e.target.parentElement.classList.remove('justify-end');
                     }}
                   />
-                  <Laptop className="h-8 w-8 text-gray-600 hidden" />
-                </div>
+                  <Laptop className="h-8 w-8 text-gray-600 mb-2 hidden" />
+                  <span className="text-sm font-semibold text-white text-center px-2 py-2 truncate relative z-10 bg-gradient-to-t from-blue-600/80 to-transparent w-full">
+                    {category.name || 'Category'}
+                  </span>
+                </>
               ) : (
-                <Laptop className="h-8 w-8 text-gray-600 mb-2" />
+                <>
+                  <Laptop className="h-8 w-8 text-gray-600 mb-2" />
+                  <span className="text-sm font-semibold text-gray-800 text-center px-1 truncate">
+                    {category.name || 'Category'}
+                  </span>
+                </>
               )}
-              <span className="text-sm font-semibold text-gray-800 text-center px-1 truncate">
-                {category.name || 'Category'}
-              </span>
             </button>
           ))}
           {categories.length === 0 && (
