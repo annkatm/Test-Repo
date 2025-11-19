@@ -12,7 +12,7 @@ class EmployeeTypeController extends Controller
 {
     public function index(): JsonResponse
     {
-        $employeeTypes = EmployeeType::all();
+        $employeeTypes = EmployeeType::orderBy('code')->get();
         return response()->json([
             'success' => true,
             'data' => $employeeTypes,
@@ -25,7 +25,7 @@ class EmployeeTypeController extends Controller
         try {
             $request->validate([
                 'name' => 'required|string|max:255|unique:employee_types,name',
-                'code' => 'required|integer|min:0|unique:employee_types,code',
+                'code' => 'required|integer|min:0|max:6|unique:employee_types,code',
             ]);
 
             $employeeType = EmployeeType::create([
@@ -72,7 +72,7 @@ class EmployeeTypeController extends Controller
         try {
             $request->validate([
                 'name' => 'required|string|max:255|unique:employee_types,name,' . $employeeType->id,
-                'code' => 'required|integer|min:0|unique:employee_types,code,' . $employeeType->id,
+                'code' => 'required|integer|min:0|max:6|unique:employee_types,code,' . $employeeType->id,
             ]);
 
             $employeeType->update([

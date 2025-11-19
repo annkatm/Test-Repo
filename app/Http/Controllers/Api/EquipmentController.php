@@ -21,19 +21,33 @@ class EquipmentController extends Controller
         try {
             $query = Equipment::with(['category']);
 
-            // Filter by status
+            // Filter by status (validate allowed values)
             if ($request->has('status')) {
-                $query->where('status', $request->status);
+                $status = (string) $request->input('status');
+                $allowedStatus = ['available', 'borrowed', 'issued'];
+                if (in_array($status, $allowedStatus, true)) {
+                    $query->where('status', $status);
+                }
             }
 
-            // Filter by category
+            // Filter by category (only if numeric and non-empty)
             if ($request->has('category_id')) {
-                $query->where('category_id', $request->category_id);
+                $categoryId = $request->input('category_id');
+                if ($categoryId !== null && $categoryId !== '' && is_numeric($categoryId)) {
+                    $query->where('category_id', (int) $categoryId);
+                }
+            }
+
+            // Exclude product-only records when units_only=1 (must have serial numbers)
+            if ($request->boolean('units_only')) {
+                $query->whereNotNull('serial_number')
+                      ->where('serial_number', '!=', '');
             }
 
             // Search by name, brand, or model
             if ($request->has('search')) {
-                $search = $request->search;
+                $search = (string) $request->input('search', '');
+                if ($search !== '') {
                 $query->where(function ($q) use ($search) {
                     $q->where('name', 'like', "%{$search}%")
                       ->orWhere('brand', 'like', "%{$search}%")
@@ -41,15 +55,23 @@ class EquipmentController extends Controller
                       ->orWhere('serial_number', 'like', "%{$search}%")
                       ->orWhere('asset_tag', 'like', "%{$search}%");
                 });
+                }
             }
 
-            // Sort
+            // Sort (sanitize inputs)
             $sortBy = $request->get('sort_by', 'created_at');
             $sortOrder = $request->get('sort_order', 'desc');
+            $allowedSort = ['created_at', 'brand', 'name', 'status', 'purchase_price', 'category_id', 'model', 'serial_number'];
+            if (!in_array($sortBy, $allowedSort, true)) {
+                $sortBy = 'created_at';
+            }
+            $sortOrder = strtolower((string) $sortOrder) === 'asc' ? 'asc' : 'desc';
             $query->orderBy($sortBy, $sortOrder);
 
             // Paginate
-            $perPage = $request->get('per_page', 10);
+            $perPage = (int) $request->get('per_page', 10);
+            if ($perPage <= 0) { $perPage = 10; }
+            if ($perPage > 1000) { $perPage = 1000; }
             $equipment = $query->paginate($perPage);
 
             return response()->json([
@@ -71,13 +93,20 @@ class EquipmentController extends Controller
     public function store(Request $request): JsonResponse
     {
         try {
+            if ($request->has('category') && !$request->has('category_id')) {
+                $request->merge(['category_id' => $request->input('category')]);
+            }
+            if ($request->has('price')) {
+                $normalizedPrice = preg_replace('/[^\d.]/', '', (string) $request->input('price'));
+                $request->merge(['price' => $normalizedPrice]);
+            }
             $validated = $request->validate([
                 'category_id' => 'required|exists:categories,id',
-                'serial_number' => 'required|string|unique:equipment',
+                'serial_number' => 'nullable|string|unique:equipment',
                 'brand' => 'required|string',
                 'supplier' => 'required|string',
                 'description' => 'required|string',
-                'price' => 'required|numeric',
+                'price' => 'nullable|numeric',
                 'item_image' => 'nullable|image|max:5120', // 5MB max
                 'receipt_image' => 'nullable|image|max:5120', // 5MB max
             ]);
