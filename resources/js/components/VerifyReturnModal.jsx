@@ -5,6 +5,7 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
   const [isProcessing, setIsProcessing] = useState(false);
   const [itemConditions, setItemConditions] = useState({});
   const [verificationNotes, setVerificationNotes] = useState('');
+  const [evidencePreview, setEvidencePreview] = useState(null); // { url, isVideo, itemName }
   const data = returnData || {};
 
   // Initialize conditions and reset notes when modal opens
@@ -32,6 +33,20 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
       ...prev,
       [itemKey]: condition
     }));
+  };
+
+  // Resolve evidence URL
+  const getEvidenceUrl = (val) => {
+    if (!val) return null;
+    const s = String(val);
+    if (s.startsWith('http') || s.startsWith('/storage/')) return s;
+    return `/storage/${s}`;
+  };
+
+  const isVideoEvidence = (val) => {
+    if (!val) return false;
+    const s = String(val).toLowerCase();
+    return /(\.mp4|\.webm|\.mov|\.avi|\.mkv)$/.test(s);
   };
 
   // Helper function to get avatar URL
@@ -110,6 +125,14 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
 
   const avatarUrl = getAvatarUrl(data);
   const employeeName = data.full_name || data.employee_name || 'N/A';
+
+  const getItemImageUrlFromItem = (item, categoryName) => {
+    const v = item?.item_image_url || item?.item_image || item?.image || item?.photo || item?.equipment?.item_image_url || item?.equipment?.item_image || null;
+    if (!v || (typeof v === 'string' && v.trim() === '')) return getItemIconUrl(categoryName);
+    const s = String(v);
+    if (s.startsWith('http') || s.startsWith('/storage/')) return s;
+    return `/storage/${s}`;
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -225,7 +248,10 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
                         <div className="overflow-hidden">
                           {/* Table Header */}
                           <div className="bg-gray-100 border-b border-gray-200">
-                            <div className="grid grid-cols-5">
+                            <div className="grid grid-cols-7">
+                              <div className="px-3 py-1.5 border-r border-gray-200">
+                                <span className="text-xs font-medium text-gray-700">Image</span>
+                              </div>
                               <div className="px-3 py-1.5 border-r border-gray-200">
                                 <span className="text-xs font-medium text-gray-700">Model</span>
                               </div>
@@ -238,6 +264,9 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
                               <div className="px-3 py-1.5 border-r border-gray-200">
                                 <span className="text-xs font-medium text-gray-700">Employee Notes</span>
                               </div>
+                              <div className="px-3 py-1.5 border-r border-gray-200">
+                                <span className="text-xs font-medium text-gray-700">Evidence</span>
+                              </div>
                               <div className="px-3 py-1.5">
                                 <span className="text-xs font-medium text-gray-700">Condition</span>
                               </div>
@@ -247,17 +276,40 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
                           {/* Table Rows */}
                           <div className="bg-white">
                             {group.items.map((item, itemIndex) => {
-                              const specs = item.specifications || item.specs || item.description || '';
+                              const specs = item.specifications
+                                || item.specs
+                                || item.description
+                                || item.equipment?.specifications
+                                || [item.brand, item.model].filter(Boolean).join(' ')
+                                || item.category_name
+                                || '';
                               const model = item.model || item.brand || item.name || 'N/A';
-                              const serialNumber = item.serial_number || item.serial || '';
+                              const serialNumber = item.serial_number
+                                || item.equipment_serial_number
+                                || item.serial
+                                || item.asset_tag
+                                || item.equipment?.serial_number
+                                || item.originalData?.serial_number
+                                || item.originalData?.serial_no
+                                || item.originalData?.serial
+                                || '';
+                              const evidenceUrl = getEvidenceUrl(item.return_evidence);
                               const itemKey = item.id || `item-${groupIndex}-${itemIndex}`;
                               const currentCondition = itemConditions[itemKey] || 'good_condition';
                               
                               return (
                                 <div 
                                   key={item.id || itemIndex} 
-                                  className={`grid grid-cols-5 ${itemIndex < group.items.length - 1 ? 'border-b border-gray-200' : ''}`}
+                                  className={`grid grid-cols-7 ${itemIndex < group.items.length - 1 ? 'border-b border-gray-200' : ''}`}
                                 >
+                                  <div className="px-3 py-2 border-r border-gray-200">
+                                    <img
+                                      src={getItemImageUrlFromItem(item, group.categoryName)}
+                                      alt={model}
+                                      className="h-10 w-10 rounded object-cover bg-gray-100"
+                                      onError={(e) => { e.currentTarget.src = iconUrl; }}
+                                    />
+                                  </div>
                                   <div className="px-3 py-2 border-r border-gray-200">
                                     <span className="text-xs text-gray-700">{model}</span>
                                   </div>
@@ -274,6 +326,65 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
                                     >
                                       {item.return_notes || item.employee_notes || '—'}
                                     </span>
+                                  </div>
+                                  <div className="px-3 py-2 border-r border-gray-200">
+                                    {evidenceUrl ? (
+                                      isVideoEvidence(item.return_evidence) ? (
+                                        <div className="space-y-1">
+                                          <video 
+                                            src={evidenceUrl} 
+                                            className="h-16 w-24 rounded border border-gray-200 object-cover cursor-pointer hover:opacity-80 transition-opacity" 
+                                            controls
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setEvidencePreview({ url: evidenceUrl, isVideo: true, itemName: model });
+                                            }}
+                                          />
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setEvidencePreview({ url: evidenceUrl, isVideo: true, itemName: model });
+                                            }}
+                                            className="text-[10px] text-blue-600 hover:underline"
+                                          >
+                                            View Full
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <div className="space-y-1">
+                                          <img 
+                                            src={evidenceUrl} 
+                                            alt="Evidence" 
+                                            className="h-16 w-16 rounded object-cover border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity" 
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setEvidencePreview({ url: evidenceUrl, isVideo: false, itemName: model });
+                                            }}
+                                            onError={(e) => {
+                                              e.target.style.display = 'none';
+                                              const parent = e.target.parentElement;
+                                              if (parent && !parent.querySelector('.error-fallback')) {
+                                                const fallback = document.createElement('span');
+                                                fallback.className = 'error-fallback text-xs text-gray-400';
+                                                fallback.textContent = '—';
+                                                parent.appendChild(fallback);
+                                              }
+                                            }}
+                                          />
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setEvidencePreview({ url: evidenceUrl, isVideo: false, itemName: model });
+                                            }}
+                                            className="text-[10px] text-blue-600 hover:underline block"
+                                          >
+                                            View Full
+                                          </button>
+                                        </div>
+                                      )
+                                    ) : (
+                                      <span className="text-xs text-gray-400">—</span>
+                                    )}
                                   </div>
                                   <div className="px-3 py-2">
                                     {(() => {
@@ -378,6 +489,67 @@ const VerifyReturnModal = ({ isOpen, onClose, returnData, onConfirmReturn }) => 
           </button>
         </div>
       </div>
+
+      {/* Evidence Preview Lightbox */}
+      {evidencePreview && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80" onClick={() => setEvidencePreview(null)}>
+          <div className="relative max-w-4xl w-full max-h-[90vh] bg-white rounded-lg shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Evidence - {evidencePreview.itemName}
+              </h3>
+              <button
+                onClick={() => setEvidencePreview(null)}
+                className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+                aria-label="Close"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-6 flex items-center justify-center bg-gray-50 min-h-[400px]">
+              {evidencePreview.isVideo ? (
+                <video 
+                  src={evidencePreview.url} 
+                  className="max-w-full max-h-[70vh] rounded-lg shadow-lg" 
+                  controls 
+                  autoPlay
+                />
+              ) : (
+                <img 
+                  src={evidencePreview.url} 
+                  alt="Evidence" 
+                  className="max-w-full max-h-[70vh] rounded-lg shadow-lg object-contain" 
+                  onError={(e) => {
+                    e.target.src = '/images/placeholder-equipment.png';
+                  }}
+                />
+              )}
+            </div>
+            <div className="px-6 py-4 bg-white border-t border-gray-200 flex items-center justify-end space-x-3">
+              <a
+                href={evidencePreview.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                <span>Download</span>
+              </a>
+              <button
+                onClick={() => setEvidencePreview(null)}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

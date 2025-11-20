@@ -7,6 +7,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Schema;
 use App\Models\Transaction;
 use App\Models\Equipment;
 use App\Models\Employee;
@@ -275,17 +277,34 @@ class TransactionController extends Controller
                 ]);
             }
 
+            // Determine desired status filter
+            $statusParam = request()->query('status');
+            $statusKey = $statusParam ? strtolower((string) $statusParam) : null;
+            $map = [
+                'returned'  => ['returned'],
+                'completed' => ['completed'],
+                'complete'  => ['completed'],
+                'verified'  => ['completed'],
+                'all'       => ['returned', 'completed'],
+            ];
+
+            $statuses = $map[$statusKey] ?? ['returned', 'completed'];
+
             $transactions = DB::table('transactions')
                 ->leftJoin('equipment', 'transactions.equipment_id', '=', 'equipment.id')
+                ->leftJoin('categories', 'equipment.category_id', '=', 'categories.id')
                 ->where('transactions.employee_id', $employee->id)
-                ->where('transactions.status', 'returned')
+                ->whereIn('transactions.status', $statuses)
                 ->select(
                     'transactions.*',
                     'equipment.name as equipment_name',
                     'equipment.brand',
-                    'equipment.model'
+                    'equipment.model',
+                    'equipment.serial_number',
+                    'categories.name as category_name',
+                    'equipment.item_image'
                 )
-                ->orderBy('transactions.return_date', 'desc')
+                ->orderByRaw("COALESCE(transactions.verified_at, transactions.return_date, transactions.updated_at, transactions.created_at) DESC")
                 ->get();
 
             return response()->json([
@@ -399,17 +418,48 @@ class TransactionController extends Controller
 
             $validatedData = $request->validate([
                 'return_condition' => 'required|in:good_condition,damaged,has_defect,lost',
-                'return_notes' => 'nullable|string|max:500'
+                'return_notes' => 'nullable|string|max:500',
+                // Accept image or video up to 50MB
+                'damage_evidence' => 'nullable|file|mimetypes:image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/quicktime,video/x-msvideo|max:51200'
             ]);
+
+            // Normalize return_notes: treat empty strings as null
+            $normalizedNotes = null;
+            if (array_key_exists('return_notes', $validatedData)) {
+                $trimmed = trim((string) $validatedData['return_notes']);
+                $normalizedNotes = ($trimmed === '') ? null : $trimmed;
+            }
+
+            // Handle optional evidence image upload
+            $evidencePath = null;
+            if ($request->hasFile('damage_evidence')) {
+                // Ensure directory exists
+                if (!Storage::disk('public')->exists('returns/evidence')) {
+                    Storage::disk('public')->makeDirectory('returns/evidence');
+                }
+                $evidencePath = $request->file('damage_evidence')->store('returns/evidence', 'public');
+            }
 
             $updateData = [
                 'status' => 'returned',
                 'return_date' => now(),
                 'return_condition' => $validatedData['return_condition'],
-                'return_notes' => $validatedData['return_notes'] ?? null,
+                'return_notes' => $normalizedNotes,
                 'received_by' => auth()->id(),
                 'updated_at' => now()
             ];
+
+            if ($evidencePath) {
+                // Only set if column exists (avoid SQL error if migration not yet run)
+                if (Schema::hasColumn('transactions', 'return_evidence')) {
+                    $updateData['return_evidence'] = $evidencePath;
+                } else {
+                    Log::warning('return_evidence column missing; skipping storing evidence path', [
+                        'transaction_id' => $id,
+                        'path' => $evidencePath,
+                    ]);
+                }
+            }
 
             DB::table('transactions')->where('id', $id)->update($updateData);
 
@@ -448,8 +498,8 @@ class TransactionController extends Controller
             $serialNumber = $equipment->serial_number ?? 'N/A';
             
             $description = "Equipment returned by {$employeeName}: {$equipmentName} (SN: {$serialNumber}) - Condition: {$conditionText}";
-            if ($validatedData['return_notes']) {
-                $description .= " | Notes: {$validatedData['return_notes']}";
+            if ($normalizedNotes) {
+                $description .= " | Notes: {$normalizedNotes}";
             }
             
             ActivityLogService::logTransactionActivity(
@@ -958,6 +1008,7 @@ class TransactionController extends Controller
                     DB::raw("COALESCE(equipment.model, '') as model"),
                     DB::raw("COALESCE(equipment.serial_number, '') as serial_number"),
                     DB::raw("COALESCE(equipment.specifications, '') as specifications"),
+                    DB::raw("COALESCE(equipment.item_image, '') as item_image"),
                     DB::raw("COALESCE(equipment.asset_tag, '') as asset_tag"),
                     DB::raw("COALESCE(categories.name, '') as category_name"),
                     DB::raw("COALESCE(categories.id, equipment.category_id) as category_id")
@@ -967,13 +1018,21 @@ class TransactionController extends Controller
             // Optional status filter with compatibility mapping
             $status = request()->query('status');
             if (!empty($status)) {
+                $key = strtolower((string) $status);
                 $statusMap = [
-                    'active' => 'pending',
-                    'completed' => 'released',
-                    'overdue' => 'returned',
+                    'active'   => 'pending',
+                    'pending'  => 'pending',
+                    'released' => 'released',
+                    'returned' => 'returned',
+                    'completed'=> 'completed',
+                    'complete' => 'completed',
+                    'verified' => 'completed',
+                    'overdue'  => 'returned',
                 ];
-                $normalized = $statusMap[$status] ?? $status;
-                $query->where('transactions.status', $normalized);
+                $normalized = $statusMap[$key] ?? $key;
+                if ($normalized !== 'all') {
+                    $query->where('transactions.status', $normalized);
+                }
             }
 
             // Optional filter by related request id (to map approved requests to their transaction)

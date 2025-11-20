@@ -20,6 +20,9 @@ const ReturnItems = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expandedItem, setExpandedItem] = useState(null);
+  const [statusFilter, setStatusFilter] = useState(() => {
+    try { return sessionStorage.getItem('employee_returns_status_filter') || 'all'; } catch (_) { return 'all'; }
+  });
 
   useEffect(() => {
     try { sessionStorage.setItem('employee_returns_current_page', String(currentPage)); } catch (_) { }
@@ -205,35 +208,50 @@ const ReturnItems = () => {
         return null;
       })();
 
-      // Fetch approved transactions (items that can be returned)
-      let approvedItems = await fetchAllPages('/api/transactions/approved');
-      // Also include currently held items from alternative endpoints
-      let borrowedItems = [];
+      // Also get current user id to detect account changes and avoid data bleed
+      let currentUserId = null;
       try {
-        borrowedItems = await fetchAllPages('/api/transactions/borrowed');
+        const userRes2 = await fetch('/check-auth', { credentials: 'same-origin' });
+        const userData2 = await userRes2.json();
+        currentUserId = userData2?.user?.id ?? null;
       } catch (_) {}
-      let holders = [];
+
+      // If user changed since last load, clear local state and caches
       try {
-        holders = await fetchAllPages('/api/employees/current-holders');
+        const lastUserId = sessionStorage.getItem('employee_returns_last_user_id');
+        if (String(lastUserId || '') !== String(currentUserId || '')) {
+          setData([]);
+          equipmentCacheRef.current = {};
+          sessionStorage.setItem('employee_returns_last_user_id', String(currentUserId || ''));
+        }
       } catch (_) {}
+
+      // Helper to append employee filter if available
+      const withEmp = (u) => {
+        if (!currentEmployeeId) return u;
+        return u.includes('?') ? `${u}&employee_id=${encodeURIComponent(currentEmployeeId)}` : `${u}?employee_id=${encodeURIComponent(currentEmployeeId)}`;
+      };
+
+      // Fetch approved transactions (items that can be returned), server already scopes by auth
+      let approvedItems = await fetchAllPages(withEmp('/api/transactions/approved'));
 
       // Fetch returned items (both pending verification and completed)
-      let returnedItems = await fetchAllPages('/api/transactions/history?status=returned');
+      let returnedItems = await fetchAllPages(withEmp('/api/transactions/history?status=returned'));
 
       // Also fetch completed transactions to show verified returns
-      let completedItems = await fetchAllPages('/api/transactions/history?status=completed');
+      let completedItems = await fetchAllPages(withEmp('/api/transactions/history?status=completed'));
       try {
-        const altCompleted = await fetchAllPages('/api/transactions/history?status=complete');
+        const altCompleted = await fetchAllPages(withEmp('/api/transactions/history?status=complete'));
         completedItems = [...(completedItems || []), ...(altCompleted || [])];
       } catch (_) {}
       try {
-        const verifiedList = await fetchAllPages('/api/transactions/history?status=verified');
+        const verifiedList = await fetchAllPages(withEmp('/api/transactions/history?status=verified'));
         completedItems = [...(completedItems || []), ...(verifiedList || [])];
       } catch (_) {}
       
       // If no returned items found, try to get them from other endpoints
       if (!Array.isArray(returnedItems) || returnedItems.length === 0) {
-        const allHistory = await fetchAllPages('/api/transactions/history');
+        const allHistory = await fetchAllPages(withEmp('/api/transactions/history?status=all'));
         returnedItems = (allHistory || []).filter(r => String(r?.status || '').toLowerCase() === 'returned' || !!r?.return_date);
         const completedGuess = (allHistory || []).filter(r => {
           const s = String(r?.status || '').toLowerCase();
@@ -241,16 +259,10 @@ const ReturnItems = () => {
         });
         completedItems = [...(completedItems || []), ...completedGuess];
       }
-
-      // If still no returned items, try the general transactions endpoint
-      if (!Array.isArray(returnedItems) || returnedItems.length === 0) {
-        const allTransactions = await fetchAllPages('/api/transactions');
-        returnedItems = (allTransactions || []).filter(r => String(r?.status || '').toLowerCase() === 'returned' || !!r?.return_date);
-      }
       
       // Scope lists to current employee when possible
       const belongsToEmployee = (r) => {
-        if (!currentEmployeeId) return true;
+        if (!currentEmployeeId) return false; // Do not show anything if we failed to resolve employee id
         const eid =
           r?.employee_id ||
           r?.employee?.id ||
@@ -268,8 +280,8 @@ const ReturnItems = () => {
       };
 
       const approvedScoped = (approvedItems || []).filter(belongsToEmployee).map(item => ({ ...item, status: 'approved' }));
-      const borrowedScoped = (borrowedItems || []).filter(belongsToEmployee).map(item => ({ ...item, status: 'approved' }));
-      const holdersScoped = (holders || []).filter(belongsToEmployee).map(item => ({ ...item, status: 'approved' }));
+      const borrowedScoped = [];
+      const holdersScoped = [];
       const returnedScoped = (returnedItems || []).filter(belongsToEmployee).map(item => ({ ...item, status: 'returned' }));
 
       // Build fallback keys from returned items (transaction id and serial) to associate completed records
@@ -288,8 +300,6 @@ const ReturnItems = () => {
       // Combine and normalize all items
       const allItems = [
         ...approvedScoped,
-        ...borrowedScoped,
-        ...holdersScoped,
         ...returnedScoped,
         ...completedScoped,
       ];
@@ -297,7 +307,13 @@ const ReturnItems = () => {
       const mapped = (allItems || []).map((r, idx) => normalize(r, idx));
       // Merge with previous to avoid temporary drops when API returns partial sets
       setData((prev) => {
-        const prevArr = Array.isArray(prev) ? prev : [];
+        // avoid mixing with previous user's data
+        let prevArr = [];
+        try {
+          const lastUserId = sessionStorage.getItem('employee_returns_last_user_id');
+          const sameUser = String(lastUserId || '') === String(currentUserId || '');
+          prevArr = sameUser ? (Array.isArray(prev) ? prev : []) : [];
+        } catch (_) { prevArr = []; }
         const groupKeyForItem = (it) => {
           const serialKey = String(it.serialNo || it.serial_number || '').trim();
           if (serialKey && serialKey.toUpperCase() !== 'N/A') return `sn:${serialKey}`;
@@ -547,11 +563,34 @@ const ReturnItems = () => {
     return result;
   }, [sortedData]);
 
+  // Persist status filter
+  useEffect(() => {
+    try { sessionStorage.setItem('employee_returns_status_filter', statusFilter); } catch (_) {}
+  }, [statusFilter]);
+
+  // Build final list depending on filter
+  const listData = useMemo(() => {
+    const isVerified = (s) => /completed|verified/i.test(String(s || '')) || String(s || '') === 'Return Completed';
+    const isPending = (s) => /await|pending|verify/i.test(String(s || ''));
+    if (statusFilter === 'completed') {
+      // Show ALL completed/verified records without deduplication (history view)
+      return sortedData.filter((it) => isVerified(it.status));
+    }
+    if (statusFilter === 'pending') {
+      return dedupedData.filter((it) => isPending(it.status) && !isVerified(it.status));
+    }
+    if (statusFilter === 'returnable') {
+      return dedupedData.filter((it) => (it.status === 'Approved' || it.status === 'approved'));
+    }
+    // Default: deduped mixed list
+    return dedupedData;
+  }, [sortedData, dedupedData, statusFilter]);
+
   // 📄 Pagination
-  const totalPages = Math.ceil(dedupedData.length / itemsPerPage);
+  const totalPages = Math.ceil(listData.length / itemsPerPage);
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = dedupedData.slice(indexOfFirstItem, indexOfLastItem);
+  const currentItems = listData.slice(indexOfFirstItem, indexOfLastItem);
 
   useEffect(() => {
     if (totalPages > 0 && currentPage > totalPages) {
@@ -595,12 +634,6 @@ const ReturnItems = () => {
 
   const handleConfirmReturn = async () => {
     if (!selectedItem) return;
-
-    // Validate evidence upload for damaged/defective items
-    if ((itemCondition === "Damaged" || itemCondition === "Has Defect") && !damageEvidence) {
-      alert('Please upload evidence photo for damaged or defective items');
-      return;
-    }
 
     setActionLoading(true);
 
@@ -719,25 +752,23 @@ const ReturnItems = () => {
   const handleDamageEvidenceUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        alert('File size must be less than 10MB');
-        return;
-      }
-
-      // Check if file is an image
-      if (!file.type.startsWith('image/')) {
-        alert('Please upload an image file');
+      // Max 50MB for image/video evidence
+      if (file.size > 50 * 1024 * 1024) {
+        alert('File size must be less than 50MB');
         return;
       }
 
       setDamageEvidence(file);
 
-      // Create preview
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setPreviewImage(e.target.result);
-      };
-      reader.readAsDataURL(file);
+      // Create preview: use object URL for video, DataURL for images
+      if (file.type.startsWith('video/')) {
+        const url = URL.createObjectURL(file);
+        setPreviewImage(url);
+      } else {
+        const reader = new FileReader();
+        reader.onload = (ev) => setPreviewImage(ev.target.result);
+        reader.readAsDataURL(file);
+      }
     }
   };
 
@@ -891,10 +922,10 @@ const ReturnItems = () => {
                 />
               </div>
 
-              {/* Upload Evidence */}
+              {/* Upload Evidence (Optional) */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Upload Evidence (Image/Video) <span className="text-red-500">*</span>
+                  Upload Evidence (Image/Video) — Optional
                 </label>
                 <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
                   <input
@@ -1272,22 +1303,26 @@ const ReturnItems = () => {
                   </select>
                 </div>
 
-                {/* Damage Evidence Upload - Only show when Damaged or Has Defect */}
+                {/* Damage Evidence Upload (Image/Video) - Only show when Damaged or Has Defect */}
                 {(itemCondition === "Damaged" || itemCondition === "Has Defect") && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Upload Evidence Photo <span className="text-red-500">*</span>
+                      Upload Evidence (Image/Video) — Optional
                     </label>
                     <label className="block cursor-pointer">
                       <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-blue-400 transition-colors">
                         {previewImage ? (
                           <div className="space-y-3">
                             <div className="relative">
-                              <img
-                                src={previewImage}
-                                alt="Damage evidence"
-                                className="w-full h-48 object-cover rounded-lg"
-                              />
+                              {damageEvidence?.type?.startsWith('video/') ? (
+                                <video src={previewImage} className="w-full h-48 rounded-lg" controls />
+                              ) : (
+                                <img
+                                  src={previewImage}
+                                  alt="Damage evidence"
+                                  className="w-full h-48 object-cover rounded-lg"
+                                />
+                              )}
                               <button
                                 onClick={(e) => {
                                   e.preventDefault();
@@ -1315,7 +1350,7 @@ const ReturnItems = () => {
                                 Click to upload or drag and drop
                               </span>
                               <span className="mt-1 block text-xs text-gray-500">
-                                PNG, JPG, GIF up to 10MB
+                                Images (PNG, JPG, GIF) or Video (MP4, WEBM, MOV, AVI) up to 50MB
                               </span>
                             </div>
                           </div>
@@ -1324,12 +1359,12 @@ const ReturnItems = () => {
                       <input
                         type="file"
                         className="sr-only"
-                        accept="image/*"
+                        accept="image/*,video/*"
                         onChange={handleDamageEvidenceUpload}
                       />
                     </label>
                     <p className="mt-2 text-xs text-gray-500">
-                      Please upload a photo showing the damage or defect as evidence.
+                      Optional: You may upload an image or a short video as evidence.
                     </p>
                   </div>
                 )}
@@ -1426,6 +1461,23 @@ const ReturnItems = () => {
             <option value="item-desc">Item (Z–A)</option>
           </select>
         </div>
+
+        {/* Status Filter */}
+        <div className="flex items-center space-x-2">
+          <label className="text-sm font-medium text-gray-700">Show:</label>
+          <select
+            value={statusFilter}
+            onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+            className="border border-gray-300 rounded-md text-sm px-2 py-1 focus:ring-2 focus:ring-blue-400 focus:outline-none"
+          >
+            <option value="all">All</option>
+            <option value="completed">Return Completed (History)</option>
+            <option value="pending">Awaiting Verification</option>
+            <option value="returnable">Returnable</option>
+          </select>
+        </div>
+
+        {/* Items-per-page is controlled below in the pagination section */}
       </div>
 
       {/* Items List */}
@@ -1549,7 +1601,25 @@ const ReturnItems = () => {
                         <div>Specs</div>
                       </div>
                       <div className="grid grid-cols-3 text-sm px-3 py-3">
-                        <div className="font-medium">{(item.serialNo && item.serialNo !== 'N/A') ? item.serialNo : (item.serial_number && item.serial_number !== 'N/A') ? item.serial_number : (item.originalData?.serial_number || item.originalData?.serial_no || item.originalData?.serial || item.equipment?.serial_number || item.equipment?.serial_no || 'N/A')}</div>
+                        <div className="font-medium">{
+                          (() => {
+                            const c = (v) => v && String(v).trim() !== '' && String(v).toUpperCase() !== 'N/A';
+                            return (
+                              (c(item.serialNo) && item.serialNo) ||
+                              (c(item.serial_number) && item.serial_number) ||
+                              (c(item.equipment_serial_number) && item.equipment_serial_number) ||
+                              (c(item.serial) && item.serial) ||
+                              (c(item.asset_tag) && item.asset_tag) ||
+                              (c(item.originalData?.serial_number) && item.originalData?.serial_number) ||
+                              (c(item.originalData?.serial_no) && item.originalData?.serial_no) ||
+                              (c(item.originalData?.serial) && item.originalData?.serial) ||
+                              (c(item.equipment?.serial_number) && item.equipment?.serial_number) ||
+                              (c(item.equipment?.serial_no) && item.equipment?.serial_no) ||
+                              (c(item.equipment?.asset_tag) && item.equipment?.asset_tag) ||
+                              'N/A'
+                            );
+                          })()
+                        }</div>
                         <div>{item.brand || item.equipment?.brand_name || item.equipment?.brand?.name || item.equipment?.brand || '—'}</div>
                         <div className="truncate" title={(item.specs || item.equipment?.specs || item.equipment?.specification || item.equipment?.model || item.equipment?.specs_name || item.equipment?.description || '—')}>
                           {item.specs || item.equipment?.specs || item.equipment?.specification || item.equipment?.model || item.equipment?.specs_name || item.equipment?.description || '—'}
@@ -1591,7 +1661,7 @@ const ReturnItems = () => {
       {/* Pagination */}
       <div className="flex items-center justify-between mt-6 flex-wrap gap-3">
         <div className="flex items-center space-x-2">
-          <span className="text-sm text-gray-700">Total: {dedupedData.length} item{dedupedData.length !== 1 ? 's' : ''}</span>
+          <span className="text-sm text-gray-700">Total: {listData.length} item{listData.length !== 1 ? 's' : ''}</span>
           {/* Previous Button */}
           <button
             onClick={() => handleChangePage(currentPage - 1)}
@@ -1665,7 +1735,7 @@ const ReturnItems = () => {
           <select
             value={itemsPerPage}
             onChange={(e) => {
-              const v = e.target.value === 'all' ? (dedupedData.length || 1) : Number(e.target.value);
+              const v = e.target.value === 'all' ? (listData.length || 1) : Number(e.target.value);
               setItemsPerPage(v);
               setCurrentPage(1);
             }}
