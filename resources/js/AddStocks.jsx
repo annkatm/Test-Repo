@@ -129,6 +129,8 @@ const AddStocks = () => {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(1000); // Show all items by default
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
   const [formData, setFormData] = useState({
     category: '',
     brand: '',
@@ -201,13 +203,33 @@ const AddStocks = () => {
       fetchEquipment(); // Refresh equipment list when equipment is returned (will use categories from state)
     };
 
+    // Listen for stock added event to show toast notification
+    const handleStockAdded = (event) => {
+      const { count, product, brand } = event.detail;
+      setSuccessMessage(`Successfully added ${count} stock${count > 1 ? 's' : ''} for ${brand || product}`);
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
+    };
+
+    // Listen for item added event to show toast notification
+    const handleItemAdded = (event) => {
+      const { brand, category } = event.detail;
+      setSuccessMessage(`Successfully added ${brand} to ${category}`);
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
+    };
+
     window.addEventListener('equipment:updated', handleEquipmentUpdate);
     window.addEventListener('ireply:equipment:restore', handleEquipmentRestore);
+    window.addEventListener('stock:added', handleStockAdded);
+    window.addEventListener('item:added', handleItemAdded);
 
     // Cleanup event listeners on component unmount
     return () => {
       window.removeEventListener('equipment:updated', handleEquipmentUpdate);
       window.removeEventListener('ireply:equipment:restore', handleEquipmentRestore);
+      window.removeEventListener('stock:added', handleStockAdded);
+      window.removeEventListener('item:added', handleItemAdded);
     };
   }, []);
 
@@ -967,6 +989,38 @@ const AddStocks = () => {
             </div>
           </div>
         )}
+
+        {/* Success Toast Notification */}
+        {showSuccess && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+            <div className="relative bg-white rounded-lg shadow-lg p-4 flex items-center max-w-sm w-full mx-4 animate-fade-in pointer-events-auto">
+              <div className="flex items-start w-full">
+                <div className="flex-shrink-0 mt-0.5">
+                  <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                    <svg className="w-5 h-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                </div>
+                <div className="ml-3 w-0 flex-1">
+                  <h3 className="text-base font-semibold text-gray-900">Success!</h3>
+                  <p className="mt-1 text-sm text-gray-500">{successMessage}</p>
+                </div>
+                <div className="ml-4 flex-shrink-0 flex">
+                  <button
+                    onClick={() => setShowSuccess(false)}
+                    className="bg-white rounded-md inline-flex text-gray-400 hover:text-gray-500 focus:outline-none"
+                  >
+                    <span className="sr-only">Close</span>
+                    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1222,6 +1276,15 @@ const AddStocksModal = ({ onClose, selectedEquipment, categories = [], onSuccess
       }
       
       handleClose();
+      
+      // Trigger success toast notification in parent component
+      window.dispatchEvent(new CustomEvent('stock:added', { 
+        detail: { 
+          count: serialNumbers.length,
+          product: selectedProduct.name,
+          brand: selectedProduct.brand
+        } 
+      }));
     } catch (error) {
       setErrors({ submit: error.message });
     } finally {
@@ -1759,6 +1822,14 @@ const AddItemModal = ({ onClose, categories = [], onSuccess }) => {
         }
         setShowSuccess(false);
         onClose();
+        
+        // Trigger success toast notification in parent component
+        window.dispatchEvent(new CustomEvent('item:added', { 
+          detail: { 
+            brand: formData.brand,
+            category: categories.find(c => c.id === formData.category)?.name || 'Equipment'
+          } 
+        }));
       }, 2000);
     } catch (error) {
       setErrors({ submit: error.message });

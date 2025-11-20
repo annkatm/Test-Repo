@@ -60,6 +60,8 @@ const Equipment = () => {
   const [imagePreview, setImagePreview] = useState(null); // { src, alt }
   const [isAddItemOpen, setIsAddItemOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [showAddStockModal, setShowAddStockModal] = useState(false);
+  const [stockEquipmentId, setStockEquipmentId] = useState(null);
 
   // Helper function to format price with commas
   const formatPrice = (price) => {
@@ -314,9 +316,28 @@ const Equipment = () => {
   useEffect(() => {
     fetchData();
     const handler = () => fetchData();
+    
+    // Listen for item added event to show toast notification
+    const handleItemAdded = (event) => {
+      const { brand, model } = event.detail;
+      setSuccessMessage(`Successfully added ${brand}${model ? ` ${model}` : ''} to inventory`);
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
+    };
+    
+    // Listen for stock added event to show toast notification
+    const handleStockAdded = (event) => {
+      const { count, product } = event.detail;
+      setSuccessMessage(`Successfully added ${count} stock${count > 1 ? 's' : ''} for ${product}`);
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
+    };
+    
     window.addEventListener('categories:updated', handler);
     window.addEventListener('equipment:updated', handler);
     window.addEventListener('ireply:equipment:restore', handler); // Listen for equipment returns
+    window.addEventListener('equipment:item:added', handleItemAdded);
+    window.addEventListener('equipment:stock:added', handleStockAdded);
     
     // Prevent default context menu on the entire page
     const preventDefaultContextMenu = (e) => {
@@ -333,6 +354,8 @@ const Equipment = () => {
       window.removeEventListener('categories:updated', handler);
       window.removeEventListener('equipment:updated', handler);
       window.removeEventListener('ireply:equipment:restore', handler);
+      window.removeEventListener('equipment:item:added', handleItemAdded);
+      window.removeEventListener('equipment:stock:added', handleStockAdded);
       document.removeEventListener('contextmenu', preventDefaultContextMenu);
     };
   }, []);
@@ -836,9 +859,21 @@ const Equipment = () => {
 
               {/* Individual Items List */}
               <div>
-                <h4 className="text-lg font-semibold text-gray-800 mb-3">
-                  Individual Items ({selectedItemDetails.items.length})
-                </h4>
+                <div className="flex justify-between items-center mb-3">
+                  <h4 className="text-lg font-semibold text-gray-800">
+                    Individual Items ({selectedItemDetails.items.length})
+                  </h4>
+                  <button
+                    onClick={() => {
+                      setShowAddStockModal(true);
+                      setStockEquipmentId(selectedItemDetails.items[0]?.id);
+                    }}
+                    className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Stock
+                  </button>
+                </div>
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {selectedItemDetails.items.map((item, idx) => (
                     <div key={idx} className="flex justify-between items-center p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
@@ -1075,6 +1110,26 @@ const Equipment = () => {
           }}
         />
       )}
+
+      {/* Add Stock Modal */}
+      {showAddStockModal && (
+        <AddStockModal
+          onClose={() => {
+            setShowAddStockModal(false);
+            setStockEquipmentId(null);
+          }}
+          equipmentId={stockEquipmentId}
+          equipmentDetails={selectedItemDetails}
+          onSuccess={() => {
+            fetchData();
+            setShowAddStockModal(false);
+            setStockEquipmentId(null);
+            setSuccessMessage('Stock has been added successfully.');
+            setShowSuccess(true);
+            setTimeout(() => setShowSuccess(false), 3000);
+          }}
+        />
+      )}
     </div>
   );
 };
@@ -1093,7 +1148,6 @@ const AddItemModal = ({ onClose, categories = [], onSuccess, preSelectedCategory
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
   const [preview, setPreview] = useState({
     item_image: null,
     receipt_image: null
@@ -1332,7 +1386,7 @@ const AddItemModal = ({ onClose, categories = [], onSuccess, preSelectedCategory
       // Trigger equipment update event for dynamic refresh
       window.dispatchEvent(new Event('equipment:updated'));
 
-      // Reset form and close modal on success
+      // Reset form immediately
       setFormData({
         category: '',
         brand: '',
@@ -1347,10 +1401,18 @@ const AddItemModal = ({ onClose, categories = [], onSuccess, preSelectedCategory
         item_image: null,
         receipt_image: null
       });
-      setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 3000); // Hide after 3 seconds
-
+      
+      // Close modal
+      onClose();
       if (onSuccess) onSuccess();
+      
+      // Trigger toast notification in parent component
+      window.dispatchEvent(new CustomEvent('equipment:item:added', { 
+        detail: { 
+          brand: formData.brand,
+          model: formData.model
+        } 
+      }));
 
     } catch (error) {
       setErrors({ submit: error.message });
@@ -1654,6 +1716,287 @@ const AddItemModal = ({ onClose, categories = [], onSuccess, preSelectedCategory
               </button>
             </div>
             {errors.submit && <p className="mt-3 text-sm text-red-500 text-center">{errors.submit}</p>}
+          </form>
+        </div>
+      </div>
+    </>
+  );
+};
+
+const AddStockModal = ({ onClose, equipmentId, equipmentDetails, onSuccess }) => {
+  const [serialNumbers, setSerialNumbers] = useState(['']);
+  const [receiptImage, setReceiptImage] = useState(null);
+  const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false);
+
+  const addSerialNumberField = () => {
+    setSerialNumbers([...serialNumbers, '']);
+  };
+
+  const removeSerialNumberField = (index) => {
+    if (serialNumbers.length > 1) {
+      const newSerialNumbers = serialNumbers.filter((_, i) => i !== index);
+      setSerialNumbers(newSerialNumbers);
+    }
+  };
+
+  const handleSerialNumberChange = (index, value) => {
+    const newSerialNumbers = [...serialNumbers];
+    newSerialNumbers[index] = value;
+    setSerialNumbers(newSerialNumbers);
+    if (errors[`serial_${index}`]) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[`serial_${index}`];
+        return newErrors;
+      });
+    }
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        setErrors(prev => ({
+          ...prev,
+          receipt_image: 'File size must be less than 5MB'
+        }));
+        return;
+      }
+      setReceiptImage(file);
+      if (errors.receipt_image) {
+        setErrors(prev => {
+          const newErrors = { ...prev };
+          delete newErrors.receipt_image;
+          return newErrors;
+        });
+      }
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setErrors({});
+
+    // Validation
+    const newErrors = {};
+    const validSerialNumbers = serialNumbers.filter(sn => sn.trim() !== '');
+    
+    if (validSerialNumbers.length === 0) {
+      newErrors.serial_numbers = 'At least one serial number is required';
+      setErrors(newErrors);
+      setLoading(false);
+      return;
+    }
+
+    // Check for duplicate serial numbers in the input
+    const duplicates = validSerialNumbers.filter((item, index) => validSerialNumbers.indexOf(item) !== index);
+    if (duplicates.length > 0) {
+      newErrors.serial_numbers = 'Duplicate serial numbers found in the list';
+      setErrors(newErrors);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append('equipment_id', equipmentId);
+      formData.append('serial_numbers', JSON.stringify(validSerialNumbers));
+      
+      if (receiptImage) {
+        formData.append('receipt_image', receiptImage);
+      }
+
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      if (csrfToken) {
+        formData.append('_token', csrfToken);
+      }
+
+      const response = await fetch('/api/equipment/add-stock', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+        },
+        credentials: 'same-origin',
+        body: formData,
+      });
+
+      const contentType = response.headers.get('content-type');
+      let data;
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        throw new Error(`Server returned an error (${response.status}). Please check your connection and try again.`);
+      }
+
+      if (!response.ok) {
+        throw new Error(data.message || data.error || 'Error adding stock');
+      }
+
+      // Trigger equipment update event
+      window.dispatchEvent(new Event('equipment:updated'));
+
+      // Reset and close modal
+      setSerialNumbers(['']);
+      setReceiptImage(null);
+      onClose();
+      if (onSuccess) onSuccess();
+      
+      // Trigger toast notification in parent component
+      window.dispatchEvent(new CustomEvent('equipment:stock:added', { 
+        detail: { 
+          count: serialNumbers.length,
+          product: equipmentDetails?.name || 'Equipment'
+        } 
+      }));
+
+    } catch (error) {
+      setErrors({ submit: error.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+        <div className="relative bg-white rounded-2xl shadow-xl w-[600px] max-w-[95vw] p-8">
+          <button
+            onClick={onClose}
+            className="absolute right-4 top-4 text-gray-500 hover:text-blue-600"
+            type="button"
+          >
+            <X className="h-6 w-6" />
+          </button>
+          <h3 className="text-xl font-bold text-blue-600 text-center">Add Stock</h3>
+
+          {/* Equipment Info */}
+          <div className="mt-6 bg-gray-50 rounded-lg p-4 border border-gray-200">
+            <p className="text-sm font-medium text-gray-900">
+              {equipmentDetails?.name || 'Equipment'}
+            </p>
+            <p className="text-xs text-gray-600 mt-1">
+              Brand: {equipmentDetails?.brand || 'N/A'}
+            </p>
+            <p className="text-xs text-gray-600">
+              Category: {equipmentDetails?.category_name || 'N/A'}
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="mt-6">
+            {/* Serial Numbers */}
+            <div className="mb-6">
+              <div className="flex justify-between items-center mb-2">
+                <label className="text-sm font-medium text-gray-700">Serial Numbers*</label>
+                <button
+                  type="button"
+                  onClick={addSerialNumberField}
+                  className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add More
+                </button>
+              </div>
+              
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {serialNumbers.map((serial, index) => (
+                  <div key={index} className="flex gap-2">
+                    <input
+                      type="text"
+                      value={serial}
+                      onChange={(e) => handleSerialNumberChange(index, e.target.value)}
+                      className="flex-1 px-3 py-2 rounded-md bg-gray-100 border border-transparent hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder={`Serial number ${index + 1}`}
+                    />
+                    {serialNumbers.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeSerialNumberField(index)}
+                        className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {errors.serial_numbers && (
+                <p className="mt-1 text-sm text-red-500">{errors.serial_numbers}</p>
+              )}
+            </div>
+
+            {/* Receipt Image */}
+            <div className="mb-6">
+              <label className="text-sm font-medium text-gray-700 mb-2 block">Receipt Image (Optional)</label>
+              <div className={`h-32 w-full border border-dashed rounded-lg ${
+                receiptImage ? 'border-blue-300' : 'border-gray-300'
+              } ${errors.receipt_image ? 'border-red-500' : ''} hover:border-blue-400 transition-colors relative overflow-hidden`}>
+                <input
+                  type="file"
+                  onChange={handleFileChange}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                  accept="image/*"
+                />
+                <div className="relative p-1">
+                  {receiptImage ? (
+                    <div className="relative flex justify-center h-28">
+                      <img
+                        src={URL.createObjectURL(receiptImage)}
+                        alt="Receipt preview"
+                        className="max-h-28 max-w-full object-contain pointer-events-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setReceiptImage(null);
+                        }}
+                        className="absolute top-1 right-1 p-1 rounded-full bg-red-500 text-white hover:bg-red-600 pointer-events-auto z-20"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="h-28 flex flex-col items-center justify-center pointer-events-none">
+                      <svg className="w-6 h-6 text-gray-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                      <p className="text-xs text-gray-500">Click to upload receipt</p>
+                      <p className="text-xs text-gray-400">JPEG, PNG up to 5MB</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {errors.receipt_image && (
+                <p className="mt-1 text-sm text-red-500">{errors.receipt_image}</p>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-6 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-6 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                disabled={loading}
+              >
+                {loading ? 'Adding Stock...' : 'Add Stock'}
+              </button>
+            </div>
+            {errors.submit && (
+              <p className="mt-3 text-sm text-red-500 text-center">{errors.submit}</p>
+            )}
           </form>
         </div>
       </div>
