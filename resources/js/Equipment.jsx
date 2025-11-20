@@ -1132,12 +1132,21 @@ const AddItemModal = ({ onClose, categories = [], onSuccess, preSelectedCategory
 
     // Allow empty string, numbers, and decimal points
     if (rawValue === '' || /^\d*\.?\d*$/.test(rawValue)) {
-      // Store raw value in formData
-      setFormData(prev => ({
-        ...prev,
-        price: rawValue
-      }));
+      // Enforce maximum 7 digits in the integer part
+      const parts = rawValue.split('.');
+      const integerPart = parts[0] || '';
+
+      if (integerPart.length <= 7) {
+        // Store raw value in formData
+        setFormData(prev => ({
+          ...prev,
+          price: rawValue
+        }));
+      }
+      // If more than 7 digits, ignore the extra input (no error message)
     }
+
+    // Clear any existing price error when user edits
     if (errors.price) {
       setErrors(prev => ({ ...prev, price: null }));
     }
@@ -1149,7 +1158,9 @@ const AddItemModal = ({ onClose, categories = [], onSuccess, preSelectedCategory
     if (rawValue && rawValue !== '' && !isNaN(rawValue)) {
       const numValue = parseFloat(rawValue);
       if (!isNaN(numValue)) {
-        const formattedValue = numValue.toFixed(2);
+        const maxPrice = 9999999.99;
+        const clamped = Math.min(numValue, maxPrice);
+        const formattedValue = clamped.toFixed(2);
         setFormData(prev => ({
           ...prev,
           price: formattedValue
@@ -1165,13 +1176,20 @@ const AddItemModal = ({ onClose, categories = [], onSuccess, preSelectedCategory
 
   const handlePriceIncrement = () => {
     const currentPrice = parseFloat(formData.price) || 0;
+    const maxPrice = 9999999.99;
+
     // Use larger step for larger values, smaller step for smaller values
     const step = currentPrice >= 100 ? 1 : 0.01;
-    const newPrice = (currentPrice + step).toFixed(2);
+    let newPrice = (currentPrice + step);
+
+    // Cap at maximum price
+    newPrice = Math.min(newPrice, maxPrice).toFixed(2);
+
     setFormData(prev => ({
       ...prev,
       price: newPrice
     }));
+
     if (errors.price) {
       setErrors(prev => ({ ...prev, price: null }));
     }
@@ -1452,7 +1470,7 @@ const AddItemModal = ({ onClose, categories = [], onSuccess, preSelectedCategory
               <div>
                 <label className="text-sm text-gray-600">Price (₱)</label>
                 <div className="mt-2">
-                  <div className="flex rounded-md bg-gray-100 border border-transparent hover:border-blue-500 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500">
+                  <div className={`flex rounded-md bg-gray-100 border ${errors.price ? 'border-red-500' : 'border-transparent hover:border-blue-500 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500'}`}>
                     <input
                       type="text"
                       name="price"
