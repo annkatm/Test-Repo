@@ -96,7 +96,8 @@ const Equipment = () => {
   const confirmEdit = async () => {
     if (!editingItem) return;
 
-    if (!editSerialNumber.trim()) {
+    const isLocked = editingItem?.status === 'borrowed' || editingItem?.status === 'issued';
+    if (!editSerialNumber.trim() && !isLocked) {
       alert('Serial number cannot be empty');
       return;
     }
@@ -108,20 +109,26 @@ const Equipment = () => {
     }
 
     try {
-      const response = await api.put(`/equipment/${editingItem.id}`, {
-        serial_number: editSerialNumber.trim(),
-        status: autoStatus,
-        condition: editCondition
-      });
+      const payload = {};
+      if (!isLocked) {
+        payload.serial_number = editSerialNumber.trim();
+        payload.status = autoStatus;
+      }
+      // Always allow updating condition
+      payload.condition = editCondition;
+      const response = await api.put(`/equipment/${editingItem.id}`, payload);
       
       if (response.data.success) {
         await fetchData();
         // Notify other components (e.g., Home dashboard) to refresh
         window.dispatchEvent(new Event('equipment:updated'));
-        const statusMessage = editCondition === 'good'
-          ? 'Equipment updated and marked as available.' 
-          : 'Equipment updated and withheld for repair.';
-        setSuccessMessage(statusMessage);
+        let msg = 'Equipment updated.';
+        if (!isLocked) {
+          msg = editCondition === 'good'
+            ? 'Equipment updated and marked as available.'
+            : 'Equipment updated and withheld for repair.';
+        }
+        setSuccessMessage(msg);
         setShowSuccess(true);
         setTimeout(() => setShowSuccess(false), 3000);
         setShowEditModal(false);
@@ -981,9 +988,19 @@ const Equipment = () => {
                     type="text"
                     value={editSerialNumber}
                     onChange={(e) => setEditSerialNumber(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      (editingItem.status === 'borrowed' || editingItem.status === 'issued')
+                        ? 'border-gray-200 bg-gray-100 text-gray-500 cursor-not-allowed'
+                        : 'border-gray-300'
+                    }`}
+                    disabled={editingItem.status === 'borrowed' || editingItem.status === 'issued'}
                     placeholder="Enter serial number"
                   />
+                  {(editingItem.status === 'borrowed' || editingItem.status === 'issued') && (
+                    <p className="mt-2 text-xs text-yellow-600">
+                      ⚠ Serial number cannot be edited while equipment is borrowed or issued. Update after it is returned.
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -1132,12 +1149,21 @@ const AddItemModal = ({ onClose, categories = [], onSuccess, preSelectedCategory
 
     // Allow empty string, numbers, and decimal points
     if (rawValue === '' || /^\d*\.?\d*$/.test(rawValue)) {
-      // Store raw value in formData
-      setFormData(prev => ({
-        ...prev,
-        price: rawValue
-      }));
+      // Enforce maximum 7 digits in the integer part
+      const parts = rawValue.split('.');
+      const integerPart = parts[0] || '';
+
+      if (integerPart.length <= 7) {
+        // Store raw value in formData
+        setFormData(prev => ({
+          ...prev,
+          price: rawValue
+        }));
+      }
+      // If more than 7 digits, ignore the extra input (no error message)
     }
+
+    // Clear any existing price error when user edits
     if (errors.price) {
       setErrors(prev => ({ ...prev, price: null }));
     }
@@ -1149,7 +1175,9 @@ const AddItemModal = ({ onClose, categories = [], onSuccess, preSelectedCategory
     if (rawValue && rawValue !== '' && !isNaN(rawValue)) {
       const numValue = parseFloat(rawValue);
       if (!isNaN(numValue)) {
-        const formattedValue = numValue.toFixed(2);
+        const maxPrice = 9999999.99;
+        const clamped = Math.min(numValue, maxPrice);
+        const formattedValue = clamped.toFixed(2);
         setFormData(prev => ({
           ...prev,
           price: formattedValue
@@ -1165,13 +1193,20 @@ const AddItemModal = ({ onClose, categories = [], onSuccess, preSelectedCategory
 
   const handlePriceIncrement = () => {
     const currentPrice = parseFloat(formData.price) || 0;
+    const maxPrice = 9999999.99;
+
     // Use larger step for larger values, smaller step for smaller values
     const step = currentPrice >= 100 ? 1 : 0.01;
-    const newPrice = (currentPrice + step).toFixed(2);
+    let newPrice = (currentPrice + step);
+
+    // Cap at maximum price
+    newPrice = Math.min(newPrice, maxPrice).toFixed(2);
+
     setFormData(prev => ({
       ...prev,
       price: newPrice
     }));
+
     if (errors.price) {
       setErrors(prev => ({ ...prev, price: null }));
     }
@@ -1452,7 +1487,7 @@ const AddItemModal = ({ onClose, categories = [], onSuccess, preSelectedCategory
               <div>
                 <label className="text-sm text-gray-600">Price (₱)</label>
                 <div className="mt-2">
-                  <div className="flex rounded-md bg-gray-100 border border-transparent hover:border-blue-500 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500">
+                  <div className={`flex rounded-md bg-gray-100 border ${errors.price ? 'border-red-500' : 'border-transparent hover:border-blue-500 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500'}`}>
                     <input
                       type="text"
                       name="price"

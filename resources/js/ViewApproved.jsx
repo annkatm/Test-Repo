@@ -127,7 +127,33 @@ const ViewApproved = () => {
       // Fetch current holders (status = 'released' - equipment released)
       const holdersResponse = await transactionService.getAll({ status: 'released' });
       if (holdersResponse.success) {
-        setCurrentHolders(holdersResponse.data);
+        const list = Array.isArray(holdersResponse.data) ? holdersResponse.data : [];
+        const seen = new Set();
+        const deduped = list.filter((h) => {
+          const key = h.id || `${h.employee_id}-${h.equipment_id}-${h.status}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        // Enrich with equipment data to ensure correct serial/brand/category
+        const enriched = await Promise.all(deduped.map(async (h) => {
+          const eqId = h?.equipment_id;
+          if (!eqId) return h;
+          try {
+            const resp = await api.get(`/equipment/${eqId}`);
+            const eq = resp?.data?.data || {};
+            return {
+              ...h,
+              serial_number: h.serial_number || h.equipment_serial_number || eq.serial_number || h.asset_tag || h.serial_number,
+              brand: h.brand || eq.brand || h.brand,
+              category_name: h.category_name || (eq.category?.name || eq.category_name) || h.category_name,
+              equipment: h.equipment || eq
+            };
+          } catch (_) {
+            return h;
+          }
+        }));
+        setCurrentHolders(enriched);
       } else {
         console.error('Failed to fetch current holders:', holdersResponse.message);
       }
@@ -266,7 +292,12 @@ const ViewApproved = () => {
         specifications: returnItem.specifications || returnItem.specs || [returnItem.brand, returnItem.model].filter(Boolean).join(' '),
         // pass through return condition and notes
         return_condition: returnItem.return_condition || null,
-        return_notes: returnItem.return_notes || null
+        return_notes: returnItem.return_notes || null,
+        // image fields for thumbnail
+        item_image: returnItem.item_image || null,
+        item_image_url: returnItem.item_image_url || null,
+        // evidence can be stored under multiple possible keys
+        return_evidence: returnItem.return_evidence || returnItem.damage_evidence || returnItem.evidence_url || returnItem.evidence || null
       });
     });
     return Object.values(grouped);
@@ -279,21 +310,25 @@ const ViewApproved = () => {
     try {
       // Check if we have saved print data with updated serial numbers
       const savedPrintData = printModal.transactionData;
-      // Create a map of saved serial numbers by equipment name for easier lookup
-      const savedSerialNumbersMap = {};
+      // Prefer mapping by equipment_id; fall back to index order; avoid name-based clashes
+      const savedByEquipmentId = {};
+      const savedByIndex = [];
       if (savedPrintData?.items && Array.isArray(savedPrintData.items)) {
-        savedPrintData.items.forEach(item => {
-          if (item.serial_number && item.serial_number !== 'N/A' && item.equipment_name) {
-            // Use equipment_name as key for matching
-            savedSerialNumbersMap[item.equipment_name] = item.serial_number;
+        savedPrintData.items.forEach((item, idx) => {
+          savedByIndex[idx] = item?.serial_number;
+          if (item?.equipment_id) {
+            savedByEquipmentId[item.equipment_id] = item.serial_number;
           }
         });
       }
-      console.log('Saved serial numbers map:', savedSerialNumbersMap);
+      console.log('Saved serials by equipment_id:', savedByEquipmentId);
 
       // Handle grouped requests
       const requests = data.requests || [data];
       const releasedTransactions = [];
+      // Track already assigned equipment within this batch to avoid duplicates
+      const usedEquipmentIds = new Set();
+      const usedSerials = new Set();
       const processedRequestIds = [];
 
       for (let requestIndex = 0; requestIndex < requests.length; requestIndex++) {
@@ -332,35 +367,25 @@ const ViewApproved = () => {
           continue;
         }
 
-        // Check if serial number was changed in print form
-        // Match by equipment name from the request
-        const requestEquipmentName = (request.equipment_name || request.equipment?.name || '').trim();
-        let savedSerialNumber = savedSerialNumbersMap[requestEquipmentName];
-
-        // Try case-insensitive matching if exact match failed
-        if (!savedSerialNumber && requestEquipmentName) {
-          const matchingKey = Object.keys(savedSerialNumbersMap).find(
-            key => key.trim().toLowerCase() === requestEquipmentName.toLowerCase()
-          );
-          if (matchingKey) {
-            savedSerialNumber = savedSerialNumbersMap[matchingKey];
-            console.log(`Matched equipment by case-insensitive name: "${matchingKey}" -> "${requestEquipmentName}"`);
-          }
+        // Resolve updated serial number from saved print data
+        let savedSerialNumber = null;
+        // 1) Prefer mapping by equipment_id
+        if (request.equipment_id && savedByEquipmentId[request.equipment_id]) {
+          savedSerialNumber = savedByEquipmentId[request.equipment_id];
         }
-
-        // Fallback: if only one item in saved data and one request, use that
-        if (!savedSerialNumber && savedPrintData?.items?.length === 1 && requests.length === 1) {
-          savedSerialNumber = savedPrintData.items[0].serial_number;
-          console.log('Using fallback: single item match');
-        }
-
-        // Another fallback: match by index if counts match
-        if (!savedSerialNumber && savedPrintData?.items?.length === requests.length && requestIndex < savedPrintData.items.length) {
-          savedSerialNumber = savedPrintData.items[requestIndex]?.serial_number;
+        // 2) If counts align, use index-based mapping
+        if (!savedSerialNumber && savedByIndex.length && savedByIndex.length === requests.length) {
+          savedSerialNumber = savedByIndex[requestIndex] || null;
           if (savedSerialNumber) {
-            console.log(`Using index-based match: item[${requestIndex}]`);
+            console.log(`Using index-based serial for request ${request.id}:`, savedSerialNumber);
           }
         }
+        // 3) As a last resort when only one item exists
+        if (!savedSerialNumber && savedPrintData?.items?.length === 1 && requests.length === 1) {
+          savedSerialNumber = savedPrintData.items[0]?.serial_number || null;
+        }
+        // Define for logging below
+        const requestEquipmentName = (request.equipment_name || request.equipment?.name || '').trim();
 
         console.log(`Checking serial number for request ${request.id}:`, {
           equipmentName: requestEquipmentName,
@@ -398,6 +423,14 @@ const ViewApproved = () => {
                 matchingEquipment = equipmentListResponse.data.data.data.find(
                   eq => eq.serial_number === savedSerialNumber
                 );
+
+                if (matchingEquipment) {
+                  // Avoid assigning the same equipment/serial to multiple requests in this batch
+                  if (usedEquipmentIds.has(matchingEquipment.id) || usedSerials.has(savedSerialNumber)) {
+                    console.warn(`Serial ${savedSerialNumber} already assigned in this batch. Skipping reassignment for request ${request.id}.`);
+                    matchingEquipment = null;
+                  }
+                }
 
                 if (matchingEquipment) {
                   console.log(`Found equipment with serial ${savedSerialNumber}, updating transaction equipment_id...`);
@@ -452,6 +485,9 @@ const ViewApproved = () => {
                     } else {
                       console.log(`ℹ New equipment ${matchingEquipment.id} status is already ${currentStatus}`);
                     }
+                    // Mark this serial/equipment as used in this batch
+                    usedEquipmentIds.add(matchingEquipment.id);
+                    usedSerials.add(savedSerialNumber);
                   } catch (e) {
                     console.warn('Error updating new equipment status:', e);
                   }
@@ -539,8 +575,17 @@ const ViewApproved = () => {
         // Update the local state - remove all processed requests from approved
         setApproved(prev => prev.filter(item => !processedRequestIds.includes(item.id)));
 
-        // Add released transactions to current holders
-        setCurrentHolders(prev => [...prev, ...releasedTransactions]);
+        // Add released transactions to current holders (dedup)
+        setCurrentHolders(prev => {
+          const combined = [...(Array.isArray(prev) ? prev : []), ...releasedTransactions];
+          const seen = new Set();
+          return combined.filter((h) => {
+            const key = h.id || `${h.employee_id}-${h.equipment_id}-${h.status}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+        });
 
         // Update dashboard stats
         setDashboardStats(prev => ({
@@ -1345,6 +1390,7 @@ export default ViewApproved;
           }
 
           allItems.push({
+            equipment_id: tx?.equipment_id || request.equipment_id || null,
             equipment_name: equipmentName,
             category_name: request.category_name || tx?.category_name || 'N/A',
             brand: equipmentBrand,
@@ -1507,6 +1553,7 @@ export default ViewApproved;
           }
 
           allItems.push({
+            equipment_id: request.equipment_id || null,
             equipment_name: equipmentName,
             category_name: request.category_name || 'N/A',
             brand: equipmentBrand,

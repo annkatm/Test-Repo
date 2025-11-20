@@ -106,7 +106,7 @@ class EquipmentController extends Controller
                 'brand' => 'required|string',
                 'supplier' => 'required|string',
                 'description' => 'required|string',
-                'price' => 'nullable|numeric',
+                'price' => 'nullable|numeric|max:9999999.99',
                 'item_image' => 'nullable|image|max:5120', // 5MB max
                 'receipt_image' => 'nullable|image|max:5120', // 5MB max
             ]);
@@ -214,7 +214,7 @@ class EquipmentController extends Controller
                 'asset_tag' => 'nullable|string|max:255|unique:equipment,asset_tag,' . $id,
                 'status' => 'sometimes|required|in:available,borrowed,issued',
                 'condition' => 'sometimes|required|in:excellent,good,fair,poor',
-                'purchase_price' => 'nullable|numeric|min:0',
+                'purchase_price' => 'nullable|numeric|min:0|max:9999999.99',
                 'purchase_date' => 'nullable|date',
                 'warranty_expiry' => 'nullable|date|after:purchase_date',
                 'notes' => 'nullable|string',
@@ -223,6 +223,11 @@ class EquipmentController extends Controller
                 'item_image' => 'nullable|image|max:5120',
                 'receipt_image' => 'nullable|image|max:5120',
             ]);
+
+            // Prevent serial number updates while equipment is borrowed or issued
+            if (in_array((string) $equipment->status, ['borrowed', 'issued'], true)) {
+                unset($validated['serial_number']);
+            }
 
             // Handle file uploads and remove old files if present
             if ($request->hasFile('item_image')) {

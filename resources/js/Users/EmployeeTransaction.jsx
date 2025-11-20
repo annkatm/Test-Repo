@@ -13,6 +13,7 @@ const EmployeeTransaction = () => {
   const [categories, setCategories] = useState([]);
   const [cartItems, setCartItems] = useState([]);
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [workLocation, setWorkLocation] = useState('');
 
   // Per-user localStorage helpers
   const getUserTag = () => {
@@ -626,6 +627,8 @@ const EmployeeTransaction = () => {
       // Submit each item as a separate request, skipping duplicates and unavailable items
       const seen = new Set();
       const results = [];
+      const wl = (workLocation || '').toLowerCase();
+      const requestMode = wl.includes('home') ? 'work_from_home' : 'on_site';
       for (const group of cartItems) {
         for (const unit of group.units) {
           if (unit.status && unit.status !== 'available') {
@@ -639,7 +642,7 @@ const EmployeeTransaction = () => {
             employee_id: currentEmployee.id,
             equipment_id: unit.id,
             request_type: 'new_assignment',
-            request_mode: 'on_site',
+            request_mode: requestMode,
             reason: `Request for 1 unit of ${group.name || group.brand}`,
             expected_start_date: startDate
           };
@@ -689,6 +692,7 @@ const EmployeeTransaction = () => {
                 equipment_name: group.name || unit.name || unit.brand || 'Item',
                 created_at: new Date().toISOString(),
                 expected_start_date: startDate,
+                request_mode: requestMode,
                 status: 'Pending',
               };
               window.dispatchEvent(new CustomEvent('ireply:request:created', { detail: newReq }));
@@ -803,6 +807,8 @@ const EmployeeTransaction = () => {
           onCancel={handleCancel}
           onSubmit={submitRequest}
           loading={loading}
+          workLocation={workLocation}
+          setWorkLocation={setWorkLocation}
           startDate={startDate}
           setStartDate={setStartDate}
           isAtLimit={isAtLimitForCategoryId}

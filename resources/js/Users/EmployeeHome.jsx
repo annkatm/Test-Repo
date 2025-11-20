@@ -450,15 +450,36 @@ const EmployeeHome = () => {
         } catch (_) {}
       }
 
-      // Do not derive using return_date; keep API-driven list only
+      // Enrich missing fields (serial/category) using equipment endpoint
+      let enriched = list;
+      try {
+        enriched = await Promise.all((Array.isArray(list) ? list : []).map(async (it) => {
+          const serialMissing = !it?.serial_number || String(it.serial_number).toUpperCase() === 'N/A';
+          const needsCategory = !it?.category_name && !it?.category;
+          const eqId = it?.equipment_id || it?.id;
+          if ((serialMissing || needsCategory) && eqId) {
+            try {
+              const resp = await fetch(`/api/equipment/${eqId}`, { credentials: 'same-origin' });
+              const j = await resp.json();
+              const eq = j?.data || j || {};
+              return {
+                ...it,
+                serial_number: it.serial_number || eq.serial_number || eq.serial || it.asset_tag || null,
+                category_name: it.category_name || eq.category_name || (eq.category && (eq.category.name || eq.category)) || it.category || null,
+              };
+            } catch (_) { return it; }
+          }
+          return it;
+        }));
+      } catch (_) {}
 
-      setBorrowedItems(list);
+      setBorrowedItems(enriched);
       // Keep dashboard count in sync with actual employee items shown in modal
       try {
-        const count = Array.isArray(list) ? list.length : 0;
+        const count = Array.isArray(enriched) ? enriched.length : 0;
         setTransactionStats(prev => ({ ...prev, borrowed: count }));
       } catch (_) {}
-      return list;
+      return enriched;
     } catch (_) {
       setBorrowedItems([]);
       return [];

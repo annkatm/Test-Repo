@@ -253,7 +253,12 @@ const ViewRequest = () => {
         specs: returnItem.specifications || returnItem.specs || [returnItem.brand, returnItem.model].filter(Boolean).join(' ') || returnItem.category_name || '',
         // pass through return condition and notes
         return_condition: returnItem.return_condition || null,
-        return_notes: returnItem.return_notes || null
+        return_notes: returnItem.return_notes || null,
+        // image fields for thumbnail
+        item_image: returnItem.item_image || null,
+        item_image_url: returnItem.item_image_url || null,
+        // evidence can be stored under multiple possible keys
+        return_evidence: returnItem.return_evidence || returnItem.damage_evidence || returnItem.evidence_url || returnItem.evidence || null
       });
     });
     return Object.values(grouped);

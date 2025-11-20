@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 
 const ReturnItems = () => {
@@ -20,6 +20,9 @@ const ReturnItems = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expandedItem, setExpandedItem] = useState(null);
+  const [statusFilter, setStatusFilter] = useState(() => {
+    try { return sessionStorage.getItem('employee_returns_status_filter') || 'all'; } catch (_) { return 'all'; }
+  });
 
   useEffect(() => {
     try { sessionStorage.setItem('employee_returns_current_page', String(currentPage)); } catch (_) { }
@@ -41,7 +44,28 @@ const ReturnItems = () => {
         day: "2-digit",
         year: "numeric"
       }),
-      serialNo: item.serial_number || item.serialNo || item.serial || `SN${Math.random().toString().substr(2, 6)}`,
+      ts: (() => {
+        if (Number.isFinite(item?.ts)) return item.ts;
+        const raw =
+          item.verified_at ||
+          item.return_verified_at ||
+          item.completed_at ||
+          item.return_date ||
+          item.updated_at ||
+          item.created_at ||
+          item.date;
+        const t = new Date(raw || Date.now()).getTime();
+        return Number.isFinite(t) ? t : Date.now();
+      })(),
+      serialNo:
+        item.serial_number ||
+        item.equipment_serial_number ||
+        item.serialNo ||
+        item.serial_no ||
+        item.serial ||
+        item.asset_tag ||
+        (item.equipment ? (item.equipment.serial_number || item.equipment.serial_no) : undefined) ||
+        'N/A',
       category: item.category || item.equipment_category || 'General',
       quantity: item.quantity || 1,
       item: item.item || item.equipment_name || 'Item'
@@ -59,26 +83,75 @@ const ReturnItems = () => {
     } catch (_) {
       dateStr = String(dateRaw || "");
     }
-
-    // Determine status - if returned but not completed, show as pending verification
+    
+    // Determine status - unify holder statuses to Approved; detect verified/completed via many flags
+    const raw = String(r?.status || '').toLowerCase();
+    const isVerified =
+      raw === 'completed' ||
+      raw === 'complete' ||
+      raw.includes('completed') ||
+      raw.includes('complete') ||
+      raw === 'verified' ||
+      raw.includes('verified') ||
+      r?.is_verified === true ||
+      r?.verified === true ||
+      !!r?.verified_at ||
+      !!r?.return_verified_at ||
+      !!r?.completed_at;
+    const isPendingLike = (
+      raw.includes('returned') ||
+      raw.includes('pending') ||
+      raw.includes('await') ||
+      raw.includes('wait') ||
+      raw.includes('verify') ||
+      raw.includes('verification') ||
+      ['pending','awaiting','waiting'].includes(String(r?.verification_status || '').toLowerCase())
+    );
     let status = r?.status || (r?.return_date ? "Returned" : "Approved");
-    if (status === 'returned') {
-      status = 'Returned - Pending Verification';
-    } else if (status === 'completed') {
-      status = 'Returned - Verified';
+    if (isVerified) {
+      status = 'Return Completed';
+    } else if (isPendingLike) {
+      status = 'Awaiting Admin Verification';
+    } else if (/approved|released|borrowed|active/i.test(raw)) {
+      status = 'Approved';
     }
 
     return {
       id: r?.id ?? r?.transaction_id ?? r?.request_id ?? r?.trx_id ?? r?.uuid ?? (idx + 1),
       transaction_id: r?.transaction_id || r?.id,
+      request_id: r?.request_id || r?.req_id || (r?.request ? r.request.id : undefined) || null,
       date: dateStr,
+      ts: (() => {
+        const rawTs = r?.verified_at || r?.return_verified_at || r?.completed_at || r?.return_date || r?.updated_at || r?.created_at || r?.date;
+        const t = new Date(rawTs || Date.now()).getTime();
+        return Number.isFinite(t) ? t : Date.now();
+      })(),
       item: r?.equipment_name || r?.item || r?.title || r?.name || "Item",
       status: status,
       category: r?.category || r?.equipment_category || r?.equipment?.category_name || "General",
       quantity: r?.quantity || 1,
-      serial_number: r?.serial_number || r?.serial_no || r?.serial || r?.equipment?.serial_number || `SN${String(idx + 1).padStart(6, '0')}`,
-      serialNo: r?.serial_number || r?.serial_no || r?.serial || r?.equipment?.serial_number || `SN${String(idx + 1).padStart(6, '0')}`,
+      equipment_id: r?.equipment_id || r?.equipment?.id || null,
+      serial_number:
+        r?.serial_number ||
+        r?.equipment_serial_number ||
+        r?.serial_no ||
+        r?.serial ||
+        r?.asset_tag ||
+        r?.equipment?.serial_number ||
+        r?.equipment?.serial_no ||
+        'N/A',
+      serialNo:
+        r?.serial_number ||
+        r?.equipment_serial_number ||
+        r?.serial_no ||
+        r?.serial ||
+        r?.asset_tag ||
+        r?.equipment?.serial_number ||
+        r?.equipment?.serial_no ||
+        'N/A',
       equipment: r?.equipment || null,
+      brand: r?.brand || r?.equipment_brand || r?.equipment?.brand_name || (r?.equipment?.brand && (r.equipment.brand.name || r.equipment.brand)) || null,
+      specs: r?.specs || r?.equipment_specs || r?.equipment?.specs || r?.equipment?.specification || r?.equipment?.model || r?.equipment?.specs_name || r?.equipment?.description || null,
       is_approved: r?.status === 'approved' || r?.is_approved || false,
       return_condition: r?.return_condition || null,
       return_notes: r?.return_notes || null,
@@ -106,36 +179,168 @@ const ReturnItems = () => {
     setLoading(true);
     setError("");
     try {
-      // Fetch approved transactions (items that can be returned)
-      const approvedItems = await fetchAllPages('/api/transactions/approved');
+      // Resolve current employee id to scope results
+      const currentEmployeeId = await (async () => {
+        try {
+          const userRes = await fetch('/check-auth', { credentials: 'same-origin' });
+          const userData = await userRes.json();
+          const user = userData?.user || {};
+          if (userData?.authenticated && user?.linked_employee_id) return user.linked_employee_id;
+          if (userData?.authenticated && user?.employee_id) return user.employee_id;
+          if (userData?.authenticated && user?.id) {
+            try {
+              const empRes = await fetch(`/api/employees?user_id=${user.id}`, { credentials: 'same-origin' });
+              const empData = await empRes.json();
+              const list = Array.isArray(empData?.data) ? empData.data : (Array.isArray(empData) ? empData : []);
+              if (list.length > 0) return list[0].id;
+            } catch (_) {}
+          }
+          try {
+            const allRes = await fetch('/api/employees', { credentials: 'same-origin' });
+            const all = await allRes.json();
+            const list = Array.isArray(all?.data) ? all.data : (Array.isArray(all) ? all : []);
+            if (user?.email) {
+              const byEmail = list.find(e => (e.email || '').toLowerCase() === String(user.email).toLowerCase());
+              if (byEmail) return byEmail.id;
+            }
+          } catch (_) {}
+        } catch (_) {}
+        return null;
+      })();
+
+      // Also get current user id to detect account changes and avoid data bleed
+      let currentUserId = null;
+      try {
+        const userRes2 = await fetch('/check-auth', { credentials: 'same-origin' });
+        const userData2 = await userRes2.json();
+        currentUserId = userData2?.user?.id ?? null;
+      } catch (_) {}
+
+      // If user changed since last load, clear local state and caches
+      try {
+        const lastUserId = sessionStorage.getItem('employee_returns_last_user_id');
+        if (String(lastUserId || '') !== String(currentUserId || '')) {
+          setData([]);
+          equipmentCacheRef.current = {};
+          sessionStorage.setItem('employee_returns_last_user_id', String(currentUserId || ''));
+        }
+      } catch (_) {}
+
+      // Helper to append employee filter if available
+      const withEmp = (u) => {
+        if (!currentEmployeeId) return u;
+        return u.includes('?') ? `${u}&employee_id=${encodeURIComponent(currentEmployeeId)}` : `${u}?employee_id=${encodeURIComponent(currentEmployeeId)}`;
+      };
+
+      // Fetch approved transactions (items that can be returned), server already scopes by auth
+      let approvedItems = await fetchAllPages(withEmp('/api/transactions/approved'));
 
       // Fetch returned items (both pending verification and completed)
-      let returnedItems = await fetchAllPages('/api/transactions/history?status=returned');
+      let returnedItems = await fetchAllPages(withEmp('/api/transactions/history?status=returned'));
 
       // Also fetch completed transactions to show verified returns
-      const completedItems = await fetchAllPages('/api/transactions/history?status=completed');
-
+      let completedItems = await fetchAllPages(withEmp('/api/transactions/history?status=completed'));
+      try {
+        const altCompleted = await fetchAllPages(withEmp('/api/transactions/history?status=complete'));
+        completedItems = [...(completedItems || []), ...(altCompleted || [])];
+      } catch (_) {}
+      try {
+        const verifiedList = await fetchAllPages(withEmp('/api/transactions/history?status=verified'));
+        completedItems = [...(completedItems || []), ...(verifiedList || [])];
+      } catch (_) {}
+      
       // If no returned items found, try to get them from other endpoints
       if (!Array.isArray(returnedItems) || returnedItems.length === 0) {
-        const allHistory = await fetchAllPages('/api/transactions/history');
+        const allHistory = await fetchAllPages(withEmp('/api/transactions/history?status=all'));
         returnedItems = (allHistory || []).filter(r => String(r?.status || '').toLowerCase() === 'returned' || !!r?.return_date);
+        const completedGuess = (allHistory || []).filter(r => {
+          const s = String(r?.status || '').toLowerCase();
+          return s.includes('completed') || s.includes('complete') || s.includes('verified') || !!r?.verified_at || !!r?.completed_at;
+        });
+        completedItems = [...(completedItems || []), ...completedGuess];
       }
+      
+      // Scope lists to current employee when possible
+      const belongsToEmployee = (r) => {
+        if (!currentEmployeeId) return false; // Do not show anything if we failed to resolve employee id
+        const eid =
+          r?.employee_id ||
+          r?.employee?.id ||
+          r?.holder?.employee_id ||
+          r?.user?.employee_id ||
+          r?.request?.employee_id ||
+          r?.released_to_employee_id ||
+          r?.holder_id ||
+          r?.borrower_id ||
+          r?.assigned_to_employee_id ||
+          null;
+        // If the record has no clear employee binding, keep it (do not drop user's items)
+        if (!eid) return true;
+        return String(eid) === String(currentEmployeeId);
+      };
 
-      // If still no returned items, try the general transactions endpoint
-      if (!Array.isArray(returnedItems) || returnedItems.length === 0) {
-        const allTransactions = await fetchAllPages('/api/transactions');
-        returnedItems = (allTransactions || []).filter(r => String(r?.status || '').toLowerCase() === 'returned' || !!r?.return_date);
-      }
+      const approvedScoped = (approvedItems || []).filter(belongsToEmployee).map(item => ({ ...item, status: 'approved' }));
+      const borrowedScoped = [];
+      const holdersScoped = [];
+      const returnedScoped = (returnedItems || []).filter(belongsToEmployee).map(item => ({ ...item, status: 'returned' }));
+
+      // Build fallback keys from returned items (transaction id and serial) to associate completed records
+      const getTxId = (r) => r?.transaction_id || r?.id || r?.trx_id || r?.request_id || r?.req_id || null;
+      const getSerial = (r) => (
+        r?.serial_number || r?.equipment_serial_number || r?.serial_no || r?.serial || r?.asset_tag || r?.equipment?.serial_number || r?.equipment?.serial_no || ''
+      );
+      const returnedTxIds = new Set((returnedScoped || []).map(getTxId).filter(Boolean).map(String));
+      const returnedSerials = new Set((returnedScoped || []).map(getSerial).filter(s => s && String(s).toUpperCase() !== 'N/A').map(String));
+
+      // Do NOT require return_date for completed; include if belongsToEmployee OR matches a returned tx/serial
+      const completedScoped = (completedItems || [])
+        .filter(r => belongsToEmployee(r) || returnedTxIds.has(String(getTxId(r) || '')) || returnedSerials.has(String(getSerial(r) || '')))
+        .map(item => ({ ...item, status: 'completed' }));
 
       // Combine and normalize all items
       const allItems = [
-        ...(approvedItems || []).map(item => ({ ...item, status: 'approved' })),
-        ...(returnedItems || []).map(item => ({ ...item, status: 'returned' })),
-        ...(completedItems || []).filter(item => item.return_date).map(item => ({ ...item, status: 'completed' }))
+        ...approvedScoped,
+        ...returnedScoped,
+        ...completedScoped,
       ];
 
       const mapped = (allItems || []).map((r, idx) => normalize(r, idx));
-      setData(mapped);
+      // Merge with previous to avoid temporary drops when API returns partial sets
+      setData((prev) => {
+        // avoid mixing with previous user's data
+        let prevArr = [];
+        try {
+          const lastUserId = sessionStorage.getItem('employee_returns_last_user_id');
+          const sameUser = String(lastUserId || '') === String(currentUserId || '');
+          prevArr = sameUser ? (Array.isArray(prev) ? prev : []) : [];
+        } catch (_) { prevArr = []; }
+        const groupKeyForItem = (it) => {
+          const serialKey = String(it.serialNo || it.serial_number || '').trim();
+          if (serialKey && serialKey.toUpperCase() !== 'N/A') return `sn:${serialKey}`;
+          if (it.id) return `id:${it.id}`;
+          if (it.transaction_id) return `tx:${it.transaction_id}`;
+          if (it.request_id) return `rq:${it.request_id}`;
+          if (it.equipment_id) return `eq:${it.equipment_id}`;
+          return `row:${Math.random().toString(36).slice(2)}`;
+        };
+        const isVerified = (s) => /completed|verified/i.test(String(s || ''));
+        const isPending = (s) => /pending|await/i.test(String(s || ''));
+        const weight = (s) => (isVerified(s) ? 2 : isPending(s) ? 1 : 0);
+        const byKey = new Map();
+        const add = (rec) => {
+          const k = groupKeyForItem(rec);
+          const cur = byKey.get(k);
+          if (!cur) { byKey.set(k, rec); return; }
+          const tCur = rec.ts || new Date(rec.date).getTime() || 0;
+          const tBest = cur.ts || new Date(cur.date).getTime() || 0;
+          if (tCur > tBest) { byKey.set(k, rec); return; }
+          if (tCur < tBest) { return; }
+          if (weight(rec.status) > weight(cur.status)) byKey.set(k, rec);
+        };
+        prevArr.forEach(add);
+        mapped.forEach(add);
+        return Array.from(byKey.values());
+      });
     } catch (e) {
       console.error('Error loading returns:', e);
       setError("Failed to load items");
@@ -153,6 +358,7 @@ const ReturnItems = () => {
         const normalized = queued.map((d, idx) => ({
           id: d.id || Date.now() + idx,
           date: d.date || new Date().toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }),
+          ts: (() => { const t = new Date(d.date || Date.now()).getTime(); return Number.isFinite(t) ? t : Date.now(); })(),
           item: d.item || d.equipment_name || "Item",
           status: d.status || "Returned",
           category: d.category || "General",
@@ -177,6 +383,56 @@ const ReturnItems = () => {
     return () => { cancelled = true; };
   }, []);
 
+  const equipmentCacheRef = useRef({});
+  useEffect(() => {
+    try {
+      const missing = (data || []).filter(d => {
+        const needsSerial = (!d.serial_number || d.serial_number === 'N/A' || !d.serialNo || d.serialNo === 'N/A');
+        const needsBrand = (!d.brand && !(d.equipment && (d.equipment.brand_name || d.equipment.brand)));
+        const needsSpecs = (!d.specs && !(d.equipment && (d.equipment.specs || d.equipment.specification || d.equipment.model || d.equipment.specs_name || d.equipment.description)));
+        const hasId = d.equipment_id || d?.originalData?.equipment_id || d?.equipment?.id;
+        return hasId && (needsSerial || needsBrand || needsSpecs);
+      });
+      const ids = Array.from(new Set(missing.map(d => String(d.equipment_id || d?.originalData?.equipment_id || d?.equipment?.id)).filter(Boolean)));
+      const toFetch = ids.filter(id => !equipmentCacheRef.current[id]);
+      if (toFetch.length === 0) return;
+      (async () => {
+        for (const id of toFetch) {
+          try {
+            const resp = await fetch(`/api/equipment/${id}`, { credentials: 'same-origin' });
+            const j = await resp.json();
+            equipmentCacheRef.current[id] = j?.data || j || {};
+          } catch (_) {
+            equipmentCacheRef.current[id] = { attempted: true };
+          }
+        }
+        setData(prev => (prev || []).map(it => {
+          const id = String(it.equipment_id || it?.originalData?.equipment_id || it?.equipment?.id || '');
+          const eq = id ? equipmentCacheRef.current[id] : null;
+          if (!eq) return it;
+          const serial = (it.serial_number && it.serial_number !== 'N/A')
+            ? it.serial_number
+            : (eq.serial_number || eq.equipment_serial_number || eq.serial_no || eq.serial || eq.asset_tag || 'N/A');
+          const categoryName = (it.category && it.category !== 'General')
+            ? it.category
+            : (eq.category_name || (eq.category && (eq.category.name || eq.category)) || it.category);
+          const brandName = it.brand || eq.brand_name || (eq.brand && (eq.brand.name || eq.brand)) || null;
+          const specsText = it.specs || eq.specs || eq.specification || eq.model || eq.specs_name || eq.description || null;
+          return {
+            ...it,
+            equipment_id: it.equipment_id || (it.originalData?.equipment_id ?? null),
+            serial_number: serial,
+            serialNo: serial,
+            category: categoryName || it.category,
+            equipment: it.equipment || eq,
+            brand: brandName || it.brand,
+            specs: specsText || it.specs,
+          };
+        }));
+      })();
+    } catch (_) {}
+  }, [data]);
+
   // React to in-app navigation-triggered returns: add returned item instantly
   useEffect(() => {
     const onReturnedAdd = (e) => {
@@ -188,21 +444,26 @@ const ReturnItems = () => {
       const serialNumber = d.serial_number || d.serial_no || d.serial || equipment.serial_number || '';
       const category = d.category || equipment.category_name || equipment.category?.name || 'General';
       const itemName = d.item || d.equipment_name || equipment.name || 'Item';
-
+      
+      const nowTs = Date.now();
       const entry = {
-        id: d.id || `returned_${Date.now()}`,
-        date: d.date ? new Date(d.date).toLocaleDateString("en-US", {
-          month: "2-digit",
-          day: "2-digit",
+        id: d.id || `returned_${nowTs}`,
+        date: d.date ? new Date(d.date).toLocaleString("en-US", { 
+          month: "2-digit", 
+          day: "2-digit", 
           year: "numeric",
           hour: '2-digit',
           minute: '2-digit',
           hour12: true
-        }) : new Date().toLocaleDateString("en-US", {
-          month: "2-digit",
-          day: "2-digit",
-          year: "numeric"
+        }) : new Date().toLocaleString("en-US", { 
+          month: "2-digit", 
+          day: "2-digit", 
+          year: "numeric",
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true
         }),
+        ts: Number.isFinite(d?.ts) ? d.ts : nowTs,
         item: itemName,
         status: d.status || "Returned",
         category: category,
@@ -248,19 +509,88 @@ const ReturnItems = () => {
   // 🔃 Sort the data
   const sortedData = useMemo(() => {
     return [...filteredData].sort((a, b) => {
-      if (sortOption === "date-asc") return new Date(a.date) - new Date(b.date);
-      if (sortOption === "date-desc") return new Date(b.date) - new Date(a.date);
+      if (sortOption === "date-asc") return (a.ts || 0) - (b.ts || 0);
+      if (sortOption === "date-desc") return (b.ts || 0) - (a.ts || 0);
       if (sortOption === "item-asc") return a.item.localeCompare(b.item);
       if (sortOption === "item-desc") return b.item.localeCompare(a.item);
       return 0;
     });
   }, [filteredData, sortOption]);
 
+  // 🧹 Group by stable key: transaction_id > request_id > serial > equipment
+  //     Pick the most recent status by timestamp; use status weight only as a tiebreaker
+  const dedupedData = useMemo(() => {
+    const isVerified = (s) => {
+      const x = String(s || '').toLowerCase();
+      return x.includes('verified') || x.includes('completed');
+    };
+    const isPending = (s) => { const x = String(s || '').toLowerCase(); return x.includes('pending') || x.includes('await'); };
+    const isApproved = (s) => String(s || '').toLowerCase().includes('approved');
+
+    const groupKeyForItem = (it) => {
+      const serialKey = String(it.serialNo || it.serial_number || '').trim();
+      if (serialKey && serialKey.toUpperCase() !== 'N/A') return `sn:${serialKey}`;
+      // Prefer unique row id next
+      if (it.id) return `id:${it.id}`;
+      // Then fall back to transaction/request/equipment
+      if (it.transaction_id) return `tx:${it.transaction_id}`;
+      if (it.request_id) return `rq:${it.request_id}`;
+      if (it.equipment_id) return `eq:${it.equipment_id}`;
+      return `row:${Math.random().toString(36).slice(2)}`;
+    };
+
+    const groups = new Map();
+    for (const it of sortedData) {
+      const k = groupKeyForItem(it);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(it);
+    }
+
+    const weight = (s) => (isVerified(s) ? 2 : isPending(s) ? 1 : isApproved(s) ? 0 : -1);
+    const pick = (arr) => {
+      return arr.reduce((best, cur) => {
+        if (!best) return cur;
+        const tBest = best.ts || 0;
+        const tCur = cur.ts || 0;
+        if (tCur > tBest) return cur; // newer always wins
+        if (tCur < tBest) return best;
+        // tie-break on status weight
+        return weight(cur.status) > weight(best.status) ? cur : best;
+      }, null);
+    };
+
+    const result = Array.from(groups.values()).map(pick).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+    return result;
+  }, [sortedData]);
+
+  // Persist status filter
+  useEffect(() => {
+    try { sessionStorage.setItem('employee_returns_status_filter', statusFilter); } catch (_) {}
+  }, [statusFilter]);
+
+  // Build final list depending on filter
+  const listData = useMemo(() => {
+    const isVerified = (s) => /completed|verified/i.test(String(s || '')) || String(s || '') === 'Return Completed';
+    const isPending = (s) => /await|pending|verify/i.test(String(s || ''));
+    if (statusFilter === 'completed') {
+      // Show ALL completed/verified records without deduplication (history view)
+      return sortedData.filter((it) => isVerified(it.status));
+    }
+    if (statusFilter === 'pending') {
+      return dedupedData.filter((it) => isPending(it.status) && !isVerified(it.status));
+    }
+    if (statusFilter === 'returnable') {
+      return dedupedData.filter((it) => (it.status === 'Approved' || it.status === 'approved'));
+    }
+    // Default: deduped mixed list
+    return dedupedData;
+  }, [sortedData, dedupedData, statusFilter]);
+
   // 📄 Pagination
-  const totalPages = Math.ceil(sortedData.length / itemsPerPage);
+  const totalPages = Math.ceil(listData.length / itemsPerPage);
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = sortedData.slice(indexOfFirstItem, indexOfLastItem);
+  const currentItems = listData.slice(indexOfFirstItem, indexOfLastItem);
 
   useEffect(() => {
     if (totalPages > 0 && currentPage > totalPages) {
@@ -304,12 +634,6 @@ const ReturnItems = () => {
 
   const handleConfirmReturn = async () => {
     if (!selectedItem) return;
-
-    // Validate evidence upload for damaged/defective items
-    if ((itemCondition === "Damaged" || itemCondition === "Has Defect") && !damageEvidence) {
-      alert('Please upload evidence photo for damaged or defective items');
-      return;
-    }
 
     setActionLoading(true);
 
@@ -363,12 +687,13 @@ const ReturnItems = () => {
         detail: {
           id: transactionId,
           date: new Date().toISOString(),
+          ts: Date.now(),
           item: selectedItem.item,
           equipment_name: selectedItem.item,
           serial_number: selectedItem.serialNo,
           category: selectedItem.category,
           quantity: selectedItem.quantity,
-          status: 'Returned - Pending Verification',
+          status: 'Awaiting Admin Verification',
           remarks: returnRemarks,
           condition: itemCondition,
           transaction_id: transactionId
@@ -427,25 +752,23 @@ const ReturnItems = () => {
   const handleDamageEvidenceUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        alert('File size must be less than 10MB');
-        return;
-      }
-
-      // Check if file is an image
-      if (!file.type.startsWith('image/')) {
-        alert('Please upload an image file');
+      // Max 50MB for image/video evidence
+      if (file.size > 50 * 1024 * 1024) {
+        alert('File size must be less than 50MB');
         return;
       }
 
       setDamageEvidence(file);
 
-      // Create preview
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setPreviewImage(e.target.result);
-      };
-      reader.readAsDataURL(file);
+      // Create preview: use object URL for video, DataURL for images
+      if (file.type.startsWith('video/')) {
+        const url = URL.createObjectURL(file);
+        setPreviewImage(url);
+      } else {
+        const reader = new FileReader();
+        reader.onload = (ev) => setPreviewImage(ev.target.result);
+        reader.readAsDataURL(file);
+      }
     }
   };
 
@@ -599,10 +922,10 @@ const ReturnItems = () => {
                 />
               </div>
 
-              {/* Upload Evidence */}
+              {/* Upload Evidence (Optional) */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Upload Evidence (Image/Video) <span className="text-red-500">*</span>
+                  Upload Evidence (Image/Video) — Optional
                 </label>
                 <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
                   <input
@@ -980,22 +1303,26 @@ const ReturnItems = () => {
                   </select>
                 </div>
 
-                {/* Damage Evidence Upload - Only show when Damaged or Has Defect */}
+                {/* Damage Evidence Upload (Image/Video) - Only show when Damaged or Has Defect */}
                 {(itemCondition === "Damaged" || itemCondition === "Has Defect") && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Upload Evidence Photo <span className="text-red-500">*</span>
+                      Upload Evidence (Image/Video) — Optional
                     </label>
                     <label className="block cursor-pointer">
                       <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-blue-400 transition-colors">
                         {previewImage ? (
                           <div className="space-y-3">
                             <div className="relative">
-                              <img
-                                src={previewImage}
-                                alt="Damage evidence"
-                                className="w-full h-48 object-cover rounded-lg"
-                              />
+                              {damageEvidence?.type?.startsWith('video/') ? (
+                                <video src={previewImage} className="w-full h-48 rounded-lg" controls />
+                              ) : (
+                                <img
+                                  src={previewImage}
+                                  alt="Damage evidence"
+                                  className="w-full h-48 object-cover rounded-lg"
+                                />
+                              )}
                               <button
                                 onClick={(e) => {
                                   e.preventDefault();
@@ -1023,7 +1350,7 @@ const ReturnItems = () => {
                                 Click to upload or drag and drop
                               </span>
                               <span className="mt-1 block text-xs text-gray-500">
-                                PNG, JPG, GIF up to 10MB
+                                Images (PNG, JPG, GIF) or Video (MP4, WEBM, MOV, AVI) up to 50MB
                               </span>
                             </div>
                           </div>
@@ -1032,12 +1359,12 @@ const ReturnItems = () => {
                       <input
                         type="file"
                         className="sr-only"
-                        accept="image/*"
+                        accept="image/*,video/*"
                         onChange={handleDamageEvidenceUpload}
                       />
                     </label>
                     <p className="mt-2 text-xs text-gray-500">
-                      Please upload a photo showing the damage or defect as evidence.
+                      Optional: You may upload an image or a short video as evidence.
                     </p>
                   </div>
                 )}
@@ -1134,6 +1461,23 @@ const ReturnItems = () => {
             <option value="item-desc">Item (Z–A)</option>
           </select>
         </div>
+
+        {/* Status Filter */}
+        <div className="flex items-center space-x-2">
+          <label className="text-sm font-medium text-gray-700">Show:</label>
+          <select
+            value={statusFilter}
+            onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+            className="border border-gray-300 rounded-md text-sm px-2 py-1 focus:ring-2 focus:ring-blue-400 focus:outline-none"
+          >
+            <option value="all">All</option>
+            <option value="completed">Return Completed (History)</option>
+            <option value="pending">Awaiting Verification</option>
+            <option value="returnable">Returnable</option>
+          </select>
+        </div>
+
+        {/* Items-per-page is controlled below in the pagination section */}
       </div>
 
       {/* Items List */}
@@ -1175,7 +1519,6 @@ const ReturnItems = () => {
 
                 {/* Options */}
                 <div className="col-span-3 flex justify-end space-x-2">
-                  {/* Only show Return button if item is approved (not yet returned) */}
                   {item.status === 'Approved' || item.status === 'approved' ? (
                     <>
                       <button
@@ -1189,8 +1532,14 @@ const ReturnItems = () => {
                       </button>
                     </>
                   ) : (
-                    <span className="text-sm text-gray-500 italic">
-                      {item.status.includes('Pending') ? 'Awaiting Admin Verification' : 'Return Completed'}
+                    <span
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
+                        ((/completed|verified/i.test(item.status)) || item.status === 'Return Completed')
+                          ? 'bg-green-50 text-green-700 border-green-200'
+                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                      }`}
+                    >
+                      {(/completed|verified/i.test(item.status)) || item.status === 'Return Completed' ? 'Return Completed' : 'Awaiting Admin Verification'}
                     </span>
                   )}
                 </div>
@@ -1214,18 +1563,69 @@ const ReturnItems = () => {
                     <div className="text-sm text-gray-700 font-medium">{item.serialNo}</div>
                     <div className="text-sm text-gray-700">{item.category}</div>
                     <div>
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${item.status.includes('Pending')
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
+                        ((/await|pending|verify/i.test(item.status)) && !(/completed|verified/i.test(item.status)))
                           ? 'bg-yellow-100 text-yellow-800'
-                          : item.status.includes('Verified')
-                            ? 'bg-green-100 text-green-800'
-                            : item.status === 'Approved' || item.status === 'approved'
-                              ? 'bg-blue-100 text-blue-800'
-                              : 'bg-gray-100 text-gray-800'
-                        }`}>
-                        {item.status}
+                          : ((/completed|verified/i.test(item.status)) || item.status === 'Return Completed')
+                          ? 'bg-green-100 text-green-800'
+                          : (item.status === 'Approved' || item.status === 'approved')
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {((/completed|verified/i.test(item.status)) || item.status === 'Return Completed')
+                          ? 'Return Completed'
+                          : ((/await|pending|verify/i.test(item.status)))
+                          ? 'Awaiting Admin Verification'
+                          : (item.status === 'Approved' || item.status === 'approved')
+                          ? 'Approved'
+                          : item.status}
                       </span>
                     </div>
                     <div className="text-sm text-gray-700">{item.date}</div>
+                  </div>
+
+                  {/* Equipment Details Table */}
+                  <div className="mt-4">
+                    <div className="flex items-center mb-2">
+                      <div className="w-5 h-5 mr-2 text-gray-500">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-5 h-5">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                        </svg>
+                      </div>
+                      <div className="text-sm font-semibold text-gray-700">Items</div>
+                    </div>
+                    <div className="border rounded-lg overflow-hidden">
+                      <div className="grid grid-cols-3 bg-gray-100 text-xs font-semibold text-gray-600 px-3 py-2">
+                        <div>Serial</div>
+                        <div>Brand</div>
+                        <div>Specs</div>
+                      </div>
+                      <div className="grid grid-cols-3 text-sm px-3 py-3">
+                        <div className="font-medium">{
+                          (() => {
+                            const c = (v) => v && String(v).trim() !== '' && String(v).toUpperCase() !== 'N/A';
+                            return (
+                              (c(item.serialNo) && item.serialNo) ||
+                              (c(item.serial_number) && item.serial_number) ||
+                              (c(item.equipment_serial_number) && item.equipment_serial_number) ||
+                              (c(item.serial) && item.serial) ||
+                              (c(item.asset_tag) && item.asset_tag) ||
+                              (c(item.originalData?.serial_number) && item.originalData?.serial_number) ||
+                              (c(item.originalData?.serial_no) && item.originalData?.serial_no) ||
+                              (c(item.originalData?.serial) && item.originalData?.serial) ||
+                              (c(item.equipment?.serial_number) && item.equipment?.serial_number) ||
+                              (c(item.equipment?.serial_no) && item.equipment?.serial_no) ||
+                              (c(item.equipment?.asset_tag) && item.equipment?.asset_tag) ||
+                              'N/A'
+                            );
+                          })()
+                        }</div>
+                        <div>{item.brand || item.equipment?.brand_name || item.equipment?.brand?.name || item.equipment?.brand || '—'}</div>
+                        <div className="truncate" title={(item.specs || item.equipment?.specs || item.equipment?.specification || item.equipment?.model || item.equipment?.specs_name || item.equipment?.description || '—')}>
+                          {item.specs || item.equipment?.specs || item.equipment?.specification || item.equipment?.model || item.equipment?.specs_name || item.equipment?.description || '—'}
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Show return condition and notes if item was returned */}
@@ -1261,7 +1661,7 @@ const ReturnItems = () => {
       {/* Pagination */}
       <div className="flex items-center justify-between mt-6 flex-wrap gap-3">
         <div className="flex items-center space-x-2">
-          <span className="text-sm text-gray-700">Total: {sortedData.length} item{sortedData.length !== 1 ? 's' : ''}</span>
+          <span className="text-sm text-gray-700">Total: {listData.length} item{listData.length !== 1 ? 's' : ''}</span>
           {/* Previous Button */}
           <button
             onClick={() => handleChangePage(currentPage - 1)}
@@ -1335,7 +1735,7 @@ const ReturnItems = () => {
           <select
             value={itemsPerPage}
             onChange={(e) => {
-              const v = e.target.value === 'all' ? (sortedData.length || 1) : Number(e.target.value);
+              const v = e.target.value === 'all' ? (listData.length || 1) : Number(e.target.value);
               setItemsPerPage(v);
               setCurrentPage(1);
             }}
