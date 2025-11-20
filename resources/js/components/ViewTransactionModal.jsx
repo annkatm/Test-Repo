@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { X, Calendar, User, Package, MapPin, FileText, Clock, CheckCircle } from 'lucide-react';
+import { X, Calendar, User, Package, MapPin, FileText, Clock, CheckCircle, Printer } from 'lucide-react';
 
-const ViewTransactionModal = ({ isOpen, onClose, transactionData, hideCancel = false, buttonText = 'Release', onRelease = null }) => {
+const ViewTransactionModal = ({ isOpen, onClose, transactionData, hideCancel = false, buttonText = 'Release', onRelease = null, onPrint = null }) => {
   if (!isOpen || !transactionData) return null;
 
   const handleButtonClick = () => {
@@ -319,7 +319,18 @@ const ViewTransactionModal = ({ isOpen, onClose, transactionData, hideCancel = f
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end p-6 border-t border-gray-200 space-x-3">
+        <div className="flex justify-between items-center p-6 border-t border-gray-200">
+          {onPrint ? (
+            <button
+              onClick={() => onPrint(transactionData)}
+              className="flex items-center space-x-2 px-4 py-2 rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+            >
+              <Printer className="h-4 w-4" />
+              <span>Print Accountability Form</span>
+            </button>
+          ) : (
+            <div></div>
+          )}
           <button
             onClick={onClose}
             className="px-6 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors"

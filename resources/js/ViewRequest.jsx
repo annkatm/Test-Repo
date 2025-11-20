@@ -8,6 +8,8 @@ import SuccessModal from './components/SuccessModal';
 import ViewTransactionModal from './components/ViewTransactionModal';
 import EditTransactionModal from './components/EditTransactionModal';
 import VerifyReturnModal from './components/VerifyReturnModal';
+import PrintReceipt from './components/PrintReceipt.jsx';
+import SelectItemsModal from './components/SelectItemsModal.jsx';
 import { useRequestData } from './hooks/useRequestData';
 import { activityLogService } from './services/activityLogService';
 import api from './services/api';
@@ -92,6 +94,16 @@ const ViewRequest = () => {
   const [viewReturnModal, setViewReturnModal] = useState({
     isOpen: false,
     returnData: null
+  });
+
+  const [printModal, setPrintModal] = useState({
+    isOpen: false,
+    transactionData: null
+  });
+
+  const [selectItemsModal, setSelectItemsModal] = useState({
+    isOpen: false,
+    transactionData: null
   });
 
   const handleSelect = (next) => {
@@ -499,6 +511,51 @@ const ViewRequest = () => {
       isOpen: false,
       returnData: null
     });
+  };
+
+  // Handle print action - show item selection first
+  const handlePrint = (transactionData) => {
+    setSelectItemsModal({
+      isOpen: true,
+      transactionData: transactionData
+    });
+  };
+
+  const closeSelectItemsModal = () => {
+    setSelectItemsModal({
+      isOpen: false,
+      transactionData: null
+    });
+  };
+
+  const handleItemsSelected = (selectedItems) => {
+    // Close selection modal
+    closeSelectItemsModal();
+    
+    // Open print modal with selected items
+    const transactionWithSelectedItems = {
+      ...selectItemsModal.transactionData,
+      items: selectedItems
+    };
+    
+    setPrintModal({
+      isOpen: true,
+      transactionData: transactionWithSelectedItems
+    });
+  };
+
+  const closePrintModal = () => {
+    setPrintModal({
+      isOpen: false,
+      transactionData: null
+    });
+  };
+
+  const handlePrintDataSave = (updatedData) => {
+    setPrintModal(prev => ({
+      ...prev,
+      transactionData: updatedData
+    }));
   };
 
   const handleConfirmReturn = async (returnData) => {
@@ -1310,9 +1367,6 @@ const ViewRequest = () => {
                     </td>
                     <td className="py-4 px-6">
                       <div className="flex items-center justify-end space-x-2">
-                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-                          Active
-                        </span>
                         <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-600 text-white">
                           Released
                         </span>
@@ -1574,6 +1628,23 @@ const ViewRequest = () => {
         isOpen={viewHolderModal.isOpen}
         onClose={handleCloseViewHolderModal}
         transactionData={viewHolderModal.holderData}
+        onPrint={handlePrint}
+      />
+
+      {/* Select Items Modal */}
+      <SelectItemsModal
+        isOpen={selectItemsModal.isOpen}
+        onClose={closeSelectItemsModal}
+        transactionData={selectItemsModal.transactionData}
+        onConfirm={handleItemsSelected}
+      />
+
+      {/* Print Receipt Modal */}
+      <PrintReceipt
+        isOpen={printModal.isOpen}
+        onClose={closePrintModal}
+        transactionData={printModal.transactionData}
+        onSave={handlePrintDataSave}
       />
 
       {/* View Return Modal */}

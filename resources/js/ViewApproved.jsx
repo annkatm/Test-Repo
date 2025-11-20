@@ -4,6 +4,7 @@ import GlobalHeader from './components/GlobalHeader';
 import HomeSidebar from './HomeSidebar';
 import ConfirmModal from './components/ConfirmModal.jsx';
 import PrintReceipt from './components/PrintReceipt.jsx';
+import SelectItemsModal from './components/SelectItemsModal.jsx';
 import ViewTransactionModal from './components/ViewTransactionModal';
 import VerifyReturnModal from './components/VerifyReturnModal';
 import { transactionService, apiUtils } from './services/api.js';
@@ -34,6 +35,11 @@ const ViewApproved = () => {
     transactionData: null
   });
   const [printModal, setPrintModal] = useState({
+    isOpen: false,
+    transactionData: null
+  });
+
+  const [selectItemsModal, setSelectItemsModal] = useState({
     isOpen: false,
     transactionData: null
   });
@@ -586,51 +592,598 @@ const ViewApproved = () => {
   };
 
 
-  // Handle print action
+  // Handle print action - show item selection first
   const handlePrint = async (transactionData) => {
+    // Open the item selection modal
+    setSelectItemsModal({
+      isOpen: true,
+      transactionData: transactionData
+    });
+  };
+
+  const closeSelectItemsModal = () => {
+    setSelectItemsModal({
+      isOpen: false,
+      transactionData: null
+    });
+  };
+
+  const handleItemsSelected = async (selectedItems) => {
+    // Close selection modal
+    closeSelectItemsModal();
+    
+    const transactionData = selectItemsModal.transactionData;
+    
+    console.log('Selected items from modal:', selectedItems);
+    
+    // Simply use the selected items directly - they already have all needed properties
+    // Just need to ensure they have the print-specific fields
+    const itemsForPrint = selectedItems.map(item => ({
+      equipment_name: item.equipment_name || item.name || 'N/A',
+      brand: item.brand || 'N/A',
+      model: item.model || 'N/A',
+      serial_number: item.serial_number || 'N/A',
+      serial_numbers: item.serial_numbers || (item.serial_number && item.serial_number !== 'N/A' ? [item.serial_number] : []),
+      date_released: item.date_released || item.created_at || new Date().toISOString(),
+      date_returned: item.date_returned || item.returned_at || null,
+      specifications: item.specifications || item.specs || '',
+      category_name: item.category_name || item.category || 'Uncategorized'
+    }));
+    
+    const transactionKey = transactionData.requests?.[0]?.id ||
+      transactionData.id ||
+      `${transactionData.full_name}_${transactionData.items?.[0]?.equipment_name || ''}`;
+    
+    // Prepare print data with selected items
+    const printData = {
+      full_name: transactionData.full_name || 'N/A',
+      position: transactionData.position || 'N/A',
+      department: transactionData.department || 'IT Department',
+      items: itemsForPrint,
+      notes: transactionData.notes || '',
+      _transactionKey: transactionKey
+    };
+    
+    console.log('Print data prepared:', printData);
+    
+    setPrintModal({ isOpen: true, transactionData: printData });
+  };
+
+  // Modal handlers
+  const openConfirmModal = (type, transactionData) => {
+    setConfirmModal({
+      isOpen: true,
+      type,
+      transactionData
+    });
+  };
+
+  const closeConfirmModal = () => {
+    setConfirmModal({ isOpen: false, type: null, transactionData: null });
+  };
+
+  const closePrintModal = () => {
+    // Keep transactionData when closing so saved changes persist
+    setPrintModal(prev => ({
+      ...prev,
+      isOpen: false
+    }));
+  };
+
+  const handlePrintDataSave = (updatedData) => {
+    // Update the stored transaction data with saved changes
+    // Preserve the transaction key so we can match it later
+    setPrintModal(prev => ({
+      ...prev,
+      transactionData: {
+        ...updatedData,
+        _transactionKey: prev.transactionData?._transactionKey
+      }
+    }));
+  };
+
+  const handleViewHolder = (groupId) => {
+    const group = groupedCurrentHolders.find(g => g.id === groupId);
+    if (group) {
+      setViewHolderModal({
+        isOpen: true,
+        holderData: group
+      });
+    }
+  };
+
+  const handleCloseViewHolderModal = () => {
+    setViewHolderModal({
+      isOpen: false,
+      holderData: null
+    });
+  };
+
+  const handleViewReturn = (groupId) => {
+    const group = groupedVerifyReturns.find(g => g.id === groupId);
+    if (group) {
+      setViewReturnModal({
+        isOpen: true,
+        returnData: group
+      });
+    }
+  };
+
+  const handleCloseViewReturnModal = () => {
+    setViewReturnModal({
+      isOpen: false,
+      returnData: null
+    });
+  };
+
+  const handleViewApproved = (groupId) => {
+    const group = groupedApproved.find(g => g.id === groupId);
+    if (group) {
+      setViewApprovedModal({
+        isOpen: true,
+        transactionData: group
+      });
+    }
+  };
+
+  const handleCloseViewApprovedModal = () => {
+    setViewApprovedModal({
+      isOpen: false,
+      transactionData: null
+    });
+  };
+
+  const handleConfirmReturn = async (returnData) => {
     try {
-      // Check if we already have saved data for this transaction
-      // Use a unique identifier to match - we'll use the first request ID or employee name + equipment
-      const transactionKey = transactionData.requests?.[0]?.id ||
-        transactionData.id ||
-        `${transactionData.full_name}_${transactionData.items?.[0]?.equipment_name || ''}`;
-
-      // Check if we have saved data for this transaction
-      if (printModal.transactionData &&
-        printModal.transactionData._transactionKey === transactionKey) {
-        // Reuse saved data instead of refetching
-        setPrintModal({
-          isOpen: true,
-          transactionData: printModal.transactionData
-        });
+      // Get all returns in the group
+      const returns = returnData.returns || [returnData];
+      
+      if (!returns || returns.length === 0) {
+        showError('No returns found to process', 'Return Error');
         return;
       }
 
-      // Handle grouped requests - get all items for printing
-      const requests = transactionData.requests || [transactionData];
+      const processedTransactionIds = [];
+      const processedEquipmentIds = [];
 
-      if (!requests || requests.length === 0) {
-        console.error('Invalid row for printing:', transactionData);
-        if (window.showToast) {
-          window.showToast({
-            type: 'error',
-            title: 'Print Error',
-            message: 'Error: Invalid data for printing',
-            duration: 5000
-          });
-        } else {
-          alert('Error: Invalid data for printing');
+      // Process all returns in the group
+      for (const returnItem of returns) {
+        const transactionId = returnItem.id || returnItem.transaction_id;
+        
+        if (!transactionId) {
+          console.warn('Transaction ID not found for item:', returnItem);
+          continue;
         }
-        return;
+
+        const response = await api.post(`/transactions/${transactionId}/verify-return`, {
+          verification_notes: returnData.verificationNotes || 'Return verified and completed'
+        });
+        
+        if (response.data.success) {
+          // Track processed transactions and equipment
+          processedTransactionIds.push(transactionId);
+          if (returnItem.equipment_id) {
+            processedEquipmentIds.push(returnItem.equipment_id);
+          }
+        } else {
+          throw new Error(response.data.message || 'Failed to verify return');
+        }
       }
+      
+      // Immediately remove processed returns from verifyReturns state
+      if (processedTransactionIds.length > 0) {
+        setVerifyReturns(prev => 
+          prev.filter(returnItem => {
+            const transactionId = returnItem.id || returnItem.transaction_id;
+            return !processedTransactionIds.includes(transactionId);
+          })
+        );
+      }
+      
+      // After processing all returns, refresh data to ensure everything is synced
+      await fetchData();
+      handleCloseViewReturnModal();
+      
+      showSuccess(`All equipment items have been successfully returned and are now available`, 'Returns Confirmed');
+    } catch (error) {
+      console.error('Error processing return:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to process return';
+      showError(errorMessage, 'Verification Error');
+    }
+  };
 
+  return (
+    <div className="h-screen overflow-hidden bg-white flex">
+      <HomeSidebar />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <GlobalHeader />
+        <div className="flex-1 overflow-y-auto" ref={scrollContainerRef}>
+          <div className="p-6">
+            {/* Header */}
+            <div className="mb-6">
+              <h1 className="text-2xl font-bold text-gray-900">View Approved Requests</h1>
+              <p className="text-gray-600 mt-1">Manage approved equipment requests and current holders</p>
+            </div>
 
-      // Collect all equipment items with their details
-      const allItems = [];
-      for (const request of requests) {
-        const txList = await transactionService.getAll({ request_id: request.id });
-        if (txList?.success && Array.isArray(txList.data) && txList.data.length > 0) {
-          const tx = txList.data[0];
+            {/* View Selector */}
+            <div className="mb-6">
+              <div className="relative inline-block">
+                <button
+                  onClick={() => setIsMenuOpen(!isMenuOpen)}
+                  className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <span className="font-medium text-gray-700">
+                    {view === 'viewApproved' && 'View Approved'}
+                    {view === 'currentHolder' && 'Current Holder'}
+                    {view === 'verifyReturn' && 'Verify Return'}
+                  </span>
+                  <ChevronDown className={`h-4 w-4 text-gray-500 transition-transform ${isMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {isMenuOpen && (
+                  <div className="absolute top-full left-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                    <button
+                      onClick={() => handleSelect('viewApproved')}
+                      className={`w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors ${
+                        view === 'viewApproved' ? 'bg-blue-50 text-blue-600' : 'text-gray-700'
+                      }`}
+                    >
+                      View Approved
+                    </button>
+                    <button
+                      onClick={() => handleSelect('currentHolder')}
+                      className={`w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors ${
+                        view === 'currentHolder' ? 'bg-blue-50 text-blue-600' : 'text-gray-700'
+                      }`}
+                    >
+                      Current Holder
+                    </button>
+                    <button
+                      onClick={() => handleSelect('verifyReturn')}
+                      className={`w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors ${
+                        view === 'verifyReturn' ? 'bg-blue-50 text-blue-600' : 'text-gray-700'
+                      }`}
+                    >
+                      Verify Return
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Content based on selected view */}
+            {loading ? (
+              <div className="flex items-center justify-center h-64">
+                <div className="text-gray-500">Loading...</div>
+              </div>
+            ) : error ? (
+              <div className="flex items-center justify-center h-64">
+                <div className="text-red-500">{error}</div>
+              </div>
+            ) : (
+              <>
+                {/* View Approved */}
+                {view === 'viewApproved' && (
+                  <div className="bg-white rounded-lg shadow">
+                    <div className="p-4 border-b border-gray-200">
+                      <h2 className="text-lg font-semibold text-gray-900">Approved Requests</h2>
+                      <p className="text-sm text-gray-600 mt-1">Ready to be released to employees</p>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Approved By</th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {groupedApproved.length === 0 ? (
+                            <tr>
+                              <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
+                                No approved requests found
+                              </td>
+                            </tr>
+                          ) : (
+                            groupedApproved.map((group) => (
+                              <tr 
+                                key={group.id}
+                                onClick={() => handleViewApproved(group.id)}
+                                className="hover:bg-gray-50 cursor-pointer transition-colors"
+                              >
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center">
+                                    <div className="flex-shrink-0 h-10 w-10">
+                                      {group.avatar_url ? (
+                                        <img className="h-10 w-10 rounded-full" src={group.avatar_url} alt="" />
+                                      ) : (
+                                        <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                                          <span className="text-blue-600 font-medium text-sm">{getInitials(group.full_name)}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="ml-4">
+                                      <div className="text-sm font-medium text-gray-900">{group.full_name}</div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm text-gray-900">{group.position}</div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm text-gray-900">{group.items.length} item(s)</div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                    Approved
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {group.approved_by_name}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                  <div className="flex items-center justify-end space-x-2">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handlePrint(group);
+                                      }}
+                                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                                      title="Print"
+                                    >
+                                      <Printer className="h-4 w-4 text-gray-600" />
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openConfirmModal('release', group);
+                                      }}
+                                      className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                                    >
+                                      Release
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Current Holder */}
+                {view === 'currentHolder' && (
+                  <div className="bg-white rounded-lg shadow">
+                    <div className="p-4 border-b border-gray-200">
+                      <h2 className="text-lg font-semibold text-gray-900">Current Holders</h2>
+                      <p className="text-sm text-gray-600 mt-1">Employees currently holding equipment</p>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mode</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expected Return</th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {groupedCurrentHolders.length === 0 ? (
+                            <tr>
+                              <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
+                                No current holders found
+                              </td>
+                            </tr>
+                          ) : (
+                            groupedCurrentHolders.map((group) => (
+                              <tr 
+                                key={group.id}
+                                onClick={() => handleViewHolder(group.id)}
+                                className="hover:bg-gray-50 cursor-pointer transition-colors"
+                              >
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center">
+                                    <div className="flex-shrink-0 h-10 w-10">
+                                      {group.avatar_url ? (
+                                        <img className="h-10 w-10 rounded-full" src={group.avatar_url} alt="" />
+                                      ) : (
+                                        <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                                          <span className="text-blue-600 font-medium text-sm">{getInitials(group.full_name)}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="ml-4">
+                                      <div className="text-sm font-medium text-gray-900">{group.full_name}</div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm text-gray-900">{group.position}</div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm text-gray-900">{group.items.length} item(s)</div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                    formatRequestMode(group.request_mode) === 'W.F.H' 
+                                      ? 'bg-purple-100 text-purple-800' 
+                                      : 'bg-blue-100 text-blue-800'
+                                  }`}>
+                                    {formatRequestMode(group.request_mode)}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {group.expected_return_date ? new Date(group.expected_return_date).toLocaleDateString() : 'N/A'}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handlePrint(group);
+                                    }}
+                                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                                    title="Print"
+                                  >
+                                    <Printer className="h-4 w-4 text-gray-600" />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Verify Return */}
+                {view === 'verifyReturn' && (
+                  <div className="bg-white rounded-lg shadow">
+                    <div className="p-4 border-b border-gray-200">
+                      <h2 className="text-lg font-semibold text-gray-900">Verify Returns</h2>
+                      <p className="text-sm text-gray-600 mt-1">Equipment pending return verification</p>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items</th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Return Date</th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {groupedVerifyReturns.length === 0 ? (
+                            <tr>
+                              <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
+                                No returns to verify
+                              </td>
+                            </tr>
+                          ) : (
+                            groupedVerifyReturns.map((group) => (
+                              <tr 
+                                key={group.id}
+                                onClick={() => handleViewReturn(group.id)}
+                                className="hover:bg-gray-50 cursor-pointer transition-colors"
+                              >
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center">
+                                    <div className="flex-shrink-0 h-10 w-10">
+                                      {group.avatar_url ? (
+                                        <img className="h-10 w-10 rounded-full" src={group.avatar_url} alt="" />
+                                      ) : (
+                                        <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                                          <span className="text-blue-600 font-medium text-sm">{getInitials(group.full_name)}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="ml-4">
+                                      <div className="text-sm font-medium text-gray-900">{group.full_name}</div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm text-gray-900">{group.position}</div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm text-gray-900">{group.items.length} item(s)</div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {group.return_date ? new Date(group.return_date).toLocaleDateString() : 'N/A'}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleViewReturn(group.id);
+                                    }}
+                                    className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                                  >
+                                    Verify
+                                  </button>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Confirmation Modal */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        onClose={closeConfirmModal}
+        onConfirm={handleRelease}
+        transactionData={confirmModal.transactionData}
+        type={confirmModal.type}
+      />
+
+      {/* Select Items Modal */}
+      <SelectItemsModal
+        isOpen={selectItemsModal.isOpen}
+        onClose={closeSelectItemsModal}
+        transactionData={selectItemsModal.transactionData}
+        onConfirm={handleItemsSelected}
+      />
+
+      {/* Print Receipt Modal */}
+      <PrintReceipt
+        isOpen={printModal.isOpen}
+        onClose={closePrintModal}
+        transactionData={printModal.transactionData}
+        onSave={handlePrintDataSave}
+      />
+
+      {/* View Holder Modal */}
+      <ViewTransactionModal
+        isOpen={viewHolderModal.isOpen}
+        onClose={handleCloseViewHolderModal}
+        transactionData={viewHolderModal.holderData}
+        onPrint={handlePrint}
+      />
+
+      {/* View Return Modal */}
+      <VerifyReturnModal
+        isOpen={viewReturnModal.isOpen}
+        onClose={handleCloseViewReturnModal}
+        returnData={viewReturnModal.returnData}
+        onConfirmReturn={handleConfirmReturn}
+      />
+
+      {/* View Approved Modal */}
+      <ViewTransactionModal
+        isOpen={viewApprovedModal.isOpen}
+        onClose={handleCloseViewApprovedModal}
+        transactionData={viewApprovedModal.transactionData}
+        onRelease={async (data) => {
+          await handleRelease(data);
+          handleCloseViewApprovedModal();
+        }}
+      />
+
+    </div>
+  );
+};
+
+export default ViewApproved;
 
           // Try to get serial number from multiple sources
           let serialNumber = tx?.serial_number
@@ -969,18 +1522,28 @@ const ViewApproved = () => {
       // Use first request for employee info
       const firstRequest = requests[0];
 
-      // Prepare print data with all items
+      // Filter allItems to only include selected items
+      // Match by equipment_name since that's what we have in selectedItems
+      const filteredItems = allItems.filter(item => 
+        selectedItems.some(selected => 
+          selected.equipment_name === item.equipment_name &&
+          selected.serial_number === item.serial_number
+        )
+      );
+
+      // Prepare print data with selected items only
       const printData = {
         full_name: transactionData.full_name || firstRequest.full_name || 'N/A',
         position: transactionData.position || firstRequest.position || 'N/A',
         department: firstRequest.department || transactionData.department || 'IT Department',
-        items: allItems,
+        items: filteredItems.length > 0 ? filteredItems : allItems, // Fallback to all if filtering fails
         notes: transactionData.notes || firstRequest.notes || '',
         _transactionKey: transactionKey // Store the key to identify this transaction
       };
 
       console.log('ViewApproved - Print data prepared:', printData);
-      console.log('ViewApproved - All items with serial numbers:', allItems);
+      console.log('ViewApproved - Selected items:', selectedItems);
+      console.log('ViewApproved - Filtered items:', filteredItems);
 
       setPrintModal({ isOpen: true, transactionData: printData });
     } catch (err) {
@@ -1411,65 +1974,84 @@ const ViewApproved = () => {
                   )}
                 </div>
               </div>
-              <div className="mt-4 bg-white rounded-2xl shadow p-4 md:p-6 border border-gray-100 transition-all duration-300">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden transition-all duration-300">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm text-left min-w-full">
-                    <thead className="bg-gray-50 text-gray-600">
-                      <tr className="border-b">
-                        <th className="py-2 px-3">Name</th>
-                        <th className="py-2 px-3">Position</th>
-                        <th className="py-2 px-3">Item</th>
-                        <th className="py-2 px-3">Request mode</th>
-                        <th className="py-2 px-3">End Date</th>
-                        <th className="py-2 px-3 text-right">Actions</th>
+                  <table className="w-full min-w-full">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-200">
+                        <th className="text-left py-4 px-6 text-sm font-semibold text-gray-700">Name</th>
+                        <th className="text-left py-4 px-6 text-sm font-semibold text-gray-700">Item</th>
+                        <th className="text-left py-4 px-6 text-sm font-semibold text-gray-700">Request mode</th>
+                        <th className="text-right py-4 px-6 text-sm font-semibold text-gray-700">Actions</th>
                       </tr>
                     </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {loading ? (
-                      <tr>
-                        <td colSpan="6" className="py-8 text-center text-gray-500">
-                          Loading current holders...
-                        </td>
-                      </tr>
-                    ) : error ? (
-                      <tr>
-                        <td colSpan="6" className="py-8 text-center text-red-500">
-                          Error: {error}
-                        </td>
-                      </tr>
-                    ) : groupedCurrentHolders.length === 0 ? (
-                      <tr>
-                        <td colSpan="6" className="py-8 text-center text-gray-500">
-                          No current holders found
-                        </td>
-                      </tr>
-                    ) : (
-                      groupedCurrentHolders.map((group) => (
-                        <tr 
-                          key={group.id}
-                          onClick={() => handleViewHolder(group.id)}
-                          className="border-b last:border-0 cursor-pointer transition-colors duration-200 hover:bg-blue-50"
-                        >
-                          <td className="py-3 px-3">{group.full_name}</td>
-                          <td className="py-3 px-3">{group.position}</td>
-                          <td className="py-3 px-3">
-                            <span>
-                              {group.items.length === 1 
-                                ? group.items[0].equipment_name 
-                                : `${group.items.length} items`}
-                            </span>
-                          </td>
-                          <td className="py-3 px-3">{formatRequestMode(group.request_mode)}</td>
-                          <td className="py-3 px-3 text-red-600">{group.expected_return_date || 'N/A'}</td>
-                          <td className="py-3 px-3">
-                            <div className="flex items-center justify-end space-x-4 text-gray-700">
-                              <span className="px-3 py-1 rounded-full text-xs bg-green-600 text-white">Released</span>
-                            </div>
+                    <tbody>
+                      {loading ? (
+                        <tr>
+                          <td colSpan="4" className="py-8 text-center text-gray-500">
+                            Loading current holders...
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
+                      ) : error ? (
+                        <tr>
+                          <td colSpan="4" className="py-8 text-center text-red-500">
+                            Error: {error}
+                          </td>
+                        </tr>
+                      ) : groupedCurrentHolders.length === 0 ? (
+                        <tr>
+                          <td colSpan="4" className="py-8 text-center text-gray-500">
+                            No current holders found
+                          </td>
+                        </tr>
+                      ) : (
+                        groupedCurrentHolders.map((group) => (
+                          <tr 
+                            key={group.id}
+                            onClick={() => handleViewHolder(group.id)}
+                            className="border-b border-gray-100 last:border-0 hover:bg-blue-50 cursor-pointer transition-colors duration-200"
+                          >
+                            <td className="py-4 px-6 text-sm font-medium text-gray-900">
+                              <div className="flex items-center space-x-3">
+                                <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-semibold overflow-hidden flex-shrink-0">
+                                  {group.avatar_url ? (
+                                    <img 
+                                      src={group.avatar_url} 
+                                      alt={group.full_name} 
+                                      className="w-full h-full object-cover"
+                                      onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        e.target.parentElement.textContent = getInitials(group.full_name);
+                                      }}
+                                    />
+                                  ) : (
+                                    getInitials(group.full_name)
+                                  )}
+                                </div>
+                                <span>{group.full_name}</span>
+                              </div>
+                            </td>
+                            <td className="py-4 px-6 text-sm text-gray-700">
+                              <span>
+                                {group.items.length === 1 
+                                  ? group.items[0].equipment_name 
+                                  : `${group.items.length} items`}
+                              </span>
+                            </td>
+                            <td className="py-4 px-6 text-sm text-gray-700">
+                              {formatRequestMode(group.request_mode)}
+                            </td>
+                            <td className="py-4 px-6">
+                              <div className="flex items-center justify-end space-x-2">
+                                <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-600 text-white">
+                                  Released
+                                </span>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
                   </table>
                 </div>
               </div>
@@ -1604,6 +2186,14 @@ const ViewApproved = () => {
         type={confirmModal.type}
       />
 
+      {/* Select Items Modal */}
+      <SelectItemsModal
+        isOpen={selectItemsModal.isOpen}
+        onClose={closeSelectItemsModal}
+        transactionData={selectItemsModal.transactionData}
+        onConfirm={handleItemsSelected}
+      />
+
       {/* Print Receipt Modal */}
       <PrintReceipt
         isOpen={printModal.isOpen}
@@ -1617,8 +2207,7 @@ const ViewApproved = () => {
         isOpen={viewHolderModal.isOpen}
         onClose={handleCloseViewHolderModal}
         transactionData={viewHolderModal.holderData}
-        hideCancel={true}
-        buttonText="Close"
+        onPrint={handlePrint}
       />
 
       {/* View Return Modal */}
