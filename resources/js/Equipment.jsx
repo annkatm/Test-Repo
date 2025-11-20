@@ -96,7 +96,8 @@ const Equipment = () => {
   const confirmEdit = async () => {
     if (!editingItem) return;
 
-    if (!editSerialNumber.trim()) {
+    const isLocked = editingItem?.status === 'borrowed' || editingItem?.status === 'issued';
+    if (!editSerialNumber.trim() && !isLocked) {
       alert('Serial number cannot be empty');
       return;
     }
@@ -108,20 +109,26 @@ const Equipment = () => {
     }
 
     try {
-      const response = await api.put(`/equipment/${editingItem.id}`, {
-        serial_number: editSerialNumber.trim(),
-        status: autoStatus,
-        condition: editCondition
-      });
+      const payload = {};
+      if (!isLocked) {
+        payload.serial_number = editSerialNumber.trim();
+        payload.status = autoStatus;
+      }
+      // Always allow updating condition
+      payload.condition = editCondition;
+      const response = await api.put(`/equipment/${editingItem.id}`, payload);
       
       if (response.data.success) {
         await fetchData();
         // Notify other components (e.g., Home dashboard) to refresh
         window.dispatchEvent(new Event('equipment:updated'));
-        const statusMessage = editCondition === 'good'
-          ? 'Equipment updated and marked as available.' 
-          : 'Equipment updated and withheld for repair.';
-        setSuccessMessage(statusMessage);
+        let msg = 'Equipment updated.';
+        if (!isLocked) {
+          msg = editCondition === 'good'
+            ? 'Equipment updated and marked as available.'
+            : 'Equipment updated and withheld for repair.';
+        }
+        setSuccessMessage(msg);
         setShowSuccess(true);
         setTimeout(() => setShowSuccess(false), 3000);
         setShowEditModal(false);
@@ -981,9 +988,19 @@ const Equipment = () => {
                     type="text"
                     value={editSerialNumber}
                     onChange={(e) => setEditSerialNumber(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      (editingItem.status === 'borrowed' || editingItem.status === 'issued')
+                        ? 'border-gray-200 bg-gray-100 text-gray-500 cursor-not-allowed'
+                        : 'border-gray-300'
+                    }`}
+                    disabled={editingItem.status === 'borrowed' || editingItem.status === 'issued'}
                     placeholder="Enter serial number"
                   />
+                  {(editingItem.status === 'borrowed' || editingItem.status === 'issued') && (
+                    <p className="mt-2 text-xs text-yellow-600">
+                      ⚠ Serial number cannot be edited while equipment is borrowed or issued. Update after it is returned.
+                    </p>
+                  )}
                 </div>
 
                 <div>

@@ -224,6 +224,11 @@ class EquipmentController extends Controller
                 'receipt_image' => 'nullable|image|max:5120',
             ]);
 
+            // Prevent serial number updates while equipment is borrowed or issued
+            if (in_array((string) $equipment->status, ['borrowed', 'issued'], true)) {
+                unset($validated['serial_number']);
+            }
+
             // Handle file uploads and remove old files if present
             if ($request->hasFile('item_image')) {
                 if ($equipment->item_image) {

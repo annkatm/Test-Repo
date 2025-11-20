@@ -42,6 +42,21 @@ const ViewExchangeRequests = () => {
       .slice(0, 2);
   };
 
+  // Helper function to resolve evidence URL
+  const getEvidenceUrl = (val) => {
+    if (!val) return null;
+    const s = String(val);
+    if (s.startsWith('http') || s.startsWith('/storage/')) return s;
+    return `/storage/${s}`;
+  };
+
+  // Helper function to check if evidence is a video
+  const isVideoEvidence = (val) => {
+    if (!val) return false;
+    const s = String(val).toLowerCase();
+    return /(\.mp4|\.webm|\.mov|\.avi|\.mkv)$/.test(s);
+  };
+
   // Fetch exchange requests
   const fetchExchangeRequests = async () => {
     try {
@@ -286,6 +301,7 @@ const ViewExchangeRequests = () => {
                         <th className="py-3 px-4 font-semibold">Current Equipment</th>
                         <th className="py-3 px-4 font-semibold">Requested Equipment</th>
                         <th className="py-3 px-4 font-semibold">Reason</th>
+                        <th className="py-3 px-4 font-semibold">Evidence</th>
                         <th className="py-3 px-4 font-semibold">Date Requested</th>
                         <th className="py-3 px-4 font-semibold">Status</th>
                         <th className="py-3 px-4 font-semibold text-right">Actions</th>
@@ -338,6 +354,51 @@ const ViewExchangeRequests = () => {
                             <div className="text-sm text-gray-700 max-w-xs truncate" title={request.reason || ''}>
                               {request.reason || 'N/A'}
                             </div>
+                          </td>
+                          <td className="py-4 px-4">
+                            {(() => {
+                              const evidenceUrl = getEvidenceUrl(request.evidence_file);
+                              if (!evidenceUrl) {
+                                return <span className="text-xs text-gray-400">—</span>;
+                              }
+                              
+                              if (isVideoEvidence(request.evidence_file)) {
+                                return (
+                                  <video 
+                                    src={evidenceUrl} 
+                                    className="h-12 w-20 rounded border border-gray-200 object-cover" 
+                                    controls
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                );
+                              } else {
+                                return (
+                                  <a
+                                    href={evidenceUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="inline-block"
+                                  >
+                                    <img 
+                                      src={evidenceUrl} 
+                                      alt="Evidence" 
+                                      className="h-12 w-12 rounded object-cover border border-gray-200 hover:opacity-80 transition-opacity" 
+                                      onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        const parent = e.target.parentElement;
+                                        if (parent && !parent.querySelector('.error-fallback')) {
+                                          const fallback = document.createElement('span');
+                                          fallback.className = 'error-fallback text-xs text-gray-400';
+                                          fallback.textContent = '—';
+                                          parent.appendChild(fallback);
+                                        }
+                                      }}
+                                    />
+                                  </a>
+                                );
+                              }
+                            })()}
                           </td>
                           <td className="py-4 px-4">
                             <div className="flex items-center text-sm text-gray-600">
@@ -485,15 +546,72 @@ const ViewExchangeRequests = () => {
                 <div>
                   <h5 className="text-sm font-semibold text-gray-700 mb-2">EVIDENCE</h5>
                   <div className="bg-gray-50 rounded-lg p-4">
-                    <a
-                      href={`/storage/${viewModal.requestData.evidence_file}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center space-x-2 text-blue-600 hover:text-blue-800"
-                    >
-                      <Download className="h-4 w-4" />
-                      <span>View Evidence File</span>
-                    </a>
+                    {(() => {
+                      const evidenceUrl = getEvidenceUrl(viewModal.requestData.evidence_file);
+                      if (!evidenceUrl) {
+                        return (
+                          <p className="text-sm text-gray-500">No evidence available</p>
+                        );
+                      }
+                      
+                      if (isVideoEvidence(viewModal.requestData.evidence_file)) {
+                        return (
+                          <div className="space-y-2">
+                            <video 
+                              src={evidenceUrl} 
+                              className="w-full max-w-md rounded-lg border border-gray-200 shadow-sm" 
+                              controls 
+                              preload="metadata"
+                            />
+                            <a
+                              href={evidenceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center space-x-2 text-blue-600 hover:text-blue-800 text-sm"
+                            >
+                              <Download className="h-4 w-4" />
+                              <span>Download Video</span>
+                            </a>
+                          </div>
+                        );
+                      } else {
+                        return (
+                          <div className="space-y-2">
+                            <a
+                              href={evidenceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block"
+                            >
+                              <img 
+                                src={evidenceUrl} 
+                                alt="Evidence" 
+                                className="max-w-full h-auto max-h-96 rounded-lg border border-gray-200 shadow-sm object-contain cursor-pointer hover:opacity-90 transition-opacity" 
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                  const parent = e.target.parentElement;
+                                  if (parent && !parent.querySelector('.error-fallback')) {
+                                    const fallback = document.createElement('div');
+                                    fallback.className = 'error-fallback text-sm text-gray-500';
+                                    fallback.innerHTML = '<p>Image failed to load. <a href="' + evidenceUrl + '" target="_blank" class="text-blue-600 hover:underline">Click to view</a></p>';
+                                    parent.appendChild(fallback);
+                                  }
+                                }}
+                              />
+                            </a>
+                            <a
+                              href={evidenceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center space-x-2 text-blue-600 hover:text-blue-800 text-sm"
+                            >
+                              <Download className="h-4 w-4" />
+                              <span>Download Image</span>
+                            </a>
+                          </div>
+                        );
+                      }
+                    })()}
                   </div>
                 </div>
               )}

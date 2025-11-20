@@ -16,10 +16,17 @@ const ViewTransactionModal = ({ isOpen, onClose, transactionData, hideCancel = f
 
   useEffect(() => {
     const base = Array.isArray(transactionData?.items) ? transactionData.items : [];
-    const need = base.filter(it => !(it?.category_name || it?.category));
+    const need = base.filter(it => {
+      const missingCat = !(it?.category_name || it?.category);
+      const missingSerial = !(
+        it?.serial_number || it?.equipment_serial_number || it?.serial || it?.asset_tag || it?.equipment?.serial_number
+      );
+      const missingBrand = !(it?.brand || it?.equipment?.brand);
+      const missingSpecs = !(it?.specifications || it?.specs || it?.equipment?.specifications);
+      return missingCat || missingSerial || missingBrand || missingSpecs;
+    });
     if (need.length === 0) { setItems(base); return; }
     Promise.all(base.map(async (it) => {
-      if (it?.category_name || it?.category) return it;
       const id = it?.equipment_id || it?.id;
       if (!id) return it;
       try {
@@ -27,9 +34,29 @@ const ViewTransactionModal = ({ isOpen, onClose, transactionData, hideCancel = f
         const j = await resp.json();
         const d = j?.data || j || {};
         const cat = d?.category?.name || d?.category_name || null;
-        return cat ? { ...it, category_name: cat } : it;
+        const enriched = {
+          ...it,
+          category_name: it.category_name || it.category || cat || it.category_name,
+          brand: it.brand || d.brand || it.brand,
+          specifications: it.specifications || it.specs || d.specifications || [d.brand, d.model].filter(Boolean).join(' ') || it.specifications,
+          serial_number: it.serial_number || it.equipment_serial_number || it.serial || it.asset_tag || d.serial_number || d.asset_tag || it.serial_number,
+          equipment: it.equipment || d
+        };
+        return enriched;
       } catch (_e) { return it; }
-    })).then(setItems).catch(() => setItems(base));
+    })).then((arr) => {
+      // Deduplicate by (equipment_id|id) + serial
+      const seen = new Set();
+      const deduped = arr.filter((it) => {
+        const eqId = it?.equipment_id || it?.id || 'na';
+        const sn = it?.serial_number || it?.equipment?.serial_number || '';
+        const key = `${eqId}|${sn}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      setItems(deduped);
+    }).catch(() => setItems(base));
   }, [isOpen, transactionData]);
 
   const formatDate = (dateString) => {
@@ -282,9 +309,22 @@ const ViewTransactionModal = ({ isOpen, onClose, transactionData, hideCancel = f
                           {/* Table Rows */}
                           <div className="bg-white">
                             {group.items.map((item, itemIndex) => {
-                              const specs = item.specifications || item.specs || '';
-                              const brand = item.brand || 'N/A';
-                              const serialNumber = item.serial_number || 'N/A';
+                              const specs = item.specifications
+                                || item.specs
+                                || item.equipment?.specifications
+                                || [item.brand, item.model].filter(Boolean).join(' ')
+                                || item.category_name
+                                || '';
+                              const brand = item.brand || item.equipment?.brand || 'N/A';
+                              const serialNumber = item.serial_number
+                                || item.equipment_serial_number
+                                || item.serial
+                                || item.asset_tag
+                                || item.equipment?.serial_number
+                                || item.originalData?.serial_number
+                                || item.originalData?.serial_no
+                                || item.originalData?.serial
+                                || 'N/A';
                               
                               return (
                                 <div 

@@ -483,11 +483,14 @@ class EmployeeController extends Controller
                     'equipment.model',
                     'equipment.serial_number',
                     'equipment.specifications',
+                    'equipment.item_image',
+                    'equipment.item_image_url',
                     'categories.name as category_name',
                     'transactions.return_date',
                     'transactions.expected_return_date',
                     'transactions.return_condition',
-                    'transactions.return_notes'
+                    'transactions.return_notes',
+                    'transactions.return_evidence'
                 )
                 ->orderBy('transactions.return_date', 'desc')
                 ->get();
