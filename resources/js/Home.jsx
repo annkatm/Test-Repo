@@ -53,10 +53,48 @@ const HomePage = () => {
           const holdersMap = new Map();
           const issuedEquipmentIds = new Set(); // Track all issued equipment IDs
           
-          // Process borrowed equipment from transactions
+          // Helper to ensure we always have a holder entry
+          const getOrCreateHolder = (id, name, position = 'N/A') => {
+            const holderId = id || name || 'unknown-holder';
+            if (!holdersMap.has(holderId)) {
+              holdersMap.set(holderId, {
+                employee_id: holderId,
+                employee_name: name || 'Unknown Holder',
+                position: position || 'N/A',
+                equipment: [],
+                borrowedCount: 0,
+                issuedCount: 0
+              });
+            }
+            return holdersMap.get(holderId);
+          };
+
+          const addEquipmentToHolder = (holderData, equipmentInfo, type = 'borrowed') => {
+            if (!equipmentInfo) return;
+            const equipmentKey = `${equipmentInfo.id || equipmentInfo.equipment_id}-${type}`;
+            if (!holderData._equipmentKeys) {
+              holderData._equipmentKeys = new Set();
+            }
+            if (holderData._equipmentKeys.has(equipmentKey)) return;
+            holderData._equipmentKeys.add(equipmentKey);
+
+            holderData.equipment.push({
+              id: equipmentInfo.id || equipmentInfo.equipment_id,
+              name: equipmentInfo.name || equipmentInfo.equipment_name || 'Unknown Equipment',
+              category: equipmentInfo.category?.name || equipmentInfo.category_name || equipmentInfo.category || 'Uncategorized',
+              status: type
+            });
+
+            if (type === 'borrowed') {
+              holderData.borrowedCount += 1;
+            } else if (type === 'issued') {
+              holderData.issuedCount += 1;
+            }
+          };
+
+          // Process borrowed equipment from transactions (based on equipment list)
           equipment.forEach(eq => {
             if (eq.status === 'borrowed') {
-              // Try to find the associated transaction/holder info
               const transaction = currentHoldersData.find(t => t.equipment_id === eq.id);
               
               if (transaction) {
@@ -65,27 +103,28 @@ const HomePage = () => {
                 const employeeId = transaction.employee_id || employeeName;
                 const position = transaction.position || 'N/A';
                 
-                if (!holdersMap.has(employeeId)) {
-                  holdersMap.set(employeeId, {
-                    employee_id: employeeId,
-                    employee_name: employeeName,
-                    position: position,
-                    equipment: [],
-                    borrowedCount: 0,
-                    issuedCount: 0
-                  });
-                }
-                
-                const holderData = holdersMap.get(employeeId);
-                holderData.equipment.push({
+                const holderData = getOrCreateHolder(employeeId, employeeName, position);
+                addEquipmentToHolder(holderData, {
                   id: eq.id,
-                  name: eq.name || 'Unknown Equipment',
-                  category: eq.category?.name || 'Uncategorized',
-                  status: eq.status
-                });
-                holderData.borrowedCount++;
+                  name: eq.name,
+                  category: eq.category
+                }, 'borrowed');
               }
             }
+          });
+
+          // Ensure every released transaction holder is represented (covers newly added employees)
+          currentHoldersData.forEach(holderRecord => {
+            const employeeName = holderRecord.full_name || holderRecord.employee_name || holderRecord.name || 'Unknown Holder';
+            const employeeId = holderRecord.employee_id || employeeName;
+            const position = holderRecord.position || holderRecord.employee_type || 'N/A';
+
+            const holderData = getOrCreateHolder(employeeId, employeeName, position);
+            addEquipmentToHolder(holderData, {
+              id: holderRecord.equipment_id || holderRecord.id,
+              name: holderRecord.equipment_name || holderRecord.name,
+              category_name: holderRecord.category_name || holderRecord.category,
+            }, 'borrowed');
           });
           
           // Process issued equipment from employees
@@ -203,7 +242,10 @@ const HomePage = () => {
           });
           
           const currentHolder = holdersMap.size;
-          const holderDetails = Array.from(holdersMap.values());
+          const holderDetails = Array.from(holdersMap.values()).map(holder => {
+            const { _equipmentKeys, ...rest } = holder;
+            return rest;
+          });
 
           // Calculate equipment type stats with prices
           const equipmentStats = {
