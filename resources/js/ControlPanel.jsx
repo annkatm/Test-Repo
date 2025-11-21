@@ -105,7 +105,7 @@ const ControlPanel = () => {
   const employeeTypeMapping = {
     0: 'Regular',
     1: 'New hire',
-    2: 'Probationary',
+    2: 'Provasionary',
     3: 'Terminated',
     4: 'Independent Contractor',
     5: 'Benched',
@@ -114,7 +114,7 @@ const ControlPanel = () => {
 
   const addNewItem = async () => {
     if (!newItemName.trim()) {
-      setItemError('Name is required');
+      setItemError(activeModal === 'employee type' ? 'Code is required (0–6)' : 'Name is required');
       return;
     }
 
@@ -137,26 +137,23 @@ const ControlPanel = () => {
       // For employee type, check if user entered a code number
       if (activeModal === 'employee type') {
         const inputValue = newItemName.trim();
-        const codeNumber = parseInt(inputValue);
-        
-        // If user entered a number (0-6), map it to the predefined name
-        if (!isNaN(codeNumber) && employeeTypeMapping[codeNumber]) {
-          payload.name = employeeTypeMapping[codeNumber];
-          payload.code = codeNumber;
-        } else {
-          // User entered a custom name, auto-generate next available code within 0–6
-          const usedCodes = new Set((dropdownItems[activeModal] || []).map(item => item.code));
-          let nextCode = null;
-          for (let i = 0; i <= 6; i++) {
-            if (!usedCodes.has(i)) { nextCode = i; break; }
-          }
-          if (nextCode === null) {
-            setItemError('Maximum limit reached. Codes 0–6 are all taken.');
-            setItemLoading(false);
-            return;
-          }
-          payload.code = nextCode;
+        const codeNumber = parseInt(inputValue, 10);
+
+        if (isNaN(codeNumber) || codeNumber < 0 || codeNumber > 6) {
+          setItemError('Enter a valid code between 0 and 6.');
+          setItemLoading(false);
+          return;
         }
+
+        const usedCodes = new Set((dropdownItems[activeModal] || []).map(item => item.code));
+        if (usedCodes.has(codeNumber)) {
+          setItemError('Code already exists. Choose another 0–6.');
+          setItemLoading(false);
+          return;
+        }
+
+        payload.name = employeeTypeMapping[codeNumber] || `Type ${codeNumber}`;
+        payload.code = codeNumber;
       }
       
       const res = await api.post(endpoint, payload);
@@ -426,12 +423,16 @@ const ControlPanel = () => {
                   
                   <div className="flex space-x-2">
                     <input
-                      type="text"
+                      type={activeModal === 'employee type' ? 'number' : 'text'}
+                      min={activeModal === 'employee type' ? 0 : undefined}
+                      max={activeModal === 'employee type' ? 6 : undefined}
+                      step={activeModal === 'employee type' ? 1 : undefined}
+                      inputMode={activeModal === 'employee type' ? 'numeric' : undefined}
                       value={newItemName}
                       onChange={(e) => setNewItemName(e.target.value)}
                       onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (!itemLoading) { addNewItem(); } } }}
                       className="flex-1 px-3 py-2 rounded-md bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder={activeModal === 'employee type' ? 'Enter 0–6 (or type a name)' : `Enter ${getDisplayName(activeModal).toLowerCase()} name`}
+                      placeholder={activeModal === 'employee type' ? 'Enter code 0–6' : `Enter ${getDisplayName(activeModal).toLowerCase()} name`}
                     />
                     <button
                       type="button"
@@ -444,7 +445,7 @@ const ControlPanel = () => {
                   </div>
                   {activeModal === 'employee type' && (
                     <p className="mt-1 text-[11px] text-gray-500">
-                      Enter a number 0–6 to organi. 0-Regular, 1-New hire, 2-Probationary, 3-Terminated, 4-Independent Contractor, 5-Benched, 6-Separated.
+                      Enter a number 0–6 to organi. 0-Regular, 1-New hire, 2-Provasionary, 3-Terminated, 4-Independent Contractor, 5-Benched, 6-Separated.
                     </p>
                   )}
                 </div>
