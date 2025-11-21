@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Printer, ChevronDown, Clock, User, CheckCircle, Calendar } from 'lucide-react';
+import { Search, Printer, ChevronDown, Clock, User, CheckCircle, Calendar, RefreshCcw } from 'lucide-react';
 import GlobalHeader from './components/GlobalHeader';
 import HomeSidebar from './HomeSidebar';
 import ConfirmModal from './components/ConfirmModal.jsx';
@@ -604,11 +604,11 @@ const ViewApproved = () => {
 
         let message = '';
         if (alreadyReleasedCount > 0 && newlyReleasedCount > 0) {
-          message = `${newlyReleasedCount} ${itemText} released successfully! ${alreadyReleasedCount} ${alreadyReleasedCount === 1 ? 'was' : 'were'} already released. Moving to Current Holder view...`;
+          message = `${newlyReleasedCount} ${itemText} released successfully! ${alreadyReleasedCount} ${alreadyReleasedCount === 1 ? 'was' : 'were'} already released. Moving to Approved Requests view...`;
         } else if (alreadyReleasedCount > 0) {
-          message = `${alreadyReleasedCount} ${itemText} ${alreadyReleasedCount === 1 ? 'was' : 'were'} already released. Moving to Current Holder view...`;
+          message = `${alreadyReleasedCount} ${itemText} ${alreadyReleasedCount === 1 ? 'was' : 'were'} already released. Moving to Approved Requests view...`;
         } else {
-          message = `${releasedTransactions.length} ${itemText} released successfully! Switching to Current Holder view...`;
+          message = `${releasedTransactions.length} ${itemText} released successfully! Switching to Approved Requests view...`;
         }
 
         alert(message);
@@ -722,7 +722,7 @@ const ViewApproved = () => {
       ...prev,
       transactionData: {
         ...updatedData,
-        _transactionKey: prev.transactionData?._transactionKey
+        _transactionKey: prev.transactionData?._transactionKey || updatedData._transactionKey
       }
     }));
   };
@@ -782,9 +782,9 @@ const ViewApproved = () => {
     try {
       // Get all returns in the group
       const returns = returnData.returns || [returnData];
-      
+
       if (!returns || returns.length === 0) {
-        showError('No returns found to process', 'Return Error');
+        showError('No returns found to process', 'Verification Failed');
         return;
       }
 
@@ -794,16 +794,31 @@ const ViewApproved = () => {
       // Process all returns in the group
       for (const returnItem of returns) {
         const transactionId = returnItem.id || returnItem.transaction_id;
-        
+
         if (!transactionId) {
           console.warn('Transaction ID not found for item:', returnItem);
           continue;
         }
 
+        // Check the current transaction status before verification
+        const statusCheck = await api.get(`/transactions/${transactionId}`);
+        const currentStatus = statusCheck.data?.data?.status || statusCheck.data?.status;
+
+        if (currentStatus === 'released') {
+          const returnResponse = await api.post(`/transactions/${transactionId}/return`, {
+            return_condition: 'good_condition',
+            return_notes: 'Returned and verified'
+          });
+
+          if (!returnResponse.data.success) {
+            throw new Error(returnResponse.data.message || 'Failed to return transaction');
+          }
+        }
+
         const response = await api.post(`/transactions/${transactionId}/verify-return`, {
           verification_notes: returnData.verificationNotes || 'Return verified and completed'
         });
-        
+
         if (response.data.success) {
           // Track processed transactions and equipment
           processedTransactionIds.push(transactionId);
@@ -814,7 +829,6 @@ const ViewApproved = () => {
           throw new Error(response.data.message || 'Failed to verify return');
         }
       }
-      
       // Immediately remove processed returns from verifyReturns state
       if (processedTransactionIds.length > 0) {
         setVerifyReturns(prev => 
@@ -824,15 +838,20 @@ const ViewApproved = () => {
           })
         );
       }
-      
+
       // After processing all returns, refresh data to ensure everything is synced
       await fetchData();
       handleCloseViewReturnModal();
-      
-      showSuccess(`All equipment items have been successfully returned and are now available`, 'Returns Confirmed');
+
+      const employeeName = returnData.full_name || returnData.employee_name || 'Unknown';
+      const itemCount = returns.length;
+      showSuccess(
+        `Return confirmed! ${employeeName} has returned ${itemCount} item${itemCount > 1 ? 's' : ''}. Equipment is now available for new requests.`,
+        'Returns Verified'
+      );
     } catch (error) {
-      console.error('Error processing return:', error);
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to process return';
+      console.error('Error verifying return:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to verify return';
       showError(errorMessage, 'Verification Error');
     }
   };
@@ -843,50 +862,71 @@ const ViewApproved = () => {
       <div className="flex-1 flex flex-col overflow-hidden">
         <GlobalHeader />
         <div className="flex-1 overflow-y-auto" ref={scrollContainerRef}>
-          <div className="p-6">
+          <div className="p-6 md:p-10">
             {/* Header */}
-            <div className="mb-6">
-              <h1 className="text-2xl font-bold text-gray-900">View Approved Requests</h1>
-              <p className="text-gray-600 mt-1">Manage approved equipment requests and current holders</p>
+            <div className="mb-8">
+              <h1 className="text-4xl font-bold text-[#2262C6] mb-2">View Request</h1>
+              <p className="text-gray-600 text-base">View and manage requests, approvals, and returns</p>
+            </div>
+
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-6">
+              <div className="bg-gradient-to-b from-[#0064FF] to-[#003C99] text-white rounded-2xl p-4 shadow-md">
+                <h4 className="text-xs uppercase tracking-wider opacity-80 mb-2">New Requests</h4>
+                <div className="flex items-center justify-between">
+                  <p className="text-3xl font-bold">{loading ? '...' : dashboardStats.new_requests}</p>
+                  <Clock className="w-8 h-8 text-white/70" />
+                </div>
+              </div>
+              <div className="bg-gray-100 rounded-2xl p-4 shadow-md">
+                <h4 className="text-xs font-semibold text-gray-600 mb-2">Approved Requests</h4>
+                <div className="flex items-center justify-between">
+                  <p className="text-3xl font-bold text-gray-900">{loading ? '...' : groupedApproved.length}</p>
+                  <RefreshCcw className="w-8 h-8 text-gray-500" />
+                </div>
+              </div>
+              <div className="bg-gray-100 rounded-2xl p-4 shadow-md">
+                <h4 className="text-xs font-semibold text-gray-600 mb-2">Verify Return</h4>
+                <div className="flex items-center justify-between">
+                  <p className="text-3xl font-bold text-gray-900">{loading ? '...' : dashboardStats.verify_returns}</p>
+                  <CheckCircle className="w-8 h-8 text-gray-500" />
+                </div>
+              </div>
             </div>
 
             {/* View Selector */}
-            <div className="mb-6">
+            <div className="mb-6 flex items-center justify-between">
               <div className="relative inline-block">
                 <button
                   onClick={() => setIsMenuOpen(!isMenuOpen)}
-                  className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="flex items-center space-x-2 px-4 py-2.5 bg-white border-2 border-gray-300 rounded-xl hover:bg-gray-50 hover:border-blue-400 transition-all shadow-sm"
                 >
-                  <span className="font-medium text-gray-700">
-                    {view === 'viewApproved' && 'View Approved'}
-                    {view === 'currentHolder' && 'Current Holder'}
-                    {view === 'verifyReturn' && 'Verify Return'}
-                  </span>
+                  <span className="font-semibold text-gray-700">View Request</span>
                   <ChevronDown className={`h-4 w-4 text-gray-500 transition-transform ${isMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
 
                 {isMenuOpen && (
-                  <div className="absolute top-full left-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                  <div className="absolute top-full left-0 mt-2 w-56 bg-white border-2 border-gray-200 rounded-xl shadow-xl z-10 overflow-hidden">
                     <button
                       onClick={() => handleSelect('viewApproved')}
-                      className={`w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors ${
-                        view === 'viewApproved' ? 'bg-blue-50 text-blue-600' : 'text-gray-700'
+                      className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${
+                        view === 'viewApproved' ? 'bg-blue-50 text-blue-600 font-semibold' : 'text-gray-700'
                       }`}
                     >
                       View Approved
                     </button>
                     <button
                       onClick={() => handleSelect('currentHolder')}
-                      className={`w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors ${
-                        view === 'currentHolder' ? 'bg-blue-50 text-blue-600' : 'text-gray-700'
+                      className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${
+                        view === 'currentHolder' ? 'bg-blue-50 text-blue-600 font-semibold' : 'text-gray-700'
                       }`}
                     >
-                      Current Holder
+                      Approved Requests
                     </button>
                     <button
                       onClick={() => handleSelect('verifyReturn')}
-                      className={`w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors ${
-                        view === 'verifyReturn' ? 'bg-blue-50 text-blue-600' : 'text-gray-700'
+                      className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors ${
+                        view === 'verifyReturn' ? 'bg-blue-50 text-blue-600 font-semibold' : 'text-gray-700'
                       }`}
                     >
                       Verify Return
@@ -898,39 +938,40 @@ const ViewApproved = () => {
 
             {/* Content based on selected view */}
             {loading ? (
-              <div className="flex items-center justify-center h-64">
-                <div className="text-gray-500">Loading...</div>
+              <div className="flex items-center justify-center h-64 bg-white rounded-2xl border border-gray-100 shadow-sm">
+                <div className="text-gray-500 text-lg">Loading...</div>
               </div>
             ) : error ? (
-              <div className="flex items-center justify-center h-64">
-                <div className="text-red-500">{error}</div>
+              <div className="flex items-center justify-center h-64 bg-white rounded-2xl border border-red-200 shadow-sm">
+                <div className="text-red-500 text-lg font-medium">{error}</div>
               </div>
             ) : (
               <>
                 {/* View Approved */}
                 {view === 'viewApproved' && (
-                  <div className="bg-white rounded-lg shadow">
-                    <div className="p-4 border-b border-gray-200">
-                      <h2 className="text-lg font-semibold text-gray-900">Approved Requests</h2>
-                      <p className="text-sm text-gray-600 mt-1">Ready to be released to employees</p>
+                  <div className="bg-white rounded-2xl border border-gray-100 shadow-md overflow-hidden">
+                    <div className="p-5 md:p-6 border-b border-gray-200 bg-gray-50">
+                      <h2 className="text-xl font-semibold text-gray-900">View Request</h2>
+                      <p className="text-sm text-gray-600 mt-1">Approved items ready for release</p>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full">
-                        <thead className="bg-gray-50">
+                        <thead className="bg-gray-50 text-gray-600">
                           <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Approved By</th>
-                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider">Name</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider">Item</th>
+                            <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider">Actions</th>
                           </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                        <tbody className="bg-white divide-y divide-gray-100">
                           {groupedApproved.length === 0 ? (
                             <tr>
-                              <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
-                                No approved requests found
+                              <td colSpan="3" className="px-6 py-16 text-center">
+                                <div className="flex flex-col items-center justify-center">
+                                  <CheckCircle className="w-16 h-16 text-gray-300 mb-4" />
+                                  <p className="text-gray-500 text-lg font-medium">No approved requests found</p>
+                                  <p className="text-gray-400 text-sm mt-2">Approved requests will appear here</p>
+                                </div>
                               </td>
                             </tr>
                           ) : (
@@ -938,37 +979,28 @@ const ViewApproved = () => {
                               <tr 
                                 key={group.id}
                                 onClick={() => handleViewApproved(group.id)}
-                                className="hover:bg-gray-50 cursor-pointer transition-colors"
+                                className="hover:bg-blue-50/40 cursor-pointer transition-all duration-200 border-b border-gray-100 last:border-0"
                               >
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="flex items-center">
-                                    <div className="flex-shrink-0 h-10 w-10">
+                                    <div className="flex-shrink-0 h-12 w-12">
                                       {group.avatar_url ? (
-                                        <img className="h-10 w-10 rounded-full" src={group.avatar_url} alt="" />
+                                        <img className="h-12 w-12 rounded-full object-cover border-2 border-gray-200" src={group.avatar_url} alt="" />
                                       ) : (
-                                        <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                                          <span className="text-blue-600 font-medium text-sm">{getInitials(group.full_name)}</span>
+                                        <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center border-2 border-blue-200">
+                                          <span className="text-white font-semibold text-sm">{getInitials(group.full_name)}</span>
                                         </div>
                                       )}
                                     </div>
                                     <div className="ml-4">
-                                      <div className="text-sm font-medium text-gray-900">{group.full_name}</div>
+                                      <div className="text-sm font-semibold text-gray-900">{group.full_name}</div>
                                     </div>
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="text-sm text-gray-900">{group.position}</div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="text-sm text-gray-900">{group.items.length} item(s)</div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                                    Approved
+                                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                                    {group.items.length} item{group.items.length !== 1 ? 's' : ''}
                                   </span>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                  {group.approved_by_name}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                   <div className="flex items-center justify-end space-x-2">
@@ -980,14 +1012,14 @@ const ViewApproved = () => {
                                       className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                                       title="Print"
                                     >
-                                      <Printer className="h-4 w-4 text-gray-600" />
+                                      <Printer className="h-5 w-5 text-gray-600" />
                                     </button>
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         openConfirmModal('release', group);
                                       }}
-                                      className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
                                     >
                                       Release
                                     </button>
@@ -1004,28 +1036,32 @@ const ViewApproved = () => {
 
                 {/* Current Holder */}
                 {view === 'currentHolder' && (
-                  <div className="bg-white rounded-lg shadow">
-                    <div className="p-4 border-b border-gray-200">
-                      <h2 className="text-lg font-semibold text-gray-900">Current Holders</h2>
-                      <p className="text-sm text-gray-600 mt-1">Employees currently holding equipment</p>
+                  <div className="bg-white rounded-2xl border border-gray-100 shadow-md overflow-hidden">
+                    <div className="p-5 md:p-6 border-b border-gray-200 bg-gray-50">
+                      <h2 className="text-xl font-semibold text-gray-900">Approved Requests</h2>
+                      <p className="text-sm text-gray-600 mt-1">All approved equipment requests</p>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full">
-                        <thead className="bg-gray-50">
+                        <thead className="bg-gray-50 text-gray-600">
                           <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mode</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expected Return</th>
-                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider">Employee</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider">Position</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider">Items</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider">Mode</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider">Expected Return</th>
+                            <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider">Actions</th>
                           </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                        <tbody className="bg-white divide-y divide-gray-100">
                           {groupedCurrentHolders.length === 0 ? (
                             <tr>
-                              <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
-                                No current holders found
+                              <td colSpan="6" className="px-6 py-16 text-center">
+                                <div className="flex flex-col items-center justify-center">
+                                  <User className="w-16 h-16 text-gray-300 mb-4" />
+                                  <p className="text-gray-500 text-lg font-medium">No approved requests found</p>
+                                  <p className="text-gray-400 text-sm mt-2">Approved requests will appear here</p>
+                                </div>
                               </td>
                             </tr>
                           ) : (
@@ -1033,40 +1069,42 @@ const ViewApproved = () => {
                               <tr 
                                 key={group.id}
                                 onClick={() => handleViewHolder(group.id)}
-                                className="hover:bg-gray-50 cursor-pointer transition-colors"
+                                className="hover:bg-blue-50/40 cursor-pointer transition-all duration-200 border-b border-gray-100 last:border-0"
                               >
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="flex items-center">
-                                    <div className="flex-shrink-0 h-10 w-10">
+                                    <div className="flex-shrink-0 h-12 w-12">
                                       {group.avatar_url ? (
-                                        <img className="h-10 w-10 rounded-full" src={group.avatar_url} alt="" />
+                                        <img className="h-12 w-12 rounded-full object-cover border-2 border-gray-200" src={group.avatar_url} alt="" />
                                       ) : (
-                                        <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                                          <span className="text-blue-600 font-medium text-sm">{getInitials(group.full_name)}</span>
+                                        <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center border-2 border-blue-200">
+                                          <span className="text-white font-semibold text-sm">{getInitials(group.full_name)}</span>
                                         </div>
                                       )}
                                     </div>
                                     <div className="ml-4">
-                                      <div className="text-sm font-medium text-gray-900">{group.full_name}</div>
+                                      <div className="text-sm font-semibold text-gray-900">{group.full_name}</div>
                                     </div>
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="text-sm text-gray-900">{group.position}</div>
+                                  <div className="text-sm text-gray-700">{group.position}</div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="text-sm text-gray-900">{group.items.length} item(s)</div>
+                                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                                    {group.items.length} item{group.items.length !== 1 ? 's' : ''}
+                                  </span>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                  <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
                                     formatRequestMode(group.request_mode) === 'W.F.H' 
-                                      ? 'bg-purple-100 text-purple-800' 
-                                      : 'bg-blue-100 text-blue-800'
+                                      ? 'bg-purple-100 text-purple-700' 
+                                      : 'bg-blue-100 text-blue-700'
                                   }`}>
                                     {formatRequestMode(group.request_mode)}
                                   </span>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                                   {group.expected_return_date ? new Date(group.expected_return_date).toLocaleDateString() : 'N/A'}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -1078,7 +1116,7 @@ const ViewApproved = () => {
                                     className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                                     title="Print"
                                   >
-                                    <Printer className="h-4 w-4 text-gray-600" />
+                                    <Printer className="h-5 w-5 text-gray-600" />
                                   </button>
                                 </td>
                               </tr>
@@ -1092,27 +1130,31 @@ const ViewApproved = () => {
 
                 {/* Verify Return */}
                 {view === 'verifyReturn' && (
-                  <div className="bg-white rounded-lg shadow">
-                    <div className="p-4 border-b border-gray-200">
-                      <h2 className="text-lg font-semibold text-gray-900">Verify Returns</h2>
+                  <div className="bg-white rounded-2xl border border-gray-100 shadow-md overflow-hidden">
+                    <div className="p-5 md:p-6 border-b border-gray-200 bg-gray-50">
+                      <h2 className="text-xl font-semibold text-gray-900">Verify Returns</h2>
                       <p className="text-sm text-gray-600 mt-1">Equipment pending return verification</p>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full">
-                        <thead className="bg-gray-50">
+                        <thead className="bg-gray-50 text-gray-600">
                           <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items</th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Return Date</th>
-                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider">Employee</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider">Position</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider">Items</th>
+                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider">Return Date</th>
+                            <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider">Actions</th>
                           </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                        <tbody className="bg-white divide-y divide-gray-100">
                           {groupedVerifyReturns.length === 0 ? (
                             <tr>
-                              <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
-                                No returns to verify
+                              <td colSpan="5" className="px-6 py-16 text-center">
+                                <div className="flex flex-col items-center justify-center">
+                                  <Clock className="w-16 h-16 text-gray-300 mb-4" />
+                                  <p className="text-gray-500 text-lg font-medium">No returns to verify</p>
+                                  <p className="text-gray-400 text-sm mt-2">Returned equipment awaiting verification will appear here</p>
+                                </div>
                               </td>
                             </tr>
                           ) : (
@@ -1120,31 +1162,33 @@ const ViewApproved = () => {
                               <tr 
                                 key={group.id}
                                 onClick={() => handleViewReturn(group.id)}
-                                className="hover:bg-gray-50 cursor-pointer transition-colors"
+                                className="hover:bg-blue-50/40 cursor-pointer transition-all duration-200 border-b border-gray-100 last:border-0"
                               >
                                 <td className="px-6 py-4 whitespace-nowrap">
                                   <div className="flex items-center">
-                                    <div className="flex-shrink-0 h-10 w-10">
+                                    <div className="flex-shrink-0 h-12 w-12">
                                       {group.avatar_url ? (
-                                        <img className="h-10 w-10 rounded-full" src={group.avatar_url} alt="" />
+                                        <img className="h-12 w-12 rounded-full object-cover border-2 border-gray-200" src={group.avatar_url} alt="" />
                                       ) : (
-                                        <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                                          <span className="text-blue-600 font-medium text-sm">{getInitials(group.full_name)}</span>
+                                        <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center border-2 border-blue-200">
+                                          <span className="text-white font-semibold text-sm">{getInitials(group.full_name)}</span>
                                         </div>
                                       )}
                                     </div>
                                     <div className="ml-4">
-                                      <div className="text-sm font-medium text-gray-900">{group.full_name}</div>
+                                      <div className="text-sm font-semibold text-gray-900">{group.full_name}</div>
                                     </div>
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="text-sm text-gray-900">{group.position}</div>
+                                  <div className="text-sm text-gray-700">{group.position}</div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
-                                  <div className="text-sm text-gray-900">{group.items.length} item(s)</div>
+                                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                                    {group.items.length} item{group.items.length !== 1 ? 's' : ''}
+                                  </span>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                                   {group.return_date ? new Date(group.return_date).toLocaleDateString() : 'N/A'}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -1153,7 +1197,7 @@ const ViewApproved = () => {
                                       e.stopPropagation();
                                       handleViewReturn(group.id);
                                     }}
-                                    className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium shadow-sm"
                                   >
                                     Verify
                                   </button>
