@@ -306,14 +306,14 @@ const Reports = () => {
 
       {/* Main Section */}
       <div className="flex-1 flex flex-col">
-        <GlobalHeader title="System Analytics & Reports" />
+        <GlobalHeader title="System Reports" />
 
         {/* Header with Filters */}
         <header className="bg-white border-b border-gray-200 px-6 py-4">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-[#2262C6]">System Analytics & Reports</h1>
-              <p className="text-sm text-gray-600">Comprehensive system insights and analytics</p>
+              <h1 className="text-2xl font-bold text-[#2262C6]">System Reports</h1>
+              <p className="text-sm text-gray-600">Comprehensive system insights and reports</p>
             </div>
             
             {/* Filters */}

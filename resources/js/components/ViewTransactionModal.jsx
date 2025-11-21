@@ -152,8 +152,32 @@ const ViewTransactionModal = ({ isOpen, onClose, transactionData, hideCancel = f
   };
 
   return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black/30 flex items-center justify-center animate-fadeIn" style={{ zIndex: 9999 }}>
       <style jsx>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+        @keyframes popUp {
+          0% {
+            opacity: 0;
+            transform: scale(0.8) translateY(20px);
+          }
+          100% {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+          }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.2s ease-out;
+        }
+        .animate-popUp {
+          animation: popUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
         div::-webkit-scrollbar {
           width: 8px;
         }
@@ -169,7 +193,7 @@ const ViewTransactionModal = ({ isOpen, onClose, transactionData, hideCancel = f
           background: #a0aec0;
         }
       `}</style>
-      <div className="relative bg-white rounded-2xl shadow-2xl w-[520px] max-w-[95vw] border border-blue-100" style={{ boxShadow: '0 8px 32px rgba(29, 78, 216, 0.35)' }}>
+      <div className="relative bg-white rounded-2xl shadow-2xl w-[520px] max-w-[95vw] border border-blue-100 animate-popUp" style={{ boxShadow: '0 8px 32px rgba(29, 78, 216, 0.35)' }}>
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div className="flex items-center space-x-3">

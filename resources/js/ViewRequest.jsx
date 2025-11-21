@@ -1303,33 +1303,34 @@ const ViewRequest = () => {
         </div>
       </div>
       
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden transition-all duration-300">
+      <div className="bg-white rounded-lg shadow overflow-hidden transition-all duration-300">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-full">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="text-left py-4 px-6 text-sm font-semibold text-gray-700">Name</th>
-                <th className="text-left py-4 px-6 text-sm font-semibold text-gray-700">Item</th>
-                <th className="text-left py-4 px-6 text-sm font-semibold text-gray-700">Request mode</th>
-                <th className="text-right py-4 px-6 text-sm font-semibold text-gray-700">Actions</th>
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mode</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="bg-white divide-y divide-gray-200">
               {loading ? (
                 <tr>
-                  <td colSpan="4" className="py-8 text-center text-gray-500">
+                  <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
                     Loading current holders...
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan="4" className="py-8 text-center text-red-500">
+                  <td colSpan="5" className="px-6 py-8 text-center text-red-500">
                     Error: {error}
                   </td>
                 </tr>
               ) : groupedCurrentHolders.length === 0 ? (
                 <tr>
-                  <td colSpan="4" className="py-8 text-center text-gray-500">
+                  <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
                     No current holders found
                   </td>
                 </tr>
@@ -1338,44 +1339,50 @@ const ViewRequest = () => {
                   <tr 
                     key={group.id} 
                     onClick={() => handleViewHolder(group.id)}
-                    className="border-b border-gray-100 last:border-0 hover:bg-blue-50 cursor-pointer transition-colors duration-200"
+                    className="hover:bg-gray-50 cursor-pointer transition-colors"
                   >
-                    <td className="py-4 px-6 text-sm font-medium text-gray-900">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-semibold overflow-hidden flex-shrink-0">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0 h-10 w-10">
                           {group.avatar_url ? (
-                            <img 
-                              src={group.avatar_url} 
-                              alt={group.full_name} 
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                e.target.style.display = 'none';
-                                e.target.parentElement.textContent = getInitials(group.full_name);
-                              }}
-                            />
+                            <img className="h-10 w-10 rounded-full" src={group.avatar_url} alt="" />
                           ) : (
-                            getInitials(group.full_name)
+                            <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                              <span className="text-blue-600 font-medium text-sm">{getInitials(group.full_name)}</span>
+                            </div>
                           )}
                         </div>
-                        <span>{group.full_name}</span>
+                        <div className="ml-4">
+                          <div className="text-sm font-medium text-gray-900">{group.full_name}</div>
+                        </div>
                       </div>
                     </td>
-                    <td className="py-4 px-6 text-sm text-gray-700">
-                      <span>
-                        {group.items.length === 1 
-                          ? group.items[0].equipment_name 
-                          : `${group.items.length} items`}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{group.position}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{group.items.length} item(s)</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        formatRequestMode(group.request_mode) === 'W.F.H' 
+                          ? 'bg-purple-100 text-purple-800' 
+                          : 'bg-blue-100 text-blue-800'
+                      }`}>
+                        {formatRequestMode(group.request_mode)}
                       </span>
                     </td>
-                    <td className="py-4 px-6 text-sm text-gray-700">
-                      {formatRequestMode(group.request_mode)}
-                    </td>
-                    <td className="py-4 px-6">
-                      <div className="flex items-center justify-end space-x-2">
-                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-600 text-white">
-                          Released
-                        </span>
-                      </div>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePrint(group);
+                        }}
+                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                        title="Print"
+                      >
+                        <Printer className="h-4 w-4 text-gray-600" />
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -1416,34 +1423,35 @@ const ViewRequest = () => {
         </div>
       </div>
       
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden transition-all duration-300">
+      <div className="bg-white rounded-lg shadow overflow-hidden transition-all duration-300">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-full">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="text-left py-4 px-6 text-sm font-semibold text-gray-700">Name</th>
-                <th className="text-left py-4 px-6 text-sm font-semibold text-gray-700">Item</th>
-                <th className="text-left py-4 px-6 text-sm font-semibold text-gray-700">Request mode</th>
-                <th className="text-right py-4 px-6 text-sm font-semibold text-gray-700">Actions</th>
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Return Date</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="bg-white divide-y divide-gray-200">
               {loading ? (
                 <tr>
-                  <td colSpan="4" className="py-8 text-center text-gray-500">
+                  <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
                     Loading verify returns...
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan="4" className="py-8 text-center text-red-500">
+                  <td colSpan="5" className="px-6 py-8 text-center text-red-500">
                     Error: {error}
                   </td>
                 </tr>
               ) : groupedVerifyReturns.length === 0 ? (
                 <tr>
-                  <td colSpan="4" className="py-8 text-center text-gray-500">
-                    No returns to verify found
+                  <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
+                    No returns to verify
                   </td>
                 </tr>
               ) : (
@@ -1451,54 +1459,43 @@ const ViewRequest = () => {
                   <tr 
                     key={group.id} 
                     onClick={() => handleViewReturn(group.id)}
-                    className="border-b border-gray-100 last:border-0 hover:bg-blue-50 cursor-pointer transition-colors duration-200"
+                    className="hover:bg-gray-50 cursor-pointer transition-colors"
                   >
-                    <td className="py-4 px-6 text-sm font-medium text-gray-900">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-semibold overflow-hidden flex-shrink-0">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0 h-10 w-10">
                           {group.avatar_url ? (
-                            <img 
-                              src={group.avatar_url} 
-                              alt={group.full_name} 
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                e.target.style.display = 'none';
-                                e.target.parentElement.textContent = getInitials(group.full_name);
-                              }}
-                            />
+                            <img className="h-10 w-10 rounded-full" src={group.avatar_url} alt="" />
                           ) : (
-                            getInitials(group.full_name)
+                            <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                              <span className="text-blue-600 font-medium text-sm">{getInitials(group.full_name)}</span>
+                            </div>
                           )}
                         </div>
-                        <span>{group.full_name}</span>
+                        <div className="ml-4">
+                          <div className="text-sm font-medium text-gray-900">{group.full_name}</div>
+                        </div>
                       </div>
                     </td>
-                    <td className="py-4 px-6 text-sm text-gray-700">
-                      <div className="flex items-center space-x-2">
-                        <span>
-                          {group.items.length === 1 
-                            ? group.items[0].equipment_name 
-                            : `${group.items.length} items`}
-                        </span>
-                        {group.items.length > 1 && (
-                          <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-blue-600 rounded-full">
-                            {group.items.length}
-                          </span>
-                        )}
-                      </div>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{group.position}</div>
                     </td>
-                    <td className="py-4 px-6 text-sm text-gray-700">
-                      {formatRequestMode(group.request_mode)}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{group.items.length} item(s)</div>
                     </td>
-                    <td className="py-4 px-6">
-                      <div className="flex items-center justify-end space-x-2">
-                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">
-                          Pending
-                        </span>
-                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-600 text-white">
-                          Returned
-                        </span>
-                      </div>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {group.return_date ? new Date(group.return_date).toLocaleDateString() : 'N/A'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleViewReturn(group.id);
+                        }}
+                        className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                      >
+                        Verify
+                      </button>
                     </td>
                   </tr>
                 ))
