@@ -949,10 +949,6 @@ const ViewApproved = () => {
                 {/* View Approved */}
                 {view === 'viewApproved' && (
                   <div className="bg-white rounded-2xl border border-gray-100 shadow-md overflow-hidden">
-                    <div className="p-5 md:p-6 border-b border-gray-200 bg-gray-50">
-                      <h2 className="text-xl font-semibold text-gray-900">View Approved</h2>
-                      <p className="text-sm text-gray-600 mt-1">Approved items ready for release</p>
-                    </div>
                     <div className="overflow-x-auto">
                       <table className="w-full">
                         <thead className="bg-gray-50 text-gray-600">
