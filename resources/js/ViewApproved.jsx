@@ -865,14 +865,13 @@ const ViewApproved = () => {
           <div className="p-6 md:p-10">
             {/* Header */}
             <div className="mb-8">
-              <h1 className="text-4xl font-bold text-[#2262C6] mb-2">View Request</h1>
-              <p className="text-gray-600 text-base">View and manage requests, approvals, and returns</p>
+              <h1 className="text-4xl font-bold text-[#2262C6] mb-2">View Approved</h1>
             </div>
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-6">
               <div className="bg-gradient-to-b from-[#0064FF] to-[#003C99] text-white rounded-2xl p-4 shadow-md">
-                <h4 className="text-xs uppercase tracking-wider opacity-80 mb-2">New Requests</h4>
+                <h4 className="text-xs uppercase tracking-wider opacity-80 mb-2">New Approved</h4>
                 <div className="flex items-center justify-between">
                   <p className="text-3xl font-bold">{loading ? '...' : dashboardStats.new_requests}</p>
                   <Clock className="w-8 h-8 text-white/70" />
@@ -881,27 +880,27 @@ const ViewApproved = () => {
               <div className="bg-gray-100 rounded-2xl p-4 shadow-md">
                 <h4 className="text-xs font-semibold text-gray-600 mb-2">Approved Requests</h4>
                 <div className="flex items-center justify-between">
-                  <p className="text-3xl font-bold text-gray-900">{loading ? '...' : groupedApproved.length}</p>
-                  <RefreshCcw className="w-8 h-8 text-gray-500" />
+                  <p className="text-3xl font-bold text-gray-900">{loading ? '...' : groupedCurrentHolders.length}</p>
+                  <User className="w-8 h-8 text-gray-500" />
                 </div>
               </div>
               <div className="bg-gray-100 rounded-2xl p-4 shadow-md">
                 <h4 className="text-xs font-semibold text-gray-600 mb-2">Verify Return</h4>
                 <div className="flex items-center justify-between">
-                  <p className="text-3xl font-bold text-gray-900">{loading ? '...' : dashboardStats.verify_returns}</p>
+                  <p className="text-3xl font-bold text-gray-900">{loading ? '...' : groupedVerifyReturns.length}</p>
                   <CheckCircle className="w-8 h-8 text-gray-500" />
                 </div>
               </div>
             </div>
 
             {/* View Selector */}
-            <div className="mb-6 flex items-center justify-between">
+            <div className="mb-6 flex items-center justify-end">
               <div className="relative inline-block">
                 <button
                   onClick={() => setIsMenuOpen(!isMenuOpen)}
                   className="flex items-center space-x-2 px-4 py-2.5 bg-white border-2 border-gray-300 rounded-xl hover:bg-gray-50 hover:border-blue-400 transition-all shadow-sm"
                 >
-                  <span className="font-semibold text-gray-700">View Request</span>
+                  <span className="font-semibold text-gray-700">{view === 'viewApproved' ? 'View Approved' : view === 'currentHolder' ? 'Approved Requests' : 'Verify Return'}</span>
                   <ChevronDown className={`h-4 w-4 text-gray-500 transition-transform ${isMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
 
@@ -951,7 +950,7 @@ const ViewApproved = () => {
                 {view === 'viewApproved' && (
                   <div className="bg-white rounded-2xl border border-gray-100 shadow-md overflow-hidden">
                     <div className="p-5 md:p-6 border-b border-gray-200 bg-gray-50">
-                      <h2 className="text-xl font-semibold text-gray-900">View Request</h2>
+                      <h2 className="text-xl font-semibold text-gray-900">View Approved</h2>
                       <p className="text-sm text-gray-600 mt-1">Approved items ready for release</p>
                     </div>
                     <div className="overflow-x-auto">
