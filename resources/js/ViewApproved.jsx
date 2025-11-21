@@ -1044,14 +1044,13 @@ const ViewApproved = () => {
                             <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider">Position</th>
                             <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider">Items</th>
                             <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider">Mode</th>
-                            <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider">Expected Return</th>
                             <th className="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider">Actions</th>
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-100">
                           {groupedCurrentHolders.length === 0 ? (
                             <tr>
-                              <td colSpan="6" className="px-6 py-16 text-center">
+                              <td colSpan="5" className="px-6 py-16 text-center">
                                 <div className="flex flex-col items-center justify-center">
                                   <User className="w-16 h-16 text-gray-300 mb-4" />
                                   <p className="text-gray-500 text-lg font-medium">No approved requests found</p>
@@ -1098,9 +1097,6 @@ const ViewApproved = () => {
                                   }`}>
                                     {formatRequestMode(group.request_mode)}
                                   </span>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                                  {group.expected_return_date ? new Date(group.expected_return_date).toLocaleDateString() : 'N/A'}
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                   <button
