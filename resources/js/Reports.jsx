@@ -426,6 +426,74 @@ const Reports = () => {
             </div>
           </div>
 
+          {/* Report Overview Section */}
+          <div className="bg-[#F8FAFF] rounded-2xl border border-gray-100 shadow-sm p-4 md:p-6 transition-all duration-300">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold text-gray-800">Report Overview</h3>
+            </div>
+            <div className="mt-4">
+              {/* Header */}
+              <div className="flex items-center justify-end mb-4 px-4">
+                <div className="text-sm font-medium text-gray-600 mr-20">Quantity</div>
+                <div className="text-sm font-medium text-gray-600">Overall Price</div>
+              </div>
+
+              {/* Equipment Rows */}
+              <div className="space-y-2">
+                {(() => {
+                  // Build report stats from expensive equipment data
+                  const reportStats = {};
+                  
+                  // Group by category
+                  expensiveEquipment.forEach(item => {
+                    const category = item.category || 'Uncategorized';
+                    if (!reportStats[category]) {
+                      reportStats[category] = {
+                        count: 0,
+                        totalPrice: 0
+                      };
+                    }
+                    reportStats[category].count += (item.count || 1);
+                    reportStats[category].totalPrice += item.value * (item.count || 1);
+                  });
+
+                  const entries = Object.entries(reportStats);
+                  if (entries.length === 0) {
+                    return (
+                      <div className="text-center text-gray-500 text-sm py-8">No data available</div>
+                    );
+                  }
+                  
+                  const maxCount = Math.max(1, ...entries.map(([_, v]) => (v?.count || 0)));
+                  
+                  return entries.map(([key, value]) => {
+                    const count = value?.count || 0;
+                    const total = value?.totalPrice || 0;
+                    const widthPct = Math.min(100, Math.round((count / maxCount) * 100));
+                    return (
+                      <div className="flex items-center" key={key}>
+                        <div className="w-32">
+                          <span className="text-sm text-gray-700">{key}</span>
+                        </div>
+                        <div className="flex-1 mx-4">
+                          <div className="bg-[#E6EEF9] h-8 rounded-lg relative">
+                            <div className="bg-[#2E90FA] h-full rounded-lg" style={{ width: `${widthPct}%` }}></div>
+                          </div>
+                        </div>
+                        <div className="w-20 text-center">
+                          <span className="text-sm font-medium text-gray-900">{count}</span>
+                        </div>
+                        <div className="w-32 text-right text-sm text-gray-600">
+                          ₱{Number(total || 0).toLocaleString()}
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            </div>
+          </div>
+
           {/* Equipment & Inventory Section */}
           {(category === "All" || category === "Equipment") && (
             <section className="space-y-6">
