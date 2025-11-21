@@ -746,9 +746,14 @@ const AddStocks = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {getDisplayRows().map((item, index) => {
-                      const rowId = `${item.key}`;
-                      const isOpen = !!expandedRows[rowId];
+                    {(() => {
+                      const allRows = getDisplayRows();
+                      const startIndex = (currentPage - 1) * itemsPerPage;
+                      const endIndex = startIndex + itemsPerPage;
+                      const paginatedRows = itemsPerPage === 1000 ? allRows : allRows.slice(startIndex, endIndex);
+                      return paginatedRows.map((item, index) => {
+                        const rowId = `${item.key}`;
+                        const isOpen = !!expandedRows[rowId];
                       return (
                         <React.Fragment key={rowId}>
                           <tr
@@ -888,7 +893,8 @@ const AddStocks = () => {
                           )}
                         </React.Fragment>
                       );
-                    })}
+                      });
+                    })()}
                   </tbody>
                 </table>
               )}
@@ -898,8 +904,7 @@ const AddStocks = () => {
                 <span className="text-sm text-gray-600 font-medium">
                   Total: {(() => {
                     const rows = getDisplayRows();
-                    const totalItems = rows.reduce((sum, row) => sum + (row.total_count || 0), 0);
-                    return `${totalItems} ${totalItems === 1 ? 'item' : 'items'}`;
+                    return `${rows.length} ${rows.length === 1 ? 'Item' : 'Items'}`;
                   })()}
                 </span>
                 <div className="flex items-center space-x-2">
@@ -914,7 +919,7 @@ const AddStocks = () => {
                   </button>
                   <button
                     onClick={() => setCurrentPage(prev => prev + 1)}
-                    disabled={currentPage * itemsPerPage >= getDisplayRows().length}
+                    disabled={itemsPerPage === 1000 || currentPage * itemsPerPage >= getDisplayRows().length}
                     className="p-1 rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">

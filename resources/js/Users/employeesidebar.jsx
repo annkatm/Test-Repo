@@ -58,13 +58,13 @@ const EmployeeSidebar = ({ activeMenu, onMenuClick }) => {
             <span>Transaction</span>
           </button>
 
-          {/* Returned Items */}
+          {/* Return Items */}
           <button
-            onClick={(e) => handleMenuClick('Returned Items', e)}
-            className={linkClass('Returned Items')}
+            onClick={(e) => handleMenuClick('Return Items', e)}
+            className={linkClass('Return Items')}
           >
             <Package className="h-5 w-5" />
-            <span>Returned Items</span>
+            <span>Return Items</span>
           </button>
         </nav>
       </aside>

@@ -137,7 +137,7 @@ const EmployeeDashboard = ({
         return <EmployeeHome />;
       case 'Transaction':
         return <EmployeeTransaction />;
-      case 'Returned Items':
+      case 'Return Items':
         return <EmployeeReturnItems />;
       default:
         return <EmployeeHome />;
