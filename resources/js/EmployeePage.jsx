@@ -1496,7 +1496,7 @@ const EmployeePage = () => {
               </div>
 
               {/* Issued Item Section - Full Width - Only show for New hire or Probationary */}
-              {(viewing.employeeType === 'New hire' || viewing.employeeType === 'Probationary') && (
+              {(viewing.employeeType === 'New hire' || viewing.employeeType === 'Provasionary' || viewing.employeeType === 'Probationary') && (
                 <div className="mt-6">
                   <div className="space-y-4">
                     <label className="block text-sm text-gray-700 font-medium mb-2">
@@ -1653,7 +1653,7 @@ const EmployeePage = () => {
               {/* Issued Item Section - Full Width - Only show for New hire or Probationary */}
               {(() => {
                 const employeeTypeName = getLabelFromValue(form.employeeType, dropdownOptions.employeeTypes);
-                return (employeeTypeName === 'New hire' || employeeTypeName === 'Probationary');
+                return (employeeTypeName === 'New hire' || employeeTypeName === 'Provasionary' || employeeTypeName === 'Probationary');
               })() && (
                   <div className="mt-6 mb-6">
                     <div className="space-y-4">
@@ -1864,7 +1864,7 @@ const EmployeePage = () => {
               {/* Issued Item Section - Full Width - Only show for New hire or Probationary */}
               {(() => {
                 const employeeTypeName = getLabelFromValue(form.employeeType, dropdownOptions.employeeTypes);
-                return (employeeTypeName === 'New hire' || employeeTypeName === 'Probationary');
+                return (employeeTypeName === 'New hire' || employeeTypeName === 'Provasionary' || employeeTypeName === 'Probationary');
               })() && (
                   <div className="mt-6">
                     <div className="space-y-4">
