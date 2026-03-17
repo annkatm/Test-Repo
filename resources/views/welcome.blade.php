@@ -6,6 +6,7 @@
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>iREPLY - Login</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  @viteReactRefresh
   @vite(['resources/css/app.css', 'resources/js/app.js'])
   <style>
     body {
